@@ -1,0 +1,113 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosCorteViewModel
+@{
+    ViewData["Title"] = "Cierre";
+    var totalCobrado = Model.Efectivo + Model.Tarjeta + Model.Amex;
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window screen-only">
+    <div class="classic-titlebar">CIERRE</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            @if (Model.Cerrado)
+            {
+                <div class="pos-notice">CORTE CERRADO PARA @Model.Fecha.ToString("dd/MM/yyyy"). CAMBIOS BLOQUEADOS.</div>
+            }
+            <form method="get" asp-action="Cortes" class="classic-form classic-form-top">
+                <div class="field small">
+                    <label>FECHA DE CORTE</label>
+                    <input type="date" name="fecha" value="@Model.Fecha.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field small">
+                    <label></label>
+                    <button type="submit" class="action-btn search inline-btn">BUSCAR</button>
+                </div>
+            </form>
+            <section class="classic-status-strip">
+                <div><span>FECHA DE CORTE</span><strong>@Model.Fecha.ToString("dd/MM/yyyy")</strong></div>
+                <div><span>MOVIMIENTOS</span><strong>@Model.Movimientos</strong></div>
+                <div><span>ESTATUS</span><strong>@(Model.Cerrado ? "CERRADO" : "ABIERTO")</strong></div>
+                <div><span>TOTAL COBRADO</span><strong>@totalCobrado.ToString("C2")</strong></div>
+            </section>
+            <section class="classic-summary-grid">
+                <div class="summary-panel"><span>EFECTIVO</span><strong>@Model.Efectivo.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>TARJETA</span><strong>@Model.Tarjeta.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>AMEX</span><strong>@Model.Amex.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>GASTOS</span><strong>@Model.Gastos.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>COMISIONES</span><strong>@Model.Comisiones.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>TOTAL DEL DIA</span><strong>@Model.TotalDia.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>DIFERENCIA</span><strong>@Model.Diferencia.ToString("C2")</strong></div>
+            </section>
+
+            <section class="classic-table-panel">
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr>
+                            <th>CONCEPTO</th>
+                            <th>IMPORTE</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>EFECTIVO</td><td>@Model.Efectivo.ToString("C2")</td></tr>
+                        <tr><td>TARJETA</td><td>@Model.Tarjeta.ToString("C2")</td></tr>
+                        <tr><td>AMEX</td><td>@Model.Amex.ToString("C2")</td></tr>
+                        <tr><td>GASTOS</td><td>@Model.Gastos.ToString("C2")</td></tr>
+                        <tr><td>COMISIONES</td><td>@Model.Comisiones.ToString("C2")</td></tr>
+                        <tr><td>TOTAL DEL DIA</td><td>@Model.TotalDia.ToString("C2")</td></tr>
+                        <tr><td>TOTAL COBRADO</td><td>@totalCobrado.ToString("C2")</td></tr>
+                        <tr><td>DIFERENCIA</td><td>@Model.Diferencia.ToString("C2")</td></tr>
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <form method="post" asp-action="CalcularCorte">
+                <input type="hidden" name="fecha" value="@Model.Fecha.ToString("yyyy-MM-dd")" />
+                <button type="submit" class="action-btn search sidebar-submit">CALCULAR</button>
+            </form>
+            <form method="post" asp-action="CerrarCorte">
+                <input type="hidden" name="fecha" value="@Model.Fecha.ToString("yyyy-MM-dd")" />
+                <button type="submit" class="action-btn red sidebar-submit">CERRAR</button>
+            </form>
+            <a class="action-btn green" asp-action="ExportCorteCsv" asp-route-fecha="@Model.Fecha.ToString("yyyy-MM-dd")">CSV</a>
+            <a class="action-btn green" asp-action="ExportCortePdf" asp-route-fecha="@Model.Fecha.ToString("yyyy-MM-dd")">PDF</a>
+            <button type="button" class="action-btn green sidebar-submit" data-pos-print>IMPRIMIR</button>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn exit" asp-action="RegistroDiario">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+<section class="print-only triton-print-report">
+    <div class="triton-report-title">** REPORTE DE CIERRE / CORTE **</div>
+    <div class="triton-report-meta">
+        <span>Fecha del Reporte : @Model.Fecha.ToString("dd/MM/yyyy") al @Model.Fecha.ToString("dd/MM/yyyy")</span>
+        <span>Page 1 of 1</span>
+    </div>
+    <table class="triton-report-table corte-print-table">
+        <thead>
+            <tr>
+                <th>concepto</th>
+                <th>importe</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>EFECTIVO</td><td class="num">@Model.Efectivo.ToString("N2")</td></tr>
+            <tr><td>TARJETA</td><td class="num">@Model.Tarjeta.ToString("N2")</td></tr>
+            <tr><td>AMEX</td><td class="num">@Model.Amex.ToString("N2")</td></tr>
+            <tr><td>GASTOS</td><td class="num">@Model.Gastos.ToString("N2")</td></tr>
+            <tr><td>COMISIONES</td><td class="num">@Model.Comisiones.ToString("N2")</td></tr>
+            <tr><td>TOTAL DEL DIA</td><td class="num">@Model.TotalDia.ToString("N2")</td></tr>
+            <tr><td>DIFERENCIA</td><td class="num">@Model.Diferencia.ToString("N2")</td></tr>
+            <tr><td>ESTATUS</td><td>@(Model.Cerrado ? "CERRADO" : "ABIERTO")</td></tr>
+        </tbody>
+    </table>
+</section>
+
+

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - HOKA</title>
+    <script type="importmap"></script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/ControlTaxiWeb.styles.css" asp-append-version="true" />
+</head>
+<body class="pos-only-shell">
+    <main role="main">
+        @RenderBody()
+    </main>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <div class="sweet-alert-shell" id="sweet-alert-shell" aria-hidden="true">
+        <div class="sweet-alert-card" role="dialog" aria-modal="true" aria-labelledby="sweet-alert-title">
+            <div class="sweet-alert-icon" aria-hidden="true">i</div>
+            <h2 id="sweet-alert-title">Aviso</h2>
+            <p id="sweet-alert-message"></p>
+            <button type="button" id="sweet-alert-ok">Aceptar</button>
+        </div>
+    </div>
+    <script>
+        function showPosAlert(message, tone) {
+            const shell = document.getElementById('sweet-alert-shell');
+            const text = document.getElementById('sweet-alert-message');
+            if (!shell || !text || !message) {
+                return;
+            }
+
+            shell.dataset.tone = tone || 'info';
+            text.textContent = message;
+            shell.classList.add('is-open');
+            shell.setAttribute('aria-hidden', 'false');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const notice = document.querySelector('.pos-notice');
+            if (notice) {
+                const message = notice.textContent.trim();
+                const tone = notice.classList.contains('warn-notice') || /no se pudo|incorrect/i.test(message) ? 'warning' : 'success';
+                notice.classList.add('sweet-source-hidden');
+                showPosAlert(message, tone);
+            }
+
+            document.getElementById('sweet-alert-ok')?.addEventListener('click', function () {
+                const shell = document.getElementById('sweet-alert-shell');
+                shell?.classList.remove('is-open');
+                shell?.setAttribute('aria-hidden', 'true');
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            const trigger = event.target.closest('[data-pos-print]');
+            if (!trigger) {
+                return;
+            }
+
+            event.preventDefault();
+            window.print();
+        });
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

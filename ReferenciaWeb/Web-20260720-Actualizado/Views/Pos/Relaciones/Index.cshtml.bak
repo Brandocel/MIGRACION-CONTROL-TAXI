@@ -1,0 +1,1081 @@
+@model ControlTaxiWeb.Models.PosTriton.PosRelacionesViewModel
+@{
+    ViewData["Title"] = "Relacion ticket-taxista";
+    var ticketPagadoJson = TempData["PosDejadaTicketJson"] as string;
+    ControlTaxiWeb.Models.PosTriton.PosDejadaTicketViewModel? ticketPagado = null;
+    if (!string.IsNullOrWhiteSpace(ticketPagadoJson))
+    {
+        try
+        {
+            ticketPagado = System.Text.Json.JsonSerializer.Deserialize<ControlTaxiWeb.Models.PosTriton.PosDejadaTicketViewModel>(ticketPagadoJson);
+        }
+        catch
+        {
+            ticketPagado = null;
+        }
+    }
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+<style>
+    .relacion-ticket-taxista-page {
+        color: #0f3057;
+    }
+
+    .relacion-ticket-taxista-page .classic-window {
+        background: transparent;
+        box-shadow: none;
+        border: none;
+    }
+
+    .relacion-ticket-taxista-page .classic-titlebar.relation-titlebar {
+        background: linear-gradient(135deg, #1f5ddf 0%, #0f4099 100%);
+        border-radius: 20px;
+        border: none;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+        color: #fff;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-icon {
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.15);
+        flex-shrink: 0;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-icon svg {
+        width: 26px;
+        height: 26px;
+        color: #ffffff;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-text {
+        min-width: 0;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-main {
+        font-size: 0.97rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        line-height: 1.1;
+        margin-bottom: 0.2rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-sub {
+        font-size: 0.86rem;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.4;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        justify-content: flex-end;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn {
+        min-height: 44px;
+        padding: 0 1rem;
+        border-radius: 999px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+        transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.05);
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn .menu-icon {
+        margin-right: 0.45rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn.search {
+        background: #ebf3ff;
+        color: #0f4ea8;
+        border: 1px solid rgba(15, 78, 153, 0.18);
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn.green {
+        background: #1a7d4d;
+        color: #fff;
+        border: 1px solid #176b44;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn.blue {
+        background: #2662be;
+        color: #fff;
+        border: 1px solid #1e5098;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn.gold {
+        background: #f5b447;
+        color: #122d42;
+        border: 1px solid #e4a12e;
+    }
+
+    .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn.red {
+        background: #dc4f4f;
+        color: #fff;
+        border: 1px solid #b43b3b;
+    }
+
+    .relacion-ticket-taxista-page .relation-body {
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-card {
+        background: #ffffff;
+        border: 1px solid #dfe7f5;
+        border-radius: 22px;
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
+        padding: 1.35rem 1.35rem 1.5rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        margin-bottom: 1rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-card-header .relation-card-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #eef4ff;
+        color: #1d5cc0;
+        flex-shrink: 0;
+    }
+
+    .relacion-ticket-taxista-page .relation-card-header h2 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: #10305d;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .relacion-ticket-taxista-page .relation-card-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(230px, 1fr));
+        gap: 1rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-card-grid.wide-row {
+        grid-column: 1 / -1;
+    }
+
+    .relacion-ticket-taxista-page .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .relacion-ticket-taxista-page .field label {
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: #112c54;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .relacion-ticket-taxista-page .relation-input-wrapper {
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        gap: 0.65rem;
+        align-items: center;
+        background: #ffffff;
+        border: 1px solid #d1dae8;
+        border-radius: 14px;
+        padding: 0.2rem 0.9rem 0.2rem 0.65rem;
+    }
+
+    .relacion-ticket-taxista-page .relation-input-wrapper input,
+    .relacion-ticket-taxista-page .relation-input-wrapper select {
+        border: none;
+        width: 100%;
+        padding: 0.72rem 0.1rem;
+        font-size: 0.95rem;
+        color: #102940;
+        background: transparent;
+        outline: none;
+    }
+
+    .relacion-ticket-taxista-page .relation-input-wrapper input:focus,
+    .relacion-ticket-taxista-page .relation-input-wrapper select:focus {
+        outline: none;
+        box-shadow: none;
+    }
+
+    .relacion-ticket-taxista-page .relation-input-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #4f7fc1;
+        min-width: 38px;
+    }
+
+    .relacion-ticket-taxista-page .relation-input-icon svg {
+        width: 18px;
+        height: 18px;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        fill: none;
+    }
+
+    .relacion-ticket-taxista-page input[readonly] {
+        color: #5a6d80;
+        background: #f7f9fc;
+    }
+
+    .relacion-ticket-taxista-page .field.wide {
+        grid-column: 1 / -1;
+    }
+
+    .relacion-ticket-taxista-page .classic-table-panel {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        margin-top: 0.25rem;
+    }
+
+    .relacion-ticket-taxista-page .classic-table-panel .mini-title {
+        margin-bottom: 0.75rem;
+        font-size: 0.96rem;
+        font-weight: 700;
+        color: #0f3057;
+    }
+
+    .relacion-ticket-taxista-page .relation-row-selectable.is-selected {
+        background: #eef5ff;
+    }
+
+    .relacion-ticket-taxista-page .relation-edit-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #0f4ea8;
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 6px;
+        text-decoration: none;
+    }
+
+    .relacion-ticket-taxista-page .relation-edit-link svg,
+    .relacion-ticket-taxista-page .mini-print-btn svg {
+        height: 14px;
+        width: 14px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+    }
+
+    .relacion-ticket-taxista-page .mini-reprint-form {
+        display: inline-flex;
+        align-items: center;
+        margin-top: 6px;
+    }
+
+    .relacion-ticket-taxista-page .mini-print-btn {
+        align-items: center;
+        background: #eef7ff;
+        border: 1px solid #7fb0e6;
+        border-radius: 999px;
+        color: #184d9a;
+        display: inline-flex;
+        gap: 6px;
+        padding: 6px 12px;
+        min-height: 34px;
+    }
+
+    .relacion-ticket-taxista-page .classic-body.with-sidebar {
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    @media (max-width: 1120px) {
+        .relacion-ticket-taxista-page .relation-card-grid {
+            grid-template-columns: repeat(2, minmax(220px, 1fr));
+        }
+
+        .relacion-ticket-taxista-page .relation-titlebar-actions {
+            justify-content: stretch;
+        }
+    }
+
+    @media (max-width: 760px) {
+        .relacion-ticket-taxista-page .relation-titlebar-inner {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .relacion-ticket-taxista-page .relation-titlebar-actions,
+        .relacion-ticket-taxista-page .relation-titlebar-actions .action-btn {
+            width: 100%;
+        }
+
+        .relacion-ticket-taxista-page .relation-card-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .relacion-ticket-taxista-page .field.wide {
+            grid-column: auto;
+        }
+    }
+</style>
+
+<div class="classic-window relation-window relacion-ticket-taxista-page">
+    <div class="classic-titlebar relation-titlebar">
+        <div class="relation-titlebar-inner">
+            <div class="relation-titlebar-brand">
+                <span class="relation-titlebar-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M3 10.5V8.5A2.5 2.5 0 0 1 5.5 6H18.5A2.5 2.5 0 0 1 21 8.5V10.5" /><path d="M21 10.5v4a2.5 2.5 0 0 1-2.5 2.5H5.5A2.5 2.5 0 0 1 3 14.5v-4" /><path d="M6.5 17.5v1.5" /><path d="M17.5 17.5v1.5" /><path d="M10 11h4" /></svg>
+                </span>
+                <div class="relation-titlebar-text">
+                    <div class="relation-titlebar-main">RELACIÓN TICKET - TAXISTA v2</div>
+                    <div class="relation-titlebar-sub">Control y asignación de tickets a taxistas</div>
+                </div>
+            </div>
+            <div class="relation-titlebar-actions">
+                <button form="relacion-filter-form" type="submit" class="action-btn search sidebar-submit"><span>BUSCAR</span></button>
+                <button form="relacion-save-form" type="submit" class="action-btn green sidebar-submit"><span>ACTUALIZAR</span></button>
+                <button type="button" class="action-btn blue sidebar-submit" data-clear-relacion><span>LIMPIAR</span></button>
+                <a class="action-btn blue" asp-action="Relaciones"><span>NUEVO</span></a>
+                <a class="action-btn gold" asp-action="Comisiones" asp-route-folioOperacion="@Model.FolioOperacion"><span>COMISION</span></a>
+                <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+                <a class="action-btn red" asp-action="Index"><span>SALIR</span></a>
+            </div>
+        </div>
+    </div>
+    <div class="classic-body with-sidebar relation-body">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+
+            <section class="relation-card relation-card-filters">
+                <div class="relation-card-header">
+                    <span class="relation-card-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M10 3H4a2 2 0 0 0-2 2v2h20V5a2 2 0 0 0-2-2h-6" /><path d="M4 11h16v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7" /><path d="M8 16h.01M16 16h.01" /></svg>
+                    </span>
+                    <h2>BÚSQUEDA / FILTROS</h2>
+                </div>
+                <form id="relacion-filter-form" method="get" asp-action="Relaciones" class="relation-card-grid">
+                    <div class="field">
+                        <label>BUSCAR AP / TICKET / TAXISTA / HOTEL / GAFETE</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M16.5 16.5 21 21" /></svg>
+                            </span>
+                            <input name="busqueda" value="@Model.Busqueda" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>FECHA INICIO</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M6 2v4M18 2v4M4 8h16M5 22h14a2 2 0 0 0 2-2V8H3v12a2 2 0 0 0 2 2Z" /></svg>
+                            </span>
+                            <input type="date" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>FECHA FIN</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M6 2v4M18 2v4M4 8h16M5 22h14a2 2 0 0 0 2-2V8H3v12a2 2 0 0 0 2 2Z" /></svg>
+                            </span>
+                            <input type="date" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <section class="relation-card relation-card-details">
+                <div class="relation-card-header">
+                    <span class="relation-card-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" /><path d="M9 9h6v6H9z" /></svg>
+                    </span>
+                    <h2>DATOS DEL TAXISTA</h2>
+                </div>
+                <form id="relacion-save-form" method="post" asp-action="GuardarRelacion" class="relation-card-grid">
+                    <input type="hidden" name="Busqueda" value="@Model.Busqueda" />
+                    <input type="hidden" name="FechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="FechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="Fecha" value="@Model.Fecha" />
+                    <div class="field">
+                        <label>TICKET APP OTORGADO</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z" /><path d="M4 11h16" /></svg>
+                            </span>
+                            <input name="FolioControl" value="@Model.FolioControl" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>FOLIO APP MOVIL</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z" /><path d="M4 11h16" /></svg>
+                            </span>
+                            <input name="FolioApp" value="@Model.FolioApp" readonly />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>FOLIO OPERACION ASIGNADO</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z" /><path d="M4 11h16" /></svg>
+                            </span>
+                            <input name="FolioOperacion" value="@Model.FolioOperacion" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>TICKET VENTA POS ASIGNADO</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z" /><path d="M4 11h16" /></svg>
+                            </span>
+                            <input name="FolioPos" value="@Model.FolioPos" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>GAFETE</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4v3a4 4 0 1 1-8 0V6a4 4 0 0 1 4-4Z" /><path d="M6 19a6 6 0 0 1 12 0" /></svg>
+                            </span>
+                            <input name="Gafete" value="@Model.Gafete" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>TAXISTA ID</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" /><path d="M6 21v-2a4 4 0 0 1 4-4h0a4 4 0 0 1 4 4v2" /></svg>
+                            </span>
+                            <input name="TaxistaId" value="@Model.TaxistaId" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>NOMBRE TAXISTA</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" /><path d="M6 21v-2a6 6 0 0 1 12 0v2" /></svg>
+                            </span>
+                            <input name="TaxistaNombre" value="@Model.TaxistaNombre" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>VENDEDORES</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M5 7a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" /><path d="M13 7a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z" /><path d="M4 18c1.5-2 4-3 8-3s6.5 1 8 3" /></svg>
+                            </span>
+                            <input name="Vendedor" value="@Model.Vendedor" list="relacion-vendedores-list" placeholder="Escribe o selecciona vendedor" autocomplete="off" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>NACIONALIDAD</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a9 9 0 0 0 0 18" /></svg>
+                            </span>
+                            <input name="Nacionalidad" value="@Model.Nacionalidad" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>TIPO TRANSPORTE</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M3 12h18" /><path d="M5 12V8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v4" /><path d="M7 17h1.5M15.5 17H17" /><path d="M7 12V9" /><path d="M17 12V9" /></svg>
+                            </span>
+                            <input name="TransporteTipo" value="@Model.TransporteTipo" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>DEJADA</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 8v8M8 12h8" /></svg>
+                            </span>
+                            <input name="Dejada" type="number" step="0.01" min="0" value="@Model.Dejada?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" />
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>COMISION CALCULADA</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M12 5v14" /><path d="M8 7h8a4 4 0 0 1 0 8H8" /><path d="M8 13h8" /></svg>
+                            </span>
+                            <input value="@Model.Comision.ToString("C2")" readonly />
+                        </div>
+                    </div>
+                    <div class="field wide">
+                        <label>OBSERVACIONES</label>
+                        <div class="relation-input-wrapper">
+                            <span class="relation-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M4 5h16M4 9h16M7 17h10" /><path d="M4 15h1M4 19h1" /><path d="M8 11h8" /></svg>
+                            </span>
+                            <input name="Observaciones" value="@Model.Observaciones" />
+                        </div>
+                    </div>
+                </form>
+            </section>
+
+            <datalist id="relacion-vendedores-list">
+                @foreach (var vendedor in Model.Vendedores)
+                {
+                    <option value="@vendedor"></option>
+                }
+            </datalist>
+
+            <section class="classic-table-panel">
+                <div class="mini-title">VIAJES RECIBIDOS DESDE LA APP MOVIL</div>
+                <table class="table table-sm table-bordered classic-grid relation-grid">
+                    <thead>
+                        <tr>
+                            <th>App / asignado</th>
+                            <th>Fecha</th>
+                            <th>Viaje</th>
+                            <th>Taxista</th>
+                            <th>Nacionalidad</th>
+                            <th>Unidad</th>
+                            <th>Importes</th>
+                            <th>Forma de pago</th>
+                            <th>Pago dejada</th>
+                            <th>Comision</th>
+                            <th>Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Relaciones)
+                        {
+                            var folioControl = (row.FolioControl ?? string.Empty).Trim();
+                            var folioApp = (row.FolioApp ?? string.Empty).Trim();
+                            var mostrarDosFoliosApp = !string.IsNullOrWhiteSpace(folioApp)
+                                && !string.Equals(folioControl, folioApp, StringComparison.OrdinalIgnoreCase);
+                            var folioOperacionVisible = new[] { row.FolioOperacion, row.FolioOperacionSugerido, row.FolioControl, row.FolioApp }
+                                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+                            var ticketPosVisible = new[] { row.FolioPos, row.FolioPosSugerido }
+                                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+                            var folioComision = new[] { row.FolioOperacion, row.FolioOperacionSugerido, row.FolioApp, row.FolioControl, row.FolioPos, row.FolioPosSugerido }
+                                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+                            var primerTicketPos = ticketPosVisible
+                                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                .FirstOrDefault() ?? string.Empty;
+                            var primerTicketPago = (row.TicketPagoDejada ?? string.Empty)
+                                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                .FirstOrDefault() ?? string.Empty;
+                            var ticketsPosVisibles = ticketPosVisible
+                                .Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+                            var gafetesVisibles = (row.Gafete ?? string.Empty)
+                                .Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                .Distinct(StringComparer.OrdinalIgnoreCase)
+                                .ToList();
+                            var folioVenta = new[] {
+                                    primerTicketPos,
+                                    primerTicketPago
+                                }
+                                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+                            var puedePagarComision = !string.IsNullOrWhiteSpace(folioComision)
+                                && row.Comision > 0m
+                                && row.Pago < row.Comision;
+                            var dejadaEstaPagada = string.Equals(row.EstatusDejada, "pagado", StringComparison.OrdinalIgnoreCase)
+                                || row.DejadaPagada > 0m;
+                            var importeDejadaPagada = row.DejadaPagada > 0m ? row.DejadaPagada : row.Dejada;
+                            <tr class="relation-row-selectable"
+                                data-folio-control="@row.FolioControl"
+                                data-folio-app="@row.FolioApp"
+                                data-folio-operacion="@folioOperacionVisible"
+                                data-folio-pos="@ticketPosVisible"
+                                data-fecha="@row.Fecha"
+                                data-gafete="@row.Gafete"
+                                data-nacionalidad="@row.Nacionalidad"
+                                data-taxista-id="@row.TaxistaId"
+                                data-taxista-nombre="@row.TaxistaNombre"
+                                data-vendedor="@row.VendedorAsignado"
+                                data-transporte="@row.TransporteTipo"
+                                data-dejada="@row.Dejada.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)"
+                                data-observaciones="@row.Observaciones">
+                                <td class="relation-id-cell">
+                                    <span class="source-pill @(row.Fuente.Contains("APP", StringComparison.OrdinalIgnoreCase) ? "app-source" : "pos-source")">@(!string.IsNullOrWhiteSpace(row.Fuente) ? row.Fuente : "SISTEMA/POS")</span>
+                                    <span>Usuario origen: @(!string.IsNullOrWhiteSpace(row.UsuarioOrigen) ? row.UsuarioOrigen : "SIN USUARIO")</span>
+                                     @if (mostrarDosFoliosApp)
+                                     {
+                                         <span>Movil <a asp-action="Relaciones" asp-route-busqueda="@row.FolioApp" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">@row.FolioApp</a></span>
+                                     }
+                                     <strong>
+                                         @if (!string.IsNullOrWhiteSpace(folioOperacionVisible))
+                                         {
+                                             <a asp-action="Relaciones" asp-route-busqueda="@folioOperacionVisible" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">@folioOperacionVisible</a>
+                                         }
+                                         else
+                                         {
+                                             @:SIN OPERACION
+                                         }
+                                     </strong>
+                                     <span>
+                                         @if (ticketsPosVisibles.Count > 0)
+                                         {
+                                             @for (var ticketIndex = 0; ticketIndex < ticketsPosVisibles.Count; ticketIndex++)
+                                             {
+                                                 var ticketPos = ticketsPosVisibles[ticketIndex];
+                                                 <a asp-action="RemisionDetalle" asp-route-folio="@ticketPos" asp-route-productoBusqueda="@ticketPos">@ticketPos</a>
+                                                 if (ticketIndex < ticketsPosVisibles.Count - 1)
+                                                 {
+                                                     @:,
+                                                 }
+                                             }
+                                         }
+                                         else
+                                         {
+                                             @:SIN TICKET POS
+                                         }
+                                     </span>
+                                     <a href="#relacion-save-form" class="relation-edit-link" data-relacion-edit>
+                                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                         <span>EDITAR</span>
+                                     </a>
+                                 </td>
+                                <td class="relation-date-cell">@row.Fecha</td>
+                                <td class="relation-actions-cell">
+                                    <strong>
+                                        @if (!string.IsNullOrWhiteSpace(row.Hotel))
+                                        {
+                                            <a asp-action="Relaciones" asp-route-busqueda="@row.Hotel" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">@row.Hotel</a>
+                                        }
+                                        else
+                                        {
+                                            @:SIN HOTEL
+                                        }
+                                    </strong>
+                                    @if (!string.IsNullOrWhiteSpace(row.Origen) || !string.IsNullOrWhiteSpace(row.Sitio) || !string.IsNullOrWhiteSpace(row.Destino))
+                                    {
+                                        <span>@string.Join(" / ", new[] { row.Origen, row.Sitio, row.Destino }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(row.Unidad) || !string.IsNullOrWhiteSpace(row.Placas) || !string.IsNullOrWhiteSpace(row.Telefono))
+                                    {
+                                        <span>@string.Join(" / ", new[] { row.Unidad, row.Placas, row.Telefono }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
+                                    }
+                                </td>
+                                <td class="relation-person-cell">
+                                     <strong>
+                                         @if (!string.IsNullOrWhiteSpace(row.TaxistaNombre))
+                                         {
+                                             <a asp-action="Relaciones" asp-route-busqueda="@row.TaxistaNombre" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">@row.TaxistaNombre</a>
+                                         }
+                                         else
+                                         {
+                                             @(row.TaxistaId == 0 ? "SIN ID" : row.TaxistaId.ToString())
+                                         }
+                                     </strong>
+                                     @if (row.TaxistaId != 0)
+                                     {
+                                         <span>ID: @row.TaxistaId</span>
+                                     }
+                                     <span>
+                                         Gafete:
+                                         @if (gafetesVisibles.Count == 0)
+                                         {
+                                             @: SIN GAFETE
+                                         }
+                                         else
+                                         {
+                                             @for (var gafeteIndex = 0; gafeteIndex < gafetesVisibles.Count; gafeteIndex++)
+                                             {
+                                                 var gafete = gafetesVisibles[gafeteIndex];
+                                                 <a asp-action="Relaciones" asp-route-busqueda="@gafete" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">@gafete</a>
+                                                 if (gafeteIndex < gafetesVisibles.Count - 1)
+                                                 {
+                                                     @:,
+                                                 }
+                                             }
+                                         }
+                                     </span>
+                                 </td>
+                                <td class="relation-nationality-cell">@(string.IsNullOrWhiteSpace(row.Nacionalidad) ? "NO CAPTURADA" : row.Nacionalidad)</td>
+                                <td>
+                                    <strong>@(string.IsNullOrWhiteSpace(row.TransporteTipo) ? "SIN TRANSPORTE" : row.TransporteTipo)</strong>
+                                    @if (!string.IsNullOrWhiteSpace(row.Unidad) || !string.IsNullOrWhiteSpace(row.Placas))
+                                    {
+                                        <span>@string.Join(" / ", new[] { row.Unidad, row.Placas }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
+                                    }
+                                </td>
+                                <td class="relation-money-cell">
+                                    <span>Venta: <strong>@row.Venta.ToString("C2")</strong></span>
+                                    <span>Dejada: <strong>@row.Dejada.ToString("C2")</strong></span>
+                                    <span>Comision: <strong>@row.Comision.ToString("C2")</strong></span>
+                                    <span>Pago: <strong>@row.Pago.ToString("C2")</strong></span>
+                                </td>
+                                <td class="relation-payment-method-cell">
+                                    @(string.IsNullOrWhiteSpace(row.FormaPago) ? "SIN PAGO POS" : row.FormaPago)
+                                </td>
+                                <td class="relation-payment-cell">
+                                    @if (dejadaEstaPagada)
+                                    {
+                                        <strong class="status-pill paid">PAGADO</strong>
+                                    }
+                                    else if (row.Dejada <= 0 && row.DejadaPagada <= 0)
+                                    {
+                                        <strong class="status-pill pending">SIN IMPORTE</strong>
+                                    }
+                                    else
+                                    {
+                                        <strong class="status-pill pending">PENDIENTE</strong>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(row.TicketPagoDejada))
+                                    {
+                                        <span>Ticket: @row.TicketPagoDejada</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(row.UsuarioPagoDejada))
+                                    {
+                                        <span>Usuario: @row.UsuarioPagoDejada</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(row.FechaPagoDejada))
+                                    {
+                                        <span>Fecha: @row.FechaPagoDejada</span>
+                                    }
+                                    @if (dejadaEstaPagada && importeDejadaPagada > 0)
+                                    {
+                                        <span>Pagado: @importeDejadaPagada.ToString("C2")</span>
+                                    }
+                                </td>
+                                <td class="relation-commission-cell">
+                                    @if (row.Comision > 0m && row.Pago >= row.Comision)
+                                    {
+                                        <strong class="status-pill paid">PAGADA</strong>
+                                        <span>@row.Pago.ToString("C2")</span>
+                                    }
+                                    else if (puedePagarComision)
+                                    {
+                                        <strong class="status-pill pending">PENDIENTE</strong>
+                                        <span>@row.Comision.ToString("C2")</span>
+                                        <form method="post" asp-action="PagarComision">
+                                            <input type="hidden" name="folioOperacion" value="@folioComision" />
+                                            <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="regreso" value="Relaciones" />
+                                            <input type="hidden" name="busqueda" value="@Model.Busqueda" />
+                                            <button type="submit" class="mini-action-btn mini-pay-commission">PAGAR COMISION</button>
+                                        </form>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(folioComision))
+                                    {
+                                        <strong class="status-pill pending">SIN CALCULAR</strong>
+                                        <form method="post" asp-action="CalcularComisiones">
+                                            <input type="hidden" name="folioOperacion" value="@folioComision" />
+                                            <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="regreso" value="Relaciones" />
+                                            <input type="hidden" name="busqueda" value="@Model.Busqueda" />
+                                            <button type="submit" class="mini-action-btn">CALCULAR</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <strong class="status-pill pending">SIN FOLIO</strong>
+                                    }
+                                </td>
+                                <td class="relation-actions-cell">
+                                    @if (!string.IsNullOrWhiteSpace(folioVenta))
+                                    {
+                                        <a class="mini-action-btn" asp-action="RemisionDetalle" asp-route-folio="@folioVenta" asp-route-productoBusqueda="@folioVenta">VENTA</a>
+                                    }
+                                    @if (dejadaEstaPagada)
+                                    {
+                                        <form method="post" asp-action="ReimprimirTicketDejada" class="mini-reprint-form" target="_blank">
+                                            <input type="hidden" name="Ticket" value="@row.TicketPagoDejada" />
+                                            <input type="hidden" name="FolioApp" value="@row.FolioApp" />
+                                            <input type="hidden" name="FolioControl" value="@row.FolioControl" />
+                                            <input type="hidden" name="FolioOperacion" value="@folioOperacionVisible" />
+                                            <input type="hidden" name="FolioPos" value="@ticketPosVisible" />
+                                            <input type="hidden" name="FechaViaje" value="@row.Fecha" />
+                                            <input type="hidden" name="FechaPago" value="@row.FechaPagoDejada" />
+                                            <input type="hidden" name="Taxista" value="@row.TaxistaNombre" />
+                                            <input type="hidden" name="Gafete" value="@row.Gafete" />
+                                            <input type="hidden" name="Unidad" value="@row.Unidad" />
+                                            <input type="hidden" name="Placas" value="@row.Placas" />
+                                            <input type="hidden" name="Destino" value="@row.Destino" />
+                                            <input type="hidden" name="Telefono" value="@row.Telefono" />
+                                            <input type="hidden" name="Nacionalidad" value="@row.Nacionalidad" />
+                                            <input type="hidden" name="Transporte" value="@row.TransporteTipo" />
+                                            <input type="hidden" name="Vendedor" value="@row.VendedorAsignado" />
+                                            <input type="hidden" name="Hotel" value="@row.Hotel" />
+                                            <input type="hidden" name="Pax" value="@row.Pax" />
+                                            <input type="hidden" name="Importe" value="@importeDejadaPagada.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                                            <input type="hidden" name="Usuario" value="@row.UsuarioPagoDejada" />
+                                            <input type="hidden" name="Estatus" value="@row.EstatusDejada" />
+                                            <input type="hidden" name="Busqueda" value="@Model.Busqueda" />
+                                            <input type="hidden" name="FechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="FechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                                            <button type="submit" class="mini-action-btn mini-print-btn" title="Reimprimir ticket" aria-label="Reimprimir ticket">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5" /><path d="M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" /><path d="M7 13h10v8H7z" /><path d="M9 17h6" /></svg>
+                                                <span>IMPRIMIR</span>
+                                            </button>
+                                        </form>
+                                    }
+                                    else if (row.PuedePagarDejada)
+                                    {
+                                        <form method="post" asp-action="PagarDejada" target="_blank">
+                                            <input type="hidden" name="folioControl" value="@row.FolioControl" />
+                                            <input type="hidden" name="folioApp" value="@row.FolioApp" />
+                                            <input type="hidden" name="folioOperacion" value="@folioOperacionVisible" />
+                                            <input type="hidden" name="folioPos" value="@ticketPosVisible" />
+                                            <input type="hidden" name="taxista" value="@row.TaxistaNombre" />
+                                            <input type="hidden" name="gafete" value="@row.Gafete" />
+                                            <input type="hidden" name="nacionalidad" value="@row.Nacionalidad" />
+                                            <input type="hidden" name="transporte" value="@row.TransporteTipo" />
+                                            <input type="hidden" name="hotel" value="@row.Hotel" />
+                                            <input type="hidden" name="unidad" value="@row.Unidad" />
+                                            <input type="hidden" name="placas" value="@row.Placas" />
+                                            <input type="hidden" name="destino" value="@row.Destino" />
+                                            <input type="hidden" name="telefono" value="@row.Telefono" />
+                                            <input type="hidden" name="pax" value="@row.Pax" />
+                                            <input type="hidden" name="importe" value="@row.Dejada.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                                            <input type="hidden" name="vendedor" value="@row.VendedorAsignado" />
+                                            <input type="hidden" name="fechaViaje" value="@row.Fecha" />
+                                            <input type="hidden" name="busqueda" value="@Model.Busqueda" />
+                                            <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                                            <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                                            <button type="submit" class="mini-action-btn">PAGAR</button>
+                                        </form>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        @if (Model.Relaciones.Count == 0)
+                        {
+                            var tieneFiltro = !string.IsNullOrWhiteSpace(Model.Busqueda) || Model.FechaInicio.HasValue || Model.FechaFin.HasValue;
+                            <tr><td colspan="10">@(tieneFiltro ? "NO HAY VIAJES PARA ESE FILTRO" : "NO HAY VIAJES DEL DIA")</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <button form="relacion-filter-form" type="submit" class="action-btn search sidebar-submit">BUSCAR</button>
+            <button form="relacion-save-form" type="submit" class="action-btn green sidebar-submit">ACTUALIZAR</button>
+            <button type="button" class="action-btn blue sidebar-submit" data-clear-relacion>LIMPIAR</button>
+            <a class="action-btn blue" asp-action="Relaciones">NUEVO</a>
+            <a class="action-btn gold" asp-action="Comisiones" asp-route-folioOperacion="@Model.FolioOperacion">COMISION</a>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn red" asp-action="Index">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+@if (ticketPagado != null)
+{
+    <form id="dejada-ticket-auto-open-form" method="post" asp-action="ReimprimirTicketDejada" target="_blank" style="display:none">
+        <input type="hidden" name="Ticket" value="@ticketPagado.Ticket" />
+        <input type="hidden" name="FolioApp" value="@ticketPagado.FolioApp" />
+        <input type="hidden" name="FolioControl" value="@ticketPagado.FolioControl" />
+        <input type="hidden" name="FolioOperacion" value="@ticketPagado.FolioOperacion" />
+        <input type="hidden" name="FolioPos" value="@ticketPagado.FolioPos" />
+        <input type="hidden" name="FechaViaje" value="@ticketPagado.FechaViaje" />
+        <input type="hidden" name="FechaPago" value="@ticketPagado.FechaPago" />
+        <input type="hidden" name="Taxista" value="@ticketPagado.Taxista" />
+        <input type="hidden" name="Gafete" value="@ticketPagado.Gafete" />
+        <input type="hidden" name="Unidad" value="@ticketPagado.Unidad" />
+        <input type="hidden" name="Placas" value="@ticketPagado.Placas" />
+        <input type="hidden" name="Destino" value="@ticketPagado.Destino" />
+        <input type="hidden" name="Telefono" value="@ticketPagado.Telefono" />
+        <input type="hidden" name="Nacionalidad" value="@ticketPagado.Nacionalidad" />
+        <input type="hidden" name="Transporte" value="@ticketPagado.Transporte" />
+        <input type="hidden" name="Vendedor" value="@ticketPagado.Vendedor" />
+        <input type="hidden" name="Hotel" value="@ticketPagado.Hotel" />
+        <input type="hidden" name="Pax" value="@ticketPagado.Pax" />
+        <input type="hidden" name="Importe" value="@ticketPagado.Importe.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+        <input type="hidden" name="Usuario" value="@ticketPagado.Usuario" />
+        <input type="hidden" name="Estatus" value="@ticketPagado.Estatus" />
+        <input type="hidden" name="Busqueda" value="@ticketPagado.Busqueda" />
+        <input type="hidden" name="FechaInicio" value="@ticketPagado.FechaInicio?.ToString("yyyy-MM-dd")" />
+        <input type="hidden" name="FechaFin" value="@ticketPagado.FechaFin?.ToString("yyyy-MM-dd")" />
+    </form>
+}
+
+<script>
+    (() => {
+        window.addEventListener('storage', (event) => {
+            if (event.key !== 'control-taxi-dejada-pagada' || !event.newValue) {
+                return;
+            }
+
+            try {
+                const payment = JSON.parse(event.newValue);
+                if (payment.refreshUrl) {
+                    window.location.href = payment.refreshUrl;
+                }
+            } catch (error) {
+                window.location.reload();
+            }
+        });
+
+        const rows = document.querySelectorAll('.relation-row-selectable');
+        const form = document.getElementById('relacion-save-form');
+        const filterForm = document.getElementById('relacion-filter-form');
+        const clearButton = document.querySelector('[data-clear-relacion]');
+        if (!form) {
+            return;
+        }
+
+        const inputs = {
+            FolioControl: form.querySelector('[name="FolioControl"]'),
+            FolioApp: form.querySelector('[name="FolioApp"]'),
+            FolioOperacion: form.querySelector('[name="FolioOperacion"]'),
+            FolioPos: form.querySelector('[name="FolioPos"]'),
+            Fecha: form.querySelector('[name="Fecha"]'),
+            Gafete: form.querySelector('[name="Gafete"]'),
+            Nacionalidad: form.querySelector('[name="Nacionalidad"]'),
+            TaxistaId: form.querySelector('[name="TaxistaId"]'),
+            TaxistaNombre: form.querySelector('[name="TaxistaNombre"]'),
+            Vendedor: form.querySelector('[name="Vendedor"]'),
+            TransporteTipo: form.querySelector('[name="TransporteTipo"]'),
+            Dejada: form.querySelector('[name="Dejada"]'),
+            Observaciones: form.querySelector('[name="Observaciones"]')
+        };
+
+        const clearForms = () => {
+            rows.forEach((item) => item.classList.remove('is-selected'));
+            Object.values(inputs).forEach((input) => {
+                if (!input) return;
+                input.value = input.name === 'TaxistaId' ? '0' : '';
+            });
+            form.querySelectorAll('input').forEach((input) => {
+                if (input.readOnly) input.value = '';
+            });
+            filterForm?.querySelectorAll('input').forEach((input) => {
+                input.value = '';
+            });
+        };
+
+        clearButton?.addEventListener('click', () => {
+            clearForms();
+            window.location.href = '@Url.Action("Relaciones")';
+        });
+
+        if (rows.length === 0) {
+            return;
+        }
+
+        const fillForm = (row) => {
+            rows.forEach((item) => item.classList.remove('is-selected'));
+            row.classList.add('is-selected');
+            if (inputs.FolioControl) inputs.FolioControl.value = row.dataset.folioControl || '';
+            if (inputs.FolioApp) inputs.FolioApp.value = row.dataset.folioApp || '';
+            if (inputs.FolioOperacion) inputs.FolioOperacion.value = row.dataset.folioOperacion || '';
+            if (inputs.FolioPos) inputs.FolioPos.value = row.dataset.folioPos || '';
+            if (inputs.Fecha) inputs.Fecha.value = row.dataset.fecha || '';
+            if (inputs.Gafete) inputs.Gafete.value = row.dataset.gafete || '';
+            if (inputs.Nacionalidad) inputs.Nacionalidad.value = row.dataset.nacionalidad || '';
+            if (inputs.TaxistaId) inputs.TaxistaId.value = row.dataset.taxistaId || '';
+            if (inputs.TaxistaNombre) inputs.TaxistaNombre.value = row.dataset.taxistaNombre || '';
+            if (inputs.Vendedor) inputs.Vendedor.value = row.dataset.vendedor || '';
+            if (inputs.TransporteTipo) inputs.TransporteTipo.value = row.dataset.transporte || '';
+            if (inputs.Dejada) inputs.Dejada.value = row.dataset.dejada || '';
+            if (inputs.Observaciones) inputs.Observaciones.value = row.dataset.observaciones || '';
+        };
+
+        const focusGafete = () => {
+            if (!inputs.Gafete) {
+                return;
+            }
+
+            inputs.Gafete.focus();
+            inputs.Gafete.select();
+        };
+
+        rows.forEach((row) => {
+            row.addEventListener('click', (event) => {
+                if (event.target.closest('a, button, form')) {
+                    return;
+                }
+
+                fillForm(row);
+                focusGafete();
+            });
+        });
+
+        document.querySelectorAll('[data-relacion-edit]').forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const row = link.closest('.relation-row-selectable');
+                if (row) {
+                    fillForm(row);
+                    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    focusGafete();
+                }
+            });
+        });
+    })();
+</script>
+
+@if (ticketPagado != null)
+{
+    <script>
+        (() => {
+            const form = document.getElementById('dejada-ticket-auto-open-form');
+            const ok = document.getElementById('sweet-alert-ok');
+            let opened = false;
+            const openTicket = () => {
+                if (opened || !form) {
+                    return;
+                }
+
+                opened = true;
+                form.submit();
+            };
+
+            if (ok) {
+                ok.addEventListener('click', () => window.setTimeout(openTicket, 150));
+            } else {
+                window.setTimeout(openTicket, 800);
+            }
+        })();
+    </script>
+}

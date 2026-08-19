@@ -1,0 +1,264 @@
+@model ControlTaxiWeb.Models.PosTriton.PosDejadaTicketViewModel
+@{
+    Layout = null;
+    ViewData["Title"] = "Ticket de dejada";
+    var folioPrincipal = new[] { Model.FolioControl, Model.FolioApp, Model.FolioOperacion, Model.FolioPos }
+        .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? "-";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<style>
+    #thermal-ticket-print {
+        display: none;
+    }
+
+    .dejada-ticket-window {
+        max-width: 1080px;
+    }
+
+    .dejada-ticket-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+        gap: 12px;
+    }
+
+    .dejada-ticket-card {
+        background: #fff;
+        border: 1px solid #b6c8da;
+        padding: 12px;
+    }
+
+    .dejada-ticket-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 12px;
+    }
+
+    .dejada-ticket-grid strong,
+    .dejada-ticket-total-label {
+        display: block;
+        margin-bottom: 4px;
+        color: #526a83;
+        font-size: 0.8rem;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+
+    .dejada-ticket-grid span {
+        color: #102033;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .dejada-ticket-total {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border: 1px solid #c5d4e3;
+        background: #eef5fb;
+    }
+
+    .dejada-ticket-total-value {
+        color: #0d3f73;
+        font-size: 1.5rem;
+        font-weight: 900;
+    }
+
+    .dejada-ticket-receipt {
+        min-height: 100%;
+        background: #fdfdfd;
+        border: 1px solid #b6c8da;
+        padding: 12px;
+    }
+
+    .dejada-ticket-receipt pre {
+        margin: 0;
+        white-space: pre-wrap;
+        font: 700 0.9rem/1.35 Consolas, "Courier New", monospace;
+        color: #111;
+    }
+
+    @@media (max-width: 920px) {
+        .dejada-ticket-layout,
+        .dejada-ticket-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @@media print {
+        @@page {
+            size: 80mm 145mm;
+            margin: 0mm;
+        }
+
+        html, body {
+            width: 80mm !important;
+            max-width: 80mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: block !important;
+            overflow: visible !important;
+            background: #fff !important;
+            print-color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+        }
+
+        body > *:not(#thermal-ticket-print) {
+            display: none !important;
+        }
+
+        #thermal-ticket-print {
+            display: block !important;
+            width: 76mm !important;
+            max-width: 76mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            padding: 2mm 2mm 0 !important;
+            margin: 0 !important;
+            border: 0 !important;
+            position: static !important;
+            transform: none !important;
+            rotate: none !important;
+            overflow: visible !important;
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
+            text-align: left !important;
+            color: #000 !important;
+            background: #fff !important;
+            font: 700 9pt/1.2 Consolas, "Courier New", monospace !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+        }
+    }
+</style>
+
+<pre id="thermal-ticket-print">@Model.TicketTexto</pre>
+
+<div class="classic-window dejada-ticket-window">
+    <div class="classic-titlebar">TICKET DE PAGO DE DEJADA</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null && ViewBag.AutoPrint != true)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+
+            <div class="dejada-ticket-layout">
+                <section class="dejada-ticket-card">
+                    <div class="mini-title">VISTA PREVIA DEL TICKET</div>
+                    <div class="dejada-ticket-grid">
+                        <div><strong>Ticket</strong><span>@Model.Ticket</span></div>
+                        <div><strong>Folio</strong><span>@folioPrincipal</span></div>
+                        <div><strong>Folio App</strong><span>@(string.IsNullOrWhiteSpace(Model.FolioApp) ? "-" : Model.FolioApp)</span></div>
+                        <div><strong>Operacion</strong><span>@(string.IsNullOrWhiteSpace(Model.FolioOperacion) ? "-" : Model.FolioOperacion)</span></div>
+                        <div><strong>Fecha viaje</strong><span>@(string.IsNullOrWhiteSpace(Model.FechaViaje) ? "-" : Model.FechaViaje)</span></div>
+                        <div><strong>Fecha pago</strong><span>@(string.IsNullOrWhiteSpace(Model.FechaPago) ? "-" : Model.FechaPago)</span></div>
+                        <div><strong>Taxista</strong><span>@(string.IsNullOrWhiteSpace(Model.Taxista) ? "-" : Model.Taxista)</span></div>
+                        <div><strong>Vendedor</strong><span>@(string.IsNullOrWhiteSpace(Model.Vendedor) ? "-" : Model.Vendedor)</span></div>
+                        <div><strong>Gafete</strong><span>@(string.IsNullOrWhiteSpace(Model.Gafete) ? "-" : Model.Gafete)</span></div>
+                        <div><strong>Unidad</strong><span>@(string.IsNullOrWhiteSpace(Model.Unidad) ? "-" : Model.Unidad)</span></div>
+                        <div><strong>Placas</strong><span>@(string.IsNullOrWhiteSpace(Model.Placas) ? "-" : Model.Placas)</span></div>
+                        <div><strong>Telefono</strong><span>@(string.IsNullOrWhiteSpace(Model.Telefono) ? "-" : Model.Telefono)</span></div>
+                        <div><strong>Nacionalidad</strong><span>@(string.IsNullOrWhiteSpace(Model.Nacionalidad) ? "-" : Model.Nacionalidad)</span></div>
+                        <div><strong>Transporte</strong><span>@(string.IsNullOrWhiteSpace(Model.Transporte) ? "-" : Model.Transporte)</span></div>
+                        <div><strong>Hotel</strong><span>@(string.IsNullOrWhiteSpace(Model.Hotel) ? "-" : Model.Hotel)</span></div>
+                        <div><strong>Destino</strong><span>@(string.IsNullOrWhiteSpace(Model.Destino) ? "-" : Model.Destino)</span></div>
+                        <div><strong>Pax</strong><span>@Model.Pax</span></div>
+                        <div><strong>Usuario</strong><span>@(string.IsNullOrWhiteSpace(Model.Usuario) ? "-" : Model.Usuario)</span></div>
+                    </div>
+
+                    <div class="dejada-ticket-total">
+                        <span class="dejada-ticket-total-label">Importe pagado</span>
+                        <div class="dejada-ticket-total-value">@Model.Importe.ToString("C2")</div>
+                    </div>
+                </section>
+
+                <section class="dejada-ticket-receipt">
+                    <pre>@Model.TicketTexto</pre>
+                </section>
+            </div>
+        </div>
+
+        <aside class="action-sidebar no-print">
+            <button type="button" class="action-btn green sidebar-submit" onclick="imprimirTicket()">IMPRIMIR</button>
+            <form method="post" asp-action="DescargarTicketDejada">
+                <input type="hidden" asp-for="Ticket" />
+                <input type="hidden" asp-for="FolioApp" />
+                <input type="hidden" asp-for="FolioControl" />
+                <input type="hidden" asp-for="FolioOperacion" />
+                <input type="hidden" asp-for="FolioPos" />
+                <input type="hidden" asp-for="FechaViaje" />
+                <input type="hidden" asp-for="FechaPago" />
+                <input type="hidden" asp-for="Taxista" />
+                <input type="hidden" asp-for="Vendedor" />
+                <input type="hidden" asp-for="Gafete" />
+                <input type="hidden" asp-for="Unidad" />
+                <input type="hidden" asp-for="Placas" />
+                <input type="hidden" asp-for="Destino" />
+                <input type="hidden" asp-for="Telefono" />
+                <input type="hidden" asp-for="Nacionalidad" />
+                <input type="hidden" asp-for="Transporte" />
+                <input type="hidden" asp-for="Hotel" />
+                <input type="hidden" asp-for="Pax" />
+                <input type="hidden" asp-for="Importe" />
+                <input type="hidden" asp-for="Usuario" />
+                <input type="hidden" asp-for="Estatus" />
+                <button type="submit" class="action-btn blue sidebar-submit">DESCARGAR</button>
+            </form>
+            <a class="action-btn search" asp-action="Relaciones" asp-route-busqueda="@Model.Busqueda" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">VOLVER</a>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn red" asp-action="Index">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+<script>
+    function imprimirTicket() {
+        window.print();
+    }
+
+    window.addEventListener('beforeprint', function () {
+        document.documentElement.style.width = '80mm';
+        document.body.style.width = '80mm';
+    });
+
+    window.addEventListener('afterprint', function () {
+        document.documentElement.style.width = '';
+        document.body.style.width = '';
+    });
+</script>
+
+<div id="print-tip" class="no-print" style="margin:8px 0;padding:8px 10px;background:#fff8e1;border:1px solid #f9a825;font-size:0.82rem;color:#5d4037;line-height:1.5;">
+    <strong>⚠ Antes de imprimir:</strong> En el diálogo de Chrome desactiva
+    <strong>"Imprimir encabezados y pies de página"</strong> para que el ticket no tenga espacio extra.
+</div>
+
+@if (ViewBag.AutoPrint == true)
+{
+    <script>
+        window.addEventListener('load', function () {
+            const refreshUrl = @Html.Raw(System.Text.Json.JsonSerializer.Serialize((string?)ViewBag.RefreshParentUrl ?? string.Empty));
+            if (refreshUrl) {
+                try {
+                    localStorage.setItem('control-taxi-dejada-pagada', JSON.stringify({
+                        refreshUrl,
+                        createdAt: Date.now()
+                    }));
+                } catch (error) {
+                    console.warn('No se pudo notificar el pago a la ventana principal.', error);
+                }
+            }
+            if (refreshUrl && window.opener && !window.opener.closed) {
+                try {
+                    window.opener.location.href = refreshUrl;
+                } catch (error) {
+                    console.warn('No se pudo refrescar la ventana principal.', error);
+                }
+            }
+            imprimirTicket();
+        });
+    </script>
+}

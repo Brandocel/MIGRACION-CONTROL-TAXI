@@ -1,0 +1,39 @@
+@model ControlTaxiWeb.Models.VendorsPageViewModel
+@{
+    ViewData["Title"] = "Vendedores";
+}
+
+<div class="page-shell">
+    <div class="hero-card">
+        <div>
+            <p class="eyebrow">@Model.Database</p>
+            <h1>Catalogo de vendedores</h1>
+            <p>Consulta rapida de claves, telefonos y porcentaje de comision.</p>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <form method="get" class="filters-grid">
+            <input type="hidden" name="database" value="@Model.Database" />
+            <div>
+                <label class="input-label">Buscar</label>
+                <input type="text" name="query" value="@Model.Query" class="text-input" placeholder="Clave o nombre" />
+            </div>
+            <div class="button-stack">
+                <button type="submit" class="primary-button">Filtrar</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card-grid">
+    @foreach (var item in Model.Vendors)
+    {
+        <article class="mini-card">
+            <span class="pill">@item.VendorKey</span>
+            <h3>@item.Name</h3>
+            <p>@(string.IsNullOrWhiteSpace(item.PhoneNumber) ? "Sin telefono" : item.PhoneNumber)</p>
+            <strong>@item.CommissionPercent.ToString("0.##")%</strong>
+        </article>
+    }
+    </div>
+</div>

@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTaxiWeb", "ControlTaxiWeb.csproj", "{BEF0E961-8289-B7E6-4781-5D40CF3E9D8A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BEF0E961-8289-B7E6-4781-5D40CF3E9D8A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BEF0E961-8289-B7E6-4781-5D40CF3E9D8A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BEF0E961-8289-B7E6-4781-5D40CF3E9D8A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BEF0E961-8289-B7E6-4781-5D40CF3E9D8A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DED96E7A-B4F3-4260-8F48-321EC630AE07}
+	EndGlobalSection
+EndGlobal

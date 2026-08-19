@@ -1,0 +1,66 @@
+@model ControlTaxiWeb.Models.CatalogsPageViewModel
+@{
+    ViewData["Title"] = "Catalogos";
+}
+
+<div class="page-shell">
+    <div class="hero-card">
+        <div>
+            <p class="eyebrow">@Model.Database</p>
+            <h1>Catalogos auxiliares</h1>
+            <p>Guias y transportistas disponibles para la operacion diaria.</p>
+        </div>
+    </div>
+
+    <div class="split-grid">
+        <section class="section-card">
+            <div class="section-head">
+                <div>
+                    <p class="section-eyebrow">GUIAS</p>
+                    <h2>Lista disponible</h2>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Clave</th>
+                            <th>Nombre</th>
+                            <th>Empresa</th>
+                            <th>Telefono</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var item in Model.Guides)
+                    {
+                        <tr>
+                            <td>@item.GuideKey</td>
+                            <td>@item.Name</td>
+                            <td>@item.Company</td>
+                            <td>@item.PhoneNumber</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section-card">
+            <div class="section-head">
+                <div>
+                    <p class="section-eyebrow">TRANSPORTES</p>
+                    <h2>Catalogo disponible</h2>
+                </div>
+            </div>
+            <div class="card-grid compact">
+            @foreach (var item in Model.Transports)
+            {
+                <article class="mini-card">
+                    <span class="pill">@item.Code</span>
+                    <h3>@item.Name</h3>
+                </article>
+            }
+            </div>
+        </section>
+    </div>
+</div>

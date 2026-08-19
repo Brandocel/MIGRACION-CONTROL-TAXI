@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Remove="PUBLICAR_CONTROL_TAXI\**" />
+    <Content Remove="PUBLICAR_CONTROL_TAXI_SERVIDOR\**" />
+    <Content Remove="PUBLICAR_CONTROL_TAXI_COMPLETO\**" />
+    <Content Remove="CONTROL_TAXI_SERVIDOR_NUEVO\**" />
+    <Content Remove="CONTROL_TAXI_SUBIR_SERVIDOR_SIN_DOTNET\**" />
+    <Content Remove="CONTROL_TAXI_SUBIR_SERVIDOR_SIN_DOTNET_LISTO\**" />
+    <Content Remove="CONTROL_TAXI_SUBIR_SERVIDOR_ACTUALIZADO\**" />
+    <None Remove="PUBLICAR_CONTROL_TAXI\**" />
+    <None Remove="PUBLICAR_CONTROL_TAXI_SERVIDOR\**" />
+    <None Remove="PUBLICAR_CONTROL_TAXI_COMPLETO\**" />
+    <None Remove="CONTROL_TAXI_SERVIDOR_NUEVO\**" />
+    <None Remove="CONTROL_TAXI_SUBIR_SERVIDOR_SIN_DOTNET\**" />
+    <None Remove="CONTROL_TAXI_SUBIR_SERVIDOR_SIN_DOTNET_LISTO\**" />
+    <None Remove="CONTROL_TAXI_SUBIR_SERVIDOR_ACTUALIZADO\**" />
+  </ItemGroup>
+
+</Project>

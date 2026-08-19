@@ -1,0 +1,128 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosPagosViewModel
+@{
+    ViewData["Title"] = "Pagos";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window screen-only">
+    <div class="classic-titlebar">PAGOS</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            <form method="get" asp-action="Pagos" class="classic-form classic-form-top classic-form-payments">
+                <div class="field wide"><label>BUSCAR FOLIO / NOMBRE / HOTEL / GAFETE</label><input name="folioOperacion" value="@(ViewBag.FolioOperacion ?? Model.FolioOperacion)" /></div>
+                <div class="field small"><label></label><button type="submit" class="action-btn search inline-btn">BUSCAR</button></div>
+            </form>
+
+            <section class="classic-form classic-form-top classic-form-payments">
+                <div class="field small"><label>FOLIO OPERACION</label><input value="@Model.FolioOperacion" /></div>
+                <div class="field small"><label>TICKET</label><input value="@Model.Ticket" /></div>
+                <div class="field small"><label>FECHA</label><input value="@Model.Fecha" /></div>
+                <div class="field small"><label>TOTAL</label><input value="@Model.TotalVenta.ToString("N2")" /></div>
+                <div class="field small"><label>COMISION</label><input value="@Model.TotalComision.ToString("N2")" /></div>
+                <div class="field small"><label>SALDO</label><input value="@Model.Saldo.ToString("N2")" /></div>
+                <div class="field small"><label>IMPORTE PAGO</label><input form="pago-save-form" name="importe" value="@Model.ImporteCaptura.ToString("0.00")" /></div>
+            </section>
+
+            <section class="classic-summary-grid">
+                <div class="summary-panel">
+                    <span>TOTAL VENTA</span>
+                    <strong>@Model.TotalVenta.ToString("C2")</strong>
+                </div>
+                <div class="summary-panel">
+                    <span>COMISION</span>
+                    <strong>@Model.TotalComision.ToString("C2")</strong>
+                </div>
+                <div class="summary-panel">
+                    <span>PAGADO</span>
+                    <strong>@Model.TotalPagado.ToString("C2")</strong>
+                </div>
+            </section>
+
+            <section class="classic-table-panel">
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr>
+                            <th>FECHA</th>
+                            <th>FORMA DE PAGO</th>
+                            <th>IMPORTE</th>
+                            <th>REFERENCIA</th>
+                            <th>ESTATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Pagos)
+                        {
+                            <tr>
+                                <td>@item.Fecha</td>
+                                <td>@item.FormaPago</td>
+                                <td>@item.Importe.ToString("C2")</td>
+                                <td>@item.Referencia</td>
+                                <td>@item.Estatus</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <a class="action-btn search" asp-action="Pagos" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion)">BUSCAR</a>
+            <form id="pago-save-form" method="post" asp-action="GuardarPago">
+                <input type="hidden" name="folioOperacion" value="@(ViewBag.FolioOperacion ?? Model.FolioOperacion)" />
+                <button type="submit" class="action-btn save sidebar-submit">GUARDAR PAGO</button>
+            </form>
+            <a class="action-btn green" asp-action="ExportPagosCsv" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion)">CSV</a>
+            <a class="action-btn green" asp-action="ExportPagosPdf" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion)">PDF</a>
+            <button type="button" class="action-btn green sidebar-submit" data-pos-print>IMPRIMIR</button>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn exit" asp-action="RegistroDiario">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+<section class="print-only triton-print-report">
+    <div class="triton-report-title">** REPORTE DE PAGOS **</div>
+    <div class="triton-report-meta">
+        <span>Fecha del Reporte : @DateTime.Today.ToString("dd/MM/yyyy") al @DateTime.Today.ToString("dd/MM/yyyy")</span>
+        <span>Page 1 of 1</span>
+    </div>
+    <div class="triton-report-subtitle">
+        Folio Operacion: @Model.FolioOperacion &nbsp;&nbsp; Ticket: @Model.Ticket &nbsp;&nbsp; Fecha: @Model.Fecha
+    </div>
+    <table class="triton-report-table">
+        <thead>
+            <tr>
+                <th>fecha</th>
+                <th>forma_pago</th>
+                <th>referencia</th>
+                <th>estatus</th>
+                <th>importe</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Pagos)
+            {
+                <tr>
+                    <td>@item.Fecha</td>
+                    <td>@item.FormaPago</td>
+                    <td>@item.Referencia</td>
+                    <td>@item.Estatus</td>
+                    <td class="num">@item.Importe.ToString("N2")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <div class="triton-report-totals">
+        <span>Total Venta: @Model.TotalVenta.ToString("N2")</span>
+        <span>Comision: @Model.TotalComision.ToString("N2")</span>
+        <span>Total Pagado: @Model.TotalPagado.ToString("N2")</span>
+        <span>Saldo: @Model.Saldo.ToString("N2")</span>
+    </div>
+</section>
+
+

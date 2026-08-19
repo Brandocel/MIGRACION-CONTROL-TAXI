@@ -1,0 +1,292 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosReportesViewModel
+@{
+    ViewData["Title"] = "Reportes";
+    var totalVentas = Model.Comisiones.Sum(x => x.Base);
+    var totalPax = Model.Comisiones.Sum(x => x.Pax);
+    var totalComisionOperativa = Model.Comisiones.Sum(x => x.Importe);
+    var totalPagoOperativo = Model.Comisiones.Sum(x => x.Pago);
+    var totalPagosComisiones = Model.PagosComisiones.Sum(x => x.Pago);
+    var primerTaxista = Model.Comisiones.FirstOrDefault()?.Staff ?? Model.Operaciones.FirstOrDefault()?.Vendedor ?? "Sin movimientos";
+    var primerHotel = Model.Comisiones.FirstOrDefault()?.Hotel ?? Model.Operaciones.FirstOrDefault()?.Hotel ?? "Sin referencia";
+    var fechaInicioValue = Model.FechaInicio?.ToString("yyyy-MM-dd") ?? string.Empty;
+    var fechaFinValue = Model.FechaFin?.ToString("yyyy-MM-dd") ?? string.Empty;
+    var esPagosComisiones = Model.TipoReporte == "pagos-comisiones";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window report-window">
+    <div class="classic-titlebar">CENTRO DE REPORTES</div>
+    <div class="report-toolbar">
+        <a class="report-tool menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+        <a class="report-tool" asp-action="RegistroDiario">Buscar</a>
+        <a class="report-tool" asp-action="Reportes" asp-route-tipoReporte="@Model.TipoReporte" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Vista previa</a>
+        <button type="button" class="report-tool" data-pos-print>Imprimir</button>
+        @if (esPagosComisiones)
+        {
+            <a class="report-tool" asp-action="ExportRegistroPdf">PDF</a>
+        }
+        else
+        {
+            <a class="report-tool" asp-action="ExportComisionesPdf" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">PDF</a>
+        }
+        @if (esPagosComisiones)
+        {
+            <a class="report-tool" asp-action="ExportReportePagosComisionesExcel" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Excel</a>
+        }
+        else
+        {
+            <a class="report-tool" asp-action="ExportReporteDejadasExcel" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Excel Dejadas</a>
+            <a class="report-tool" asp-action="ExportReporteConcentradoExcel" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Excel Concentrado</a>
+            <a class="report-tool" asp-action="ExportReporteCuadreFinalExcel" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Excel Cuadre</a>
+        }
+    </div>
+
+    <div class="report-surface">
+        <div class="report-dashboard no-print">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+
+            <form class="report-filter-bar" method="get" asp-action="Reportes">
+                <input type="hidden" name="tipoReporte" value="@Model.TipoReporte" />
+                <label>
+                    <span>Fecha inicio</span>
+                    <input type="date" name="fechaInicio" value="@fechaInicioValue" />
+                </label>
+                <label>
+                    <span>Fecha fin</span>
+                    <input type="date" name="fechaFin" value="@fechaFinValue" />
+                </label>
+                <button type="submit" class="report-filter-submit">Consultar</button>
+                <a class="report-filter-clear" asp-action="Reportes">Limpiar</a>
+            </form>
+
+            <div class="report-mode-switch">
+                <a class="@(esPagosComisiones ? "" : "is-active")" asp-action="Reportes" asp-route-tipoReporte="operaciones" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Operaciones</a>
+                <a class="@(esPagosComisiones ? "is-active" : "")" asp-action="Reportes" asp-route-tipoReporte="pagos-comisiones" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">Pagos de comisiones</a>
+            </div>
+
+            <section class="report-hero">
+                <div>
+                    <span>Reporte operativo</span>
+                    <h1>@(esPagosComisiones ? "Pagos de comisiones" : "Operaciones del dia")</h1>
+                    <p>
+                        @if (Model.FechaInicio.HasValue || Model.FechaFin.HasValue)
+                        {
+                            <text>@(Model.FechaInicio?.ToString("dd/MM/yyyy") ?? "Inicio") al @(Model.FechaFin?.ToString("dd/MM/yyyy") ?? "Fin")</text>
+                        }
+                        else
+                        {
+                            <text>@Model.FechaReporte.ToString("dd/MM/yyyy")</text>
+                        }
+                    </p>
+                </div>
+                <div class="report-page-badge">Page 1 of 1</div>
+            </section>
+
+            <section class="report-kpis">
+                @if (esPagosComisiones)
+                {
+                    <div><span>Pagos</span><strong>@Model.PagosComisiones.Count</strong></div>
+                    <div><span>Pagado</span><strong>@totalPagosComisiones.ToString("C2")</strong></div>
+                    <div><span>Comision</span><strong>@Model.PagosComisiones.Sum(x => x.Importe).ToString("C2")</strong></div>
+                    <div><span>Saldo</span><strong>@Model.PagosComisiones.Sum(x => x.Importe - x.Pago).ToString("C2")</strong></div>
+                }
+                else
+                {
+                    <div><span>Movimientos</span><strong>@Model.Comisiones.Count</strong></div>
+                    <div><span>PAX</span><strong>@totalPax</strong></div>
+                    <div><span>Importe</span><strong>@Model.TotalDejadas.ToString("C2")</strong></div>
+                    <div><span>Taxista</span><strong>@primerTaxista</strong></div>
+                }
+            </section>
+
+            <section class="report-preview">
+                <div class="report-preview-head">
+                    <div>
+                        <span>Vista previa</span>
+                        <strong>@(esPagosComisiones ? "Reporte de pagos generados" : "Reporte de operaciones total")</strong>
+                    </div>
+                    <small>@(esPagosComisiones ? totalPagosComisiones.ToString("C2") : primerHotel)</small>
+                </div>
+                @if (esPagosComisiones)
+                {
+                    <table class="table table-sm table-bordered classic-grid report-preview-grid">
+                        <thead>
+                            <tr>
+                                <th>Folio</th>
+                                <th>Fecha pago</th>
+                                <th>Taxista</th>
+                                <th>Transporte</th>
+                                <th>Comision</th>
+                                <th>Pago</th>
+                                <th>Estatus</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pago in Model.PagosComisiones.Take(10))
+                            {
+                                <tr>
+                                    <td>@pago.Folio</td>
+                                    <td>@pago.FechaPago</td>
+                                    <td>@pago.Staff</td>
+                                    <td>@pago.Transporte</td>
+                                    <td>@pago.Importe.ToString("C2")</td>
+                                    <td>@pago.Pago.ToString("C2")</td>
+                                    <td>@pago.Estatus</td>
+                                </tr>
+                            }
+                            @if (Model.PagosComisiones.Count == 0)
+                            {
+                                <tr><td colspan="7">Selecciona un rango de fechas y presiona Consultar</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <table class="table table-sm table-bordered classic-grid report-preview-grid">
+                        <thead>
+                            <tr>
+                                <th>Taxista</th>
+                                <th>Fecha</th>
+                                <th>PAX</th>
+                                <th>Llegada/Sucursal</th>
+                                <th>Dejada</th>
+                                <th>Importe</th>
+                                <th>Comision</th>
+                                <th>Pago</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Comisiones.Take(10))
+                            {
+                                <tr>
+                                    <td>@(string.IsNullOrWhiteSpace(item.Staff) ? item.Beneficiario : item.Staff)</td>
+                                    <td>@item.Fecha</td>
+                                    <td>@item.Pax</td>
+                                    <td>@item.Hotel</td>
+                                    <td>@item.DeduccionDejada.ToString("C2")</td>
+                                    <td>@item.Base.ToString("C2")</td>
+                                    <td>@item.Importe.ToString("C2")</td>
+                                    <td>@item.Pago.ToString("C2")</td>
+                                </tr>
+                            }
+                            @if (Model.Comisiones.Count == 0)
+                            {
+                                <tr><td colspan="8">Selecciona un rango de fechas y presiona Consultar</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </section>
+
+            <section class="report-module-grid">
+        @foreach (var module in Model.Reportes)
+        {
+            <a class="report-module-card @module.AccentClass" asp-controller="Pos" asp-action="@module.Action">
+                <span class="report-module-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z" /><path d="M8 8h8M8 12h8M8 16h5" /></svg>
+                        </span>
+                        <span>
+                            <strong>@module.Title</strong>
+                            <small>@module.Description</small>
+                        </span>
+                <b>ABRIR</b>
+            </a>
+        }
+        <a class="report-module-card accent-green" asp-controller="Pos" asp-action="Reportes" asp-route-tipoReporte="pagos-comisiones" asp-route-fechaInicio="@fechaInicioValue" asp-route-fechaFin="@fechaFinValue">
+            <span class="report-module-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z" /><path d="M8 8h8M8 12h8M8 16h5" /></svg>
+            </span>
+                    <span>
+                        <strong>PAGOS COMISION</strong>
+                        <small>Pagos generados y descargables</small>
+                    </span>
+                    <b>ABRIR</b>
+                </a>
+            </section>
+        </div>
+
+        <div class="report-paper triton-report print-preview-paper">
+            <div class="triton-report-title">** @(esPagosComisiones ? "REPORTE DE PAGOS DE COMISIONES" : "REPORTE DE OPERACIONES TOTAL") **</div>
+            <div class="triton-report-meta">
+                <span>Fecha del Reporte : @(Model.FechaInicio?.ToString("dd/MM/yyyy") ?? Model.FechaReporte.ToString("dd/MM/yyyy")) al @(Model.FechaFin?.ToString("dd/MM/yyyy") ?? Model.FechaReporte.ToString("dd/MM/yyyy"))</span>
+                <span>Page 1 of 1</span>
+            </div>
+
+            @if (esPagosComisiones)
+            {
+                <table class="triton-report-table">
+                    <thead>
+                        <tr>
+                            <th>folio</th>
+                            <th>fecha pago</th>
+                            <th>taxista</th>
+                            <th>transporte</th>
+                            <th>comision</th>
+                            <th>pago</th>
+                            <th>estatus</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var pago in Model.PagosComisiones)
+                        {
+                            <tr>
+                                <td>@pago.Folio</td>
+                                <td>@pago.FechaPago</td>
+                                <td>@pago.Staff</td>
+                                <td>@pago.Transporte</td>
+                                <td class="num">@pago.Importe.ToString("N2")</td>
+                                <td class="num">@pago.Pago.ToString("N2")</td>
+                                <td>@pago.Estatus</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            else
+            {
+            <table class="triton-report-table">
+                <thead>
+                    <tr>
+                        <th>taxista</th>
+                        <th>fecha</th>
+                        <th>PAX</th>
+                        <th>LLEGADA/SUCURSAL</th>
+                        <th>DEJADA</th>
+                        <th>IMPORTE</th>
+                        <th>COMISION</th>
+                        <th>PAGO</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Comisiones)
+                    {
+                        <tr>
+                            <td>@(string.IsNullOrWhiteSpace(item.Staff) ? item.Beneficiario : item.Staff)</td>
+                            <td>@item.Fecha</td>
+                            <td class="num">@item.Pax</td>
+                            <td>@item.Hotel</td>
+                            <td class="num">@item.DeduccionDejada.ToString("N2")</td>
+                            <td class="num">@item.Base.ToString("N2")</td>
+                            <td class="num">@item.Importe.ToString("N2")</td>
+                            <td class="num">@item.Pago.ToString("N2")</td>
+                        </tr>
+                    }
+                    @if (Model.Comisiones.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="8">SELECCIONA UN RANGO DE FECHAS Y PRESIONA CONSULTAR</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            }
+        </div>
+    </div>
+</div>
+
+

@@ -1,0 +1,673 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosGafetesViewModel
+@{
+    ViewData["Title"] = "Llegadas a sucursales";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+<style>
+    .gafetes-filter-row {
+        align-items: end;
+        display: grid;
+        grid-template-columns: 160px 160px 130px 1fr;
+        gap: 14px;
+        margin-top: 12px;
+        max-width: 620px;
+    }
+
+    .gafetes-filter-row .field {
+        width: 100%;
+    }
+
+    .gafetes-filter-row .action-btn {
+        min-height: 32px;
+    }
+
+    .gafete-row-selectable {
+        cursor: pointer;
+    }
+
+    .gafete-row-selectable.is-selected {
+        background: #e8f1ff;
+    }
+
+    .gafete-status-note {
+        color: #184d9a;
+        font-size: 12px;
+        font-weight: 700;
+        margin-top: 8px;
+        text-transform: uppercase;
+    }
+
+    .gafete-action-cell {
+        white-space: nowrap;
+        width: 120px;
+    }
+
+    .gafete-edit-link {
+        align-items: center;
+        color: #184d9a;
+        display: inline-flex;
+        gap: 6px;
+        text-decoration: none;
+    }
+
+    .gafete-edit-link svg {
+        height: 14px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        width: 14px;
+    }
+
+    .gafete-mode-badge {
+        color: #184d9a;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+
+    .gafete-bulk-panel {
+        margin: 12px 0;
+    }
+
+    .gafete-bulk-form {
+        align-items: start;
+        display: grid;
+        gap: 12px;
+        grid-template-columns: minmax(300px, 1fr) 180px;
+    }
+
+    .gafete-scan-input {
+        font-size: 16px;
+        min-height: 42px;
+        width: 100%;
+    }
+
+    .gafete-scan-list {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .gafete-scan-item {
+        align-items: center;
+        background: #f5f9ff;
+        border: 1px solid #b8cce4;
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 90px 1fr 90px 34px;
+        min-height: 36px;
+        padding: 5px 8px;
+    }
+
+    .gafete-scan-item strong {
+        color: #064ea2;
+    }
+
+    .gafete-scan-remove {
+        background: transparent;
+        border: 0;
+        color: #ba1a1a;
+        cursor: pointer;
+        font-size: 20px;
+    }
+
+    .gafete-scan-empty {
+        color: #52677f;
+        font-size: 12px;
+        padding: 8px 0;
+    }
+
+    .gafete-check-cell {
+        text-align: center;
+        width: 38px;
+    }
+
+    .gafete-check-cell input {
+        height: 17px;
+        width: 17px;
+    }
+
+    @@media (max-width: 900px) {
+        .gafete-bulk-form {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="classic-window">
+    <div class="classic-titlebar">LLEGADAS A SUCURSALES</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            <div class="gafete-mode-badge" data-gafete-mode>Nuevo registro</div>
+            <section id="gafete-editor" class="classic-form classic-form-top">
+                <div class="field small"><label>MATRICULA</label><input form="gafete-save-form" name="matricula" value="@Model.Matricula" /></div>
+                <div class="field small"><label>GAFETE</label><input form="gafete-save-form" name="gafete" value="@Model.Gafete" /></div>
+                <div class="field wide"><label>FOLIO OPERACION</label><input form="gafete-save-form" name="folioOperacion" value="@Model.FolioOperacion" /></div>
+            </section>
+
+            <form id="gafetes-filter-form" method="get" asp-action="Gafetes" class="gafetes-filter-row">
+                <div class="field small">
+                    <label>DE FECHA</label>
+                    <input type="date" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field small">
+                    <label>A FECHA</label>
+                    <input type="date" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                </div>
+                <button type="submit" class="action-btn blue sidebar-submit">BUSCAR</button>
+            </form>
+
+            <section class="classic-mini-panel gafete-bulk-panel">
+                <div class="mini-title">REGRESO DE GAFETES EN BLOQUE</div>
+                <form id="gafete-bulk-form" method="post" asp-action="RegistrarRegresoGafetesBloque" class="gafete-bulk-form" data-gafete-bulk-form>
+                    <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                    <div class="field wide">
+                        <label>ESCANEAR GAFETE</label>
+                        <input class="gafete-scan-input"
+                               inputmode="numeric"
+                               autocomplete="off"
+                               data-gafete-scan
+                               placeholder="Escanea y presiona Enter; repite con cada gafete" />
+                        <div class="gafete-scan-list" data-gafete-scan-list>
+                            <div class="gafete-scan-empty" data-gafete-scan-empty>También puedes seleccionar gafetes ocupados con los checkbox de la tabla.</div>
+                        </div>
+                    </div>
+                    <button type="submit" class="action-btn pay sidebar-submit" data-gafete-bulk-submit disabled>REGRESAR SELECCIONADOS</button>
+                </form>
+            </section>
+
+            <section class="classic-mini-panel">
+                <div class="mini-title">RELACION DE GAFETES</div>
+                <table class="table table-sm table-bordered classic-grid">
+            <thead>
+                <tr>
+                    <th class="gafete-check-cell"><input type="checkbox" data-gafete-check-all aria-label="Seleccionar todos los ocupados" /></th>
+                    <th>Gafete</th>
+                    <th>Staff</th>
+                    <th>Folio Operacion</th>
+                    <th>Unidad</th>
+                    <th>Telefono</th>
+                    <th>Nacionalidad</th>
+                    <th>Entrega</th>
+                    <th>Estatus</th>
+                    <th>Regreso</th>
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Model.Filas)
+                {
+                    var rowClass = "gafete-row-selectable";
+                    var estatusFila = row.Count > 7 ? row[7] : string.Empty;
+                    var puedeRegresar = string.Equals(estatusFila, "OCUPADO", StringComparison.OrdinalIgnoreCase);
+                    if (!string.IsNullOrWhiteSpace(Model.SelectedGafete)
+                        && row.Count > 0
+                        && row[0] == Model.SelectedGafete
+                        && (Model.SelectedFolioOperacion == null || (row.Count > 2 && row[2] == Model.SelectedFolioOperacion.ToString())))
+                    {
+                        rowClass = "gafete-row-selectable is-selected";
+                    }
+                <tr class="@rowClass"
+                        data-matricula="@(row.Count > 1 ? row[1] : string.Empty)"
+                        data-gafete="@(row.Count > 0 ? row[0] : string.Empty)"
+                        data-folio-operacion="@(row.Count > 2 ? row[2] : string.Empty)"
+                        data-estatus="@(row.Count > 7 ? row[7] : string.Empty)">
+                        <td class="gafete-check-cell">
+                            <input type="checkbox"
+                                   class="gafete-bulk-check"
+                                   name="seleccion"
+                                   value="@($"{(row.Count > 0 ? row[0] : string.Empty)}|{(row.Count > 2 ? row[2] : string.Empty)}")"
+                                   form="gafete-bulk-form"
+                                   disabled="@(!puedeRegresar)"
+                                   aria-label="Seleccionar gafete @(row.Count > 0 ? row[0] : string.Empty)" />
+                        </td>
+                        @for (var i = 0; i < row.Count; i++)
+                        {
+                            <td>
+                                @if (i == 0)
+                                {
+                                    <a href="#gafete-editor" class="gafete-edit-link" data-gafete-edit>
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                        <strong>@row[i]</strong>
+                                    </a>
+                                }
+                                else if (i == 7)
+                                {
+                                    var estVal = row[i];
+                                    var chip = estVal == "OCUPADO"
+                                        ? "<span style='background:#d32f2f;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>OCUPADO</span>"
+                                        : estVal == "LIBRE"
+                                            ? "<span style='background:#388e3c;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700'>LIBRE</span>"
+                                            : $"<span style='background:#888;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px'>{estVal}</span>";
+                                    @Html.Raw(chip)
+                                }
+                                else
+                                {
+                                    @row[i]
+                                }
+                            </td>
+                        }
+                        <td class="gafete-action-cell">
+                            <a href="#gafete-editor" class="gafete-edit-link" data-gafete-edit>
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                <span>EDITAR</span>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <form id="gafete-save-form" method="post" asp-action="GuardarGafete">
+                <input type="hidden" name="movimiento" value="@Model.Movimiento" />
+                <input type="hidden" name="esEdicion" value="@Model.EsEdicion.ToString().ToLowerInvariant()" data-gafete-edit-flag />
+                <input type="hidden" name="matriculaOriginal" value="@Model.MatriculaOriginal" data-gafete-original-matricula />
+                <input type="hidden" name="gafeteOriginal" value="@Model.GafeteOriginal" data-gafete-original-gafete />
+                <input type="hidden" name="folioOperacionOriginal" value="@Model.FolioOperacionOriginal" data-gafete-original-folio />
+                <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                <button type="submit" class="action-btn save sidebar-submit" data-gafete-submit>GUARDAR</button>
+            </form>
+            <form method="post" asp-action="ReiniciarGafetes">
+                <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="selectedGafete" value="@Model.SelectedGafete" />
+                <input type="hidden" name="selectedFolioOperacion" value="@Model.SelectedFolioOperacion" />
+                <button type="submit" class="action-btn warn sidebar-submit">REINICIO</button>
+            </form>
+            <button type="button" class="action-btn blue sidebar-submit" data-gafete-clear>NUEVO</button>
+            <button form="gafetes-filter-form" type="submit" class="action-btn search sidebar-submit">BUSCAR</button>
+            <form method="post" asp-action="RegistrarRegresoGafete" data-gafete-regreso-form>
+                <input type="hidden" name="gafete" value="@Model.Gafete" data-gafete-regreso-numero />
+                <input type="hidden" name="folioOperacion" value="@Model.FolioOperacion" data-gafete-regreso-folio />
+                <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                <button type="submit" class="action-btn pay sidebar-submit" data-gafete-regreso>REGRESO</button>
+            </form>
+            <div class="gafete-status-note" data-gafete-status-note>Selecciona un gafete OCUPADO para marcar LIBRE</div>
+            <div class="sidebar-date">@DateTime.Today.ToString("dd/MM/yyyy")</div>
+            <a class="action-btn green" asp-action="ExportGafetesCsv" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">CSV</a>
+            <button type="button" class="action-btn green sidebar-submit" data-pos-print>IMPRIMIR</button>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+        </aside>
+    </div>
+</div>
+
+
+<script>
+    (() => {
+        const matriculaInput = document.querySelector('input[name="matricula"]');
+        const gafeteInput = document.querySelector('input[name="gafete"]');
+        const folioOperacionInput = document.querySelector('input[name="folioOperacion"]');
+        const editFlagInput = document.querySelector('[data-gafete-edit-flag]');
+        const originalMatriculaInput = document.querySelector('[data-gafete-original-matricula]');
+        const originalGafeteInput = document.querySelector('[data-gafete-original-gafete]');
+        const originalFolioInput = document.querySelector('[data-gafete-original-folio]');
+        const modeLabel = document.querySelector('[data-gafete-mode]');
+        const clearButton = document.querySelector('[data-gafete-clear]');
+        const editor = document.querySelector('#gafete-editor');
+        const submitButton = document.querySelector('[data-gafete-submit]');
+        const regresoNumeroInput = document.querySelector('[data-gafete-regreso-numero]');
+        const regresoFolioInput = document.querySelector('[data-gafete-regreso-folio]');
+        const regresoButton = document.querySelector('[data-gafete-regreso]');
+        const regresoForm = document.querySelector('[data-gafete-regreso-form]');
+        const bulkForm = document.querySelector('[data-gafete-bulk-form]');
+        const scanInput = document.querySelector('[data-gafete-scan]');
+        const scanList = document.querySelector('[data-gafete-scan-list]');
+        const scanEmpty = document.querySelector('[data-gafete-scan-empty]');
+        const bulkSubmit = document.querySelector('[data-gafete-bulk-submit]');
+        const checkAll = document.querySelector('[data-gafete-check-all]');
+        const bulkChecks = Array.from(document.querySelectorAll('.gafete-bulk-check'));
+        const statusNote = document.querySelector('[data-gafete-status-note]');
+        const rows = document.querySelectorAll('.gafete-row-selectable');
+        const findGafeteUrl = '@Url.Action("FindGafete", "Pos")';
+        const scanned = new Map();
+        if (!matriculaInput || !gafeteInput || !folioOperacionInput) {
+            return;
+        }
+
+        const defaults = {
+            matricula: matriculaInput.value,
+            gafete: gafeteInput.value,
+            folioOperacion: folioOperacionInput.value
+        };
+
+        const updateRegresoState = (estatus) => {
+            const activo = (estatus || '').trim().toUpperCase() === 'OCUPADO';
+            if (regresoButton) {
+                regresoButton.disabled = !activo;
+            }
+
+            if (statusNote) {
+                statusNote.textContent = activo
+                    ? 'Gafete OCUPADO — clic en REGRESO para marcar LIBRE'
+                    : 'Selecciona un gafete OCUPADO para marcar LIBRE';
+            }
+        };
+
+        const syncRegresoInputsFromEditor = () => {
+            const normalizedGafete = normalizeBadgeValue(gafeteInput?.value || '');
+            const normalizedFolio = (folioOperacionInput?.value || '').trim();
+            if (regresoNumeroInput) {
+                regresoNumeroInput.value = normalizedGafete;
+            }
+            if (regresoFolioInput) {
+                regresoFolioInput.value = normalizedFolio;
+            }
+        };
+
+        const setEditMode = (enabled, row) => {
+            if (editFlagInput) {
+                editFlagInput.value = enabled ? 'true' : 'false';
+            }
+
+            if (submitButton) {
+                submitButton.textContent = enabled ? 'ACTUALIZAR' : 'GUARDAR';
+            }
+
+            if (enabled && row) {
+                if (originalMatriculaInput) {
+                    originalMatriculaInput.value = row.dataset.matricula || '';
+                }
+                if (originalGafeteInput) {
+                    originalGafeteInput.value = row.dataset.gafete || '';
+                }
+                if (originalFolioInput) {
+                    originalFolioInput.value = row.dataset.folioOperacion || '';
+                }
+                if (modeLabel) {
+                    modeLabel.textContent = 'Editando registro';
+                }
+            } else {
+                if (originalMatriculaInput) {
+                    originalMatriculaInput.value = '';
+                }
+                if (originalGafeteInput) {
+                    originalGafeteInput.value = '';
+                }
+                if (originalFolioInput) {
+                    originalFolioInput.value = '';
+                }
+                if (modeLabel) {
+                    modeLabel.textContent = 'Nuevo registro';
+                }
+            }
+        };
+
+        const selectRow = (row, scrollToEditor) => {
+            rows.forEach((item) => item.classList.remove('is-selected'));
+            row.classList.add('is-selected');
+            matriculaInput.value = row.dataset.matricula || '';
+            gafeteInput.value = row.dataset.gafete || '';
+            folioOperacionInput.value = row.dataset.folioOperacion || '';
+            if (regresoNumeroInput) {
+                regresoNumeroInput.value = row.dataset.gafete || '';
+            }
+            if (regresoFolioInput) {
+                regresoFolioInput.value = row.dataset.folioOperacion || '';
+            }
+            setEditMode(true, row);
+            updateRegresoState(row.dataset.estatus || '');
+
+            if (scrollToEditor && editor) {
+                editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                gafeteInput.focus();
+                gafeteInput.select();
+            }
+        };
+
+        rows.forEach((row) => {
+            row.addEventListener('click', (event) => {
+                if (event.target.closest('.gafete-bulk-check')) {
+                    updateBulkState();
+                    return;
+                }
+                if (event.target.closest('[data-gafete-edit]') || event.target.closest('a')) {
+                    event.preventDefault();
+                }
+
+                selectRow(row, false);
+            });
+        });
+
+        document.querySelectorAll('[data-gafete-edit]').forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const row = link.closest('.gafete-row-selectable');
+                if (row) {
+                    selectRow(row, true);
+                }
+            });
+        });
+
+        const preselectedRow = document.querySelector('.gafete-row-selectable.is-selected');
+        if (preselectedRow) {
+            selectRow(preselectedRow, true);
+        }
+
+        if (clearButton) {
+            clearButton.addEventListener('click', () => {
+                rows.forEach((item) => item.classList.remove('is-selected'));
+                matriculaInput.value = defaults.matricula;
+                gafeteInput.value = defaults.gafete;
+                folioOperacionInput.value = defaults.folioOperacion;
+                syncRegresoInputsFromEditor();
+                setEditMode(false);
+                updateRegresoState('');
+                if (editor) {
+                    editor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                matriculaInput.focus();
+            });
+        }
+
+        const updateBulkState = () => {
+            const selectedKeys = new Set(scanned.keys());
+            bulkChecks
+                .filter((check) => check.checked)
+                .forEach((check) => selectedKeys.add(check.value));
+            const total = selectedKeys.size;
+
+            if (regresoButton) {
+                regresoButton.textContent = total > 0 ? `REGRESO SEL. (${total})` : 'REGRESO';
+                if (total > 0) {
+                    regresoButton.disabled = false;
+                } else {
+                    const selectedRow = document.querySelector('.gafete-row-selectable.is-selected');
+                    const estatusSeleccionado = selectedRow?.getAttribute('data-estatus') || '';
+                    regresoButton.disabled = (estatusSeleccionado || '').trim().toUpperCase() !== 'OCUPADO';
+                }
+            }
+
+            if (bulkSubmit) {
+                bulkSubmit.disabled = total === 0;
+                bulkSubmit.textContent = total > 0
+                    ? `REGRESAR SELECCIONADOS (${total})`
+                    : 'REGRESAR SELECCIONADOS';
+            }
+            if (checkAll) {
+                const enabled = bulkChecks.filter((check) => !check.disabled);
+                const enabledChecked = enabled.filter((check) => check.checked);
+                checkAll.checked = enabled.length > 0 && enabledChecked.length === enabled.length;
+                checkAll.indeterminate = enabledChecked.length > 0 && enabledChecked.length < enabled.length;
+            }
+        };
+
+        const renderScanned = () => {
+            if (!scanList) return;
+            scanList.querySelectorAll('.gafete-scan-item').forEach((item) => item.remove());
+            if (scanEmpty) scanEmpty.hidden = scanned.size > 0;
+
+            scanned.forEach((item, key) => {
+                const row = document.createElement('div');
+                row.className = 'gafete-scan-item';
+
+                const badge = document.createElement('strong');
+                badge.textContent = `Gafete ${item.numero}`;
+                const detail = document.createElement('span');
+                detail.textContent = `Folio ${item.folioOperacion || 'sin folio'}${item.staff ? ` | Staff ${item.staff}` : ''}`;
+                const status = document.createElement('span');
+                status.textContent = item.estatus || 'OCUPADO';
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'gafete-scan-remove';
+                remove.title = 'Quitar';
+                remove.textContent = 'x';
+                remove.addEventListener('click', () => {
+                    scanned.delete(key);
+                    renderScanned();
+                    scanInput?.focus();
+                });
+
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'seleccion';
+                hidden.value = `${item.numero}|${item.folioOperacion || ''}`;
+                row.append(badge, detail, status, remove, hidden);
+                scanList.appendChild(row);
+            });
+            updateBulkState();
+        };
+
+        const normalizeBadgeValue = (rawValue) => {
+            const value = (rawValue || '').trim();
+            const digitsOnly = value.replace(/[^\d]/g, '');
+            return digitsOnly || value;
+        };
+
+        const addScannedBadge = async (rawValue) => {
+            const value = normalizeBadgeValue(rawValue);
+            if (!value) return;
+            try {
+                const resp = await fetch(`${findGafeteUrl}?gafete=${encodeURIComponent(value)}`);
+                if (!resp.ok) {
+                    window.alert(`Error del servidor al consultar el gafete ${value} (HTTP ${resp.status}). Verifica la conexion con la base de datos POS.`);
+                    return;
+                }
+                const data = await resp.json();
+                if (!data || !data.numero) {
+                    window.alert(`No se encontro el gafete ${value}.`);
+                    return;
+                }
+                if ((data.estatus || '').trim().toUpperCase() !== 'OCUPADO') {
+                    window.alert(`El gafete ${data.numero} aparece como ${data.estatus || 'sin estatus'} y no necesita regreso.`);
+                    return;
+                }
+
+                const key = `${data.numero}|${data.folioOperacion || ''}`;
+                if (!scanned.has(key)) {
+                    scanned.set(key, data);
+                    renderScanned();
+                }
+            } catch {
+                window.alert(`No se pudo consultar el gafete ${value}.`);
+            }
+        };
+
+        scanInput?.addEventListener('keydown', async (event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            const values = (scanInput.value || '')
+                .split(/[\s,;|/]+/)
+                .map((value) => value.trim())
+                .filter(Boolean);
+            scanInput.value = '';
+            for (const value of values) {
+                await addScannedBadge(value);
+            }
+            scanInput.focus();
+        });
+
+        bulkChecks.forEach((check) => check.addEventListener('change', updateBulkState));
+        checkAll?.addEventListener('change', () => {
+            bulkChecks.forEach((check) => {
+                if (!check.disabled) check.checked = checkAll.checked;
+            });
+            updateBulkState();
+        });
+
+        bulkForm?.addEventListener('submit', (event) => {
+            const selectedKeys = new Set(scanned.keys());
+            bulkChecks
+                .filter((check) => check.checked)
+                .forEach((check) => selectedKeys.add(check.value));
+            const total = selectedKeys.size;
+            if (total === 0) {
+                event.preventDefault();
+                scanInput?.focus();
+            }
+        });
+
+        regresoForm?.addEventListener('submit', (event) => {
+            const selectedKeys = new Set(scanned.keys());
+            bulkChecks
+                .filter((check) => check.checked)
+                .forEach((check) => selectedKeys.add(check.value));
+
+            if (selectedKeys.size > 0 && bulkForm) {
+                event.preventDefault();
+                if (typeof bulkForm.requestSubmit === 'function') {
+                    bulkForm.requestSubmit();
+                } else {
+                    bulkForm.submit();
+                }
+            }
+        });
+
+        setEditMode(false);
+        updateRegresoState('');
+        if (submitButton && editFlagInput && editFlagInput.value === 'true') {
+            submitButton.textContent = 'ACTUALIZAR';
+        }
+
+        // Allow quick lookup by entering only the gafete and pressing Enter
+        gafeteInput.addEventListener('keydown', async (evt) => {
+            if (evt.key !== 'Enter') return;
+            evt.preventDefault();
+            const value = normalizeBadgeValue(gafeteInput.value || '');
+            if (!value) return;
+            try {
+                const resp = await fetch(`${findGafeteUrl}?gafete=${encodeURIComponent(value)}`);
+                if (!resp.ok) {
+                    window.alert(`Error del servidor al consultar el gafete ${value} (HTTP ${resp.status}). Verifica la conexion con la base de datos POS.`);
+                    return;
+                }
+                const data = await resp.json();
+                if (!data || !data.numero) {
+                    // no encontrado: switch to new entry mode
+                    setEditMode(false);
+                    return;
+                }
+                // populate editor with found data
+                matriculaInput.value = data.staff || '';
+                gafeteInput.value = data.numero || value;
+                folioOperacionInput.value = data.folioOperacion || '';
+                syncRegresoInputsFromEditor();
+                setEditMode(true);
+                updateRegresoState(data.estatus || '');
+            } catch (e) {
+                // ignore errors
+            }
+        });
+
+        gafeteInput.addEventListener('input', syncRegresoInputsFromEditor);
+        folioOperacionInput.addEventListener('input', syncRegresoInputsFromEditor);
+
+        regresoForm?.addEventListener('submit', () => {
+            syncRegresoInputsFromEditor();
+        });
+
+        syncRegresoInputsFromEditor();
+        updateBulkState();
+    })();
+</script>

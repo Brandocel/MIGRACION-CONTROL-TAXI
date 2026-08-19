@@ -1,0 +1,218 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosVentasViewModel
+@{
+    ViewData["Title"] = "Venta";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window">
+    <div class="classic-titlebar">VENTA</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            <form id="venta-search-form" method="get" asp-action="Ventas" class="classic-form classic-form-top">
+                <div class="field wide"><label>BUSCAR PRODUCTO / FOLIO / NOMBRE / HOTEL / GAFETE</label><input name="productoBusqueda" value="@Model.ProductoBusqueda" /></div>
+                <div class="field small"><label></label><button type="submit" class="action-btn search inline-btn">BUSCAR</button></div>
+            </form>
+
+            <form id="venta-save-form" method="post" asp-action="GuardarVenta"></form>
+            <section class="ventas-top">
+                <div class="ventas-left">
+                    <div class="field-row"><label>VENDEDOR</label><input form="venta-save-form" name="Vendedor" value="@Model.Vendedor" /></div>
+                    <div class="field-row"><label>CLIENTE</label><input form="venta-save-form" name="Cliente" value="@Model.Cliente" maxlength="6" /></div>
+                    <div class="field-row"><label>USUARIO</label><input form="venta-save-form" name="Usuario" value="@Model.Usuario" maxlength="4" /></div>
+                    <div class="field-row"><label>AP MOVIL</label><input form="venta-save-form" name="FolioControl" value="@Model.FolioControl" maxlength="20" /></div>
+                    <input form="venta-save-form" type="hidden" name="FolioApp" value="@Model.FolioApp" />
+                    <div class="field-row"><label>GAFETE</label><input form="venta-save-form" name="Gafete" value="@Model.Gafete" maxlength="300" /></div>
+                    <div class="field-row"><label>TRANSPORTE</label><input form="venta-save-form" name="TransporteTipo" value="@Model.TransporteTipo" maxlength="10" /></div>
+                    <div class="field-row"><label>GUIA MAT.</label><input form="venta-save-form" name="GuiaMatricula" value="@Model.GuiaMatricula" /></div>
+                    <div class="field-row"><label>TAXISTA ID</label><input form="venta-save-form" name="TaxistaId" value="@Model.TaxistaId" /></div>
+                    <div class="field-row"><label>TAXISTA</label><input form="venta-save-form" name="TaxistaNombre" value="@Model.TaxistaNombre" maxlength="50" /></div>
+                    <div class="field-row"><label>PRODUCTO</label><input form="venta-save-form" name="ProductoId" value="@Model.ProductoId" /></div>
+                    <div class="field-row"><label>CANTIDAD</label><input form="venta-save-form" name="Cantidad" value="@Model.Cantidad" /></div>
+                    <div class="field-row"><label>PAX</label><input form="venta-save-form" name="Pax" value="@Model.Pax" /></div>
+                </div>
+                <div class="ventas-totals">
+                    <div class="total-box"><span>FECHA</span><strong>@DateTime.Today.ToString("dd/MM/yyyy")</strong></div>
+                    <div class="total-box"><span>Subtotal</span><strong>@Model.Subtotal.ToString("N2")</strong></div>
+                    <div class="total-box"><span>IVA</span><strong>@Model.Iva.ToString("N2")</strong></div>
+                    <div class="total-box"><span>Total</span><strong>@Model.Total.ToString("N2")</strong></div>
+                </div>
+            </section>
+
+            <section class="ventas-typechange">
+                <input form="venta-save-form" type="hidden" name="ProductoBusqueda" value="@Model.ProductoBusqueda" />
+                <div class="field-row wide"><label>TIPO DE CAMBIO DLS</label><input form="venta-save-form" name="TipoCambio" value="@Model.TipoCambio" /></div>
+                <div class="field-row wide"><label>EFECTIVO</label><input form="venta-save-form" name="Efectivo" value="@Model.Efectivo.ToString("0.00")" /></div>
+                <div class="field-row wide"><label>TARJETA</label><input form="venta-save-form" name="Tarjeta" value="@Model.Tarjeta.ToString("0.00")" /></div>
+                <div class="field-row wide"><label>DOLARES</label><input form="venta-save-form" name="Dolares" value="@Model.Dolares.ToString("0.00")" /></div>
+            </section>
+
+            <section class="classic-table-panel">
+                <div class="mini-title">TICKET ACTUAL</div>
+                <table class="table table-sm table-bordered classic-grid">
+            <thead>
+                <tr>
+                    <th>Cantidad</th>
+                    <th>Producto</th>
+                    <th>Departamento</th>
+                    <th>Precio</th>
+                    <th>Importe</th>
+                    <th>Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>@item.Cantidad</td>
+                        <td>
+                            @if (item.ProductoId <= 0 && !string.IsNullOrWhiteSpace(item.Referencia))
+                            {
+                                <a asp-action="RemisionDetalle" asp-route-folio="@item.Referencia" asp-route-productoBusqueda="@Model.ProductoBusqueda">@item.Producto</a>
+                            }
+                            else
+                            {
+                                @item.Producto
+                            }
+                        </td>
+                        <td>@item.Departamento</td>
+                        <td>@item.Precio.ToString("C2")</td>
+                        <td>@item.Importe.ToString("C2")</td>
+                        <td>
+                            @if (item.ProductoId > 0)
+                            {
+                                <form method="post" asp-action="BorrarLineaVenta">
+                                    <input type="hidden" name="productoId" value="@item.ProductoId" />
+                                    <button type="submit" class="mini-action-btn">QUITAR</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <a class="mini-action-btn" asp-action="RemisionDetalle" asp-route-folio="@item.Referencia" asp-route-productoBusqueda="@Model.ProductoBusqueda">REMISION</a>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Items.Count == 0)
+                {
+                    <tr><td colspan="6">SIN LINEAS EN EL TICKET</td></tr>
+                }
+            </tbody>
+        </table>
+            </section>
+
+            @{
+                var gafetesOperacion = Model.GafetesActivos.Count > 0
+                    ? Model.GafetesActivos
+                    : (Model.Gafete ?? string.Empty)
+                        .Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+            }
+            @if (gafetesOperacion.Count > 0)
+            {
+                <section class="classic-table-panel">
+                    <div class="mini-title">GAFETES ACTIVOS Y VENTAS RELACIONADAS</div>
+                    <table class="table table-sm table-bordered classic-grid">
+                        <thead>
+                            <tr>
+                                <th>Gafete</th>
+                                <th>Venta</th>
+                                <th>Referencia</th>
+                                <th>Importe</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.GafeteVentas)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (!string.Equals(row.Gafete, "SIN GAFETE ASIGNADO", StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <a asp-action="Relaciones" asp-route-busqueda="@row.Gafete">@row.Gafete</a>
+                                        }
+                                        else
+                                        {
+                                            @row.Gafete
+                                        }
+                                    </td>
+                                    <td>@row.Venta</td>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(row.Referencia))
+                                        {
+                                            <a asp-action="RemisionDetalle" asp-route-folio="@row.Referencia" asp-route-productoBusqueda="@Model.ProductoBusqueda">@row.Referencia</a>
+                                        }
+                                        else
+                                        {
+                                            @:-
+                                        }
+                                    </td>
+                                    <td>@row.Importe.ToString("C2")</td>
+                                </tr>
+                            }
+                            @if (Model.GafeteVentas.Count == 0)
+                            {
+                                <tr><td colspan="4">SIN VENTAS RELACIONADAS PARA LOS GAFETES ACTIVOS</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+            }
+
+            @if (Model.ResultadosBusqueda.Count > 0)
+            {
+                <section class="classic-table-panel">
+                    <div class="mini-title">RESULTADOS DE CONSULTA</div>
+                    <table class="table table-sm table-bordered classic-grid">
+                        <thead>
+                            <tr><th>Producto</th><th>Departamento</th><th>Precio</th><th>Importe</th><th>Accion</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.ResultadosBusqueda)
+                            {
+                                <tr>
+                                    <td>@item.Producto</td>
+                                    <td>@item.Departamento</td>
+                                    <td>@item.Precio.ToString("C2")</td>
+                                    <td>@item.Importe.ToString("C2")</td>
+                                    <td>
+                                        <form method="post" asp-action="AgregarLineaVenta">
+                                            <input type="hidden" name="productoId" value="@item.ProductoId" />
+                                            <input type="hidden" name="productoBusqueda" value="@Model.ProductoBusqueda" />
+                                            <button type="submit" class="mini-action-btn">AGREGAR</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+            }
+        </div>
+
+        <aside class="action-sidebar">
+            @{
+                var ultimaLineaEditable = Model.Items.LastOrDefault(x => x.ProductoId > 0);
+            }
+            <form method="post" asp-action="BorrarLineaVenta">
+                <input type="hidden" name="productoId" value="@(ultimaLineaEditable?.ProductoId ?? 0)" />
+                <button type="submit" class="action-btn red sidebar-submit" disabled="@(ultimaLineaEditable == null)">BORRA LINEA</button>
+            </form>
+            <form method="post" asp-action="NuevaVenta">
+                <button type="submit" class="action-btn gold sidebar-submit">NUEVO</button>
+            </form>
+            <button form="venta-save-form" type="submit" class="action-btn green sidebar-submit">COBRAR</button>
+            <button type="submit" form="venta-search-form" class="action-btn blue sidebar-submit">CONSULTA PRECIOS</button>
+            <a class="action-btn warn" asp-action="Cortes">CORTE</a>
+            <a class="action-btn orange" asp-action="Gastos">GASTOS</a>
+            <a class="action-btn blue" asp-action="RegistroDiario">TICKETS</a>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn red" asp-action="RegistroDiario">SALIR</a>
+        </aside>
+    </div>
+</div>
+

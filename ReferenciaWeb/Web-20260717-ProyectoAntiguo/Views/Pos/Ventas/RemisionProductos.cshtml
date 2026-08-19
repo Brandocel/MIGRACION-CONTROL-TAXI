@@ -1,0 +1,39 @@
+@model List<ControlTaxiWeb.Models.PosTriton.PosVentaDetalleViewModel>
+@{
+    ViewData["Title"] = "Productos de remisión";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window">
+    <div class="classic-titlebar">PRODUCTOS DE REMISIÓN</div>
+    <div class="classic-body">
+        <section class="classic-table-panel">
+            <table class="table table-sm table-bordered classic-grid">
+                <thead>
+                    <tr><th>Cantidad</th><th>Producto</th><th>Departamento</th><th>Precio</th><th>Importe</th></tr>
+                </thead>
+                <tbody>
+                    @if (Model == null || Model.Count == 0)
+                    {
+                        <tr><td colspan="5">SIN PRODUCTOS EN LA REMISIÓN</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var line in Model)
+                        {
+                            <tr>
+                                <td>@line.Cantidad</td>
+                                <td>@line.Producto</td>
+                                <td>@line.Departamento</td>
+                                <td>@line.Precio.ToString("C2")</td>
+                                <td>@line.Importe.ToString("C2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </section>
+        <a class="action-btn menu" asp-action="Index">VOLVER</a>
+    </div>
+</div>

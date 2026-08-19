@@ -1,0 +1,248 @@
+@model ControlTaxiWeb.Models.PosTriton.PosDashboardViewModel
+@{
+    ViewData["Title"] = "Administracion";
+    var permisos = ViewBag.Permisos as HashSet<string> ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    bool PuedeVer(string modulo) => permisos.Contains(modulo);
+}
+
+<style>
+    body.pos-only-shell {
+        margin: 0;
+        background: #f4f0e8;
+        color: #17243a;
+        font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    body.pos-only-shell main {
+        min-height: 100vh;
+        padding: 18px;
+        background: linear-gradient(90deg, #f4f0e8 0, #eef5fb 15%, #eef5fb 85%, #f4f0e8 100%);
+    }
+
+    .admin-window {
+        width: min(100%, 980px);
+        min-height: calc(100vh - 36px);
+        margin: 0 auto;
+        padding: 26px;
+        border: 1px solid #98adc3;
+        background: #dfeaf5;
+        box-shadow: 0 18px 40px rgba(20, 35, 55, 0.18);
+    }
+
+    .classic-titlebar {
+        margin: -26px -26px 0;
+        padding: 11px 14px;
+        text-align: center;
+        color: #263a53;
+        background: #fbfcff;
+        border-bottom: 1px solid #b4c5d7;
+        text-transform: uppercase;
+    }
+
+    .admin-brand {
+        padding: 18px 0 28px;
+        text-align: center;
+    }
+
+    .brand-logo {
+        width: min(360px, 74vw);
+        height: auto;
+        display: block;
+        margin: 0 auto;
+        object-fit: contain;
+    }
+
+    .admin-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 20px;
+    }
+
+    .admin-tile {
+        display: grid;
+        place-items: center;
+        gap: 12px;
+        min-height: 152px;
+        padding: 18px;
+        text-decoration: none;
+        color: var(--tile-ink, #8c641a);
+        border: 1px solid #cbd8e6;
+        border-top: 4px solid var(--tile-accent, #b48329);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 8px 22px rgba(24, 43, 65, 0.08);
+        transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+
+    .tile-icon {
+        display: grid;
+        place-items: center;
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        background: var(--tile-soft, #e7f4f3);
+        color: var(--tile-accent, #118b80);
+    }
+
+    .tile-icon svg {
+        display: block;
+        width: 32px;
+        height: 32px;
+        max-width: 32px;
+        max-height: 32px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .admin-tile span:last-child {
+        font-size: 1.05rem;
+        font-weight: 900;
+        text-align: center;
+    }
+
+    .admin-tile.danger {
+        --tile-accent: #c23b2d;
+        --tile-soft: #fff0ed;
+        --tile-ink: #c23b2d;
+        color: #c23b2d;
+    }
+
+    .admin-tile.danger .tile-icon {
+        background: #fff0ed;
+        color: #c23b2d;
+    }
+
+    .admin-logout-form {
+        margin: 0;
+    }
+
+    .admin-logout-form .admin-tile {
+        width: 100%;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .admin-tile:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(24, 43, 65, 0.14);
+    }
+
+    .tile-registro { --tile-accent: #2d6cdf; --tile-soft: #eaf1ff; --tile-ink: #2458b2; }
+    .tile-registro-app { --tile-accent: #0f8f83; --tile-soft: #e8fbf7; --tile-ink: #0b6f65; }
+    .tile-pagos { --tile-accent: #16a34a; --tile-soft: #eaf9ef; --tile-ink: #137a39; }
+    .tile-comisiones { --tile-accent: #e28b16; --tile-soft: #fff4df; --tile-ink: #9a5a08; }
+    .tile-transporte { --tile-accent: #7c5ce6; --tile-soft: #f1edff; --tile-ink: #5c41ba; }
+    .tile-guias { --tile-accent: #0f7490; --tile-soft: #e7f7fb; --tile-ink: #0a5b71; }
+    .tile-taxistas { --tile-accent: #db5a3a; --tile-soft: #fff0eb; --tile-ink: #a53f28; }
+    .tile-gafetes { --tile-accent: #d9467a; --tile-soft: #ffeaf2; --tile-ink: #a72f59; }
+    .tile-relaciones { --tile-accent: #be185d; --tile-soft: #fdf2f8; --tile-ink: #9d174d; }
+    .tile-gastos { --tile-accent: #b7791f; --tile-soft: #fff4e2; --tile-ink: #8c5a10; }
+    .tile-cortes { --tile-accent: #334155; --tile-soft: #edf2f7; --tile-ink: #243142; }
+    .tile-reportes { --tile-accent: #2563eb; --tile-soft: #eaf1ff; --tile-ink: #1d4ed8; }
+    .tile-reporte-taxis { --tile-accent: #0f7490; --tile-soft: #e7f7fb; --tile-ink: #0a5b71; }
+    .tile-control-dejadas { --tile-accent: #7c5ce6; --tile-soft: #f1edff; --tile-ink: #5c41ba; }
+    .tile-dejadas-comisiones { --tile-accent: #be185d; --tile-soft: #fdf2f8; --tile-ink: #9d174d; }
+    .tile-concentrado { --tile-accent: #16a34a; --tile-soft: #eaf9ef; --tile-ink: #137a39; }
+    .tile-usuarios { --tile-accent: #0891b2; --tile-soft: #e7f9fc; --tile-ink: #0e7490; }
+</style>
+
+<div class="classic-window admin-window">
+    <div class="classic-titlebar">ADMINISTRACION</div>
+
+    <div class="admin-brand">
+        <img class="brand-logo" src="~/img/hoka-logo.png" asp-append-version="true" alt="Grupo HOKA" />
+    </div>
+
+    <div class="admin-grid">
+        @if (PuedeVer("RegistroDiario"))
+        {
+        <a class="admin-tile tile-registro" asp-action="RegistroDiario">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4h6l1 2h3v15H5V6h3l1-2Z" /><path d="M9 11h6M9 15h6" /></svg></span>
+            <span>REGISTRO DIARIO</span>
+        </a>
+        <a class="admin-tile tile-registro-app" asp-action="RegistroApp">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" /><path d="M10 6h4M10 17h4" /><path d="M9 11h6" /></svg></span>
+            <span>REGISTRO APP</span>
+        </a>
+        }
+        @if (PuedeVer("Comisiones"))
+        {
+        <a class="admin-tile tile-comisiones" asp-action="Comisiones">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 17 17 7" /><path d="M7.5 8.5h.01M16.5 15.5h.01" /></svg></span>
+            <span>COMISIONES</span>
+        </a>
+        }
+        @if (PuedeVer("Transportes"))
+        {
+        <a class="admin-tile tile-transporte" asp-action="Transportes">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 15V9l2-4h10l2 4v6" /><path d="M6 15h12M8 18h.01M16 18h.01" /></svg></span>
+            <span>TRANSPORTE</span>
+        </a>
+        }
+        @if (PuedeVer("Guias"))
+        {
+        <a class="admin-tile tile-guias" asp-action="Guias">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 18 4 20V6l5-2 6 2 5-2v14l-5 2-6-2Z" /><path d="M9 4v14M15 6v14" /></svg></span>
+            <span>GUIAS</span>
+        </a>
+        }
+        @if (PuedeVer("Taxistas"))
+        {
+        <a class="admin-tile tile-taxistas" asp-action="Taxistas">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M5 21a7 7 0 0 1 14 0" /></svg></span>
+            <span>TAXISTAS</span>
+        </a>
+        }
+        @if (PuedeVer("Gafetes"))
+        {
+        <a class="admin-tile tile-gafetes" asp-action="Gafetes">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4h6v4H9z" /><path d="M7 8h10v13H7z" /><path d="M10 14h4M10 17h4" /></svg></span>
+            <span>GAFETES</span>
+        </a>
+        }
+        @if (PuedeVer("Relaciones"))
+        {
+        <a class="admin-tile tile-relaciones" asp-action="Relaciones">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.14 1.14" /><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.14-1.14" /></svg></span>
+            <span>RELACION TICKET-TAXISTA</span>
+        </a>
+        }
+        @if (PuedeVer("Gastos"))
+        {
+        <a class="admin-tile tile-gastos" asp-action="Gastos">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h10v18l-2-1-2 1-2-1-2 1-2-1V3Z" /><path d="M10 8h4M10 12h4M10 16h2" /></svg></span>
+            <span>GASTOS</span>
+        </a>
+        }
+        @if (PuedeVer("Cortes"))
+        {
+        <a class="admin-tile tile-cortes" asp-action="Cortes">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z" /><path d="M9 8h6M9 12h2M13 12h2M9 16h2M13 16h2" /></svg></span>
+            <span>CORTES</span>
+        </a>
+        }
+        @if (PuedeVer("Reportes"))
+        {
+        <a class="admin-tile tile-reportes" asp-action="Reportes">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V5" /><path d="M9 17v-5M13 17V8M17 17v-8" /><path d="M4 19h16" /></svg></span>
+            <span>REPORTES</span>
+        </a>
+        }
+        @if (PuedeVer("Usuarios"))
+        {
+        <a class="admin-tile tile-usuarios" asp-action="Usuarios">
+            <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M4 21a8 8 0 0 1 16 0" /><path d="M18 6v4M20 8h-4" /></svg></span>
+            <span>USUARIOS</span>
+        </a>
+        }
+        <form method="post" asp-action="Logout" class="admin-logout-form">
+            <button type="submit" class="admin-tile danger">
+                <span class="tile-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 5H6v14h4" /><path d="M14 8l4 4-4 4M18 12H9" /></svg></span>
+                <span>SALIR</span>
+            </button>
+        </form>
+    </div>
+</div>

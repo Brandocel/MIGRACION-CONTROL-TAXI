@@ -1,0 +1,231 @@
+@model string
+@{
+    Layout = null;
+    var parts = (Model ?? "||||||").Split("||");
+    var tipo     = parts.Length > 0 ? parts[0] : "Error desconocido";
+    var mensaje  = parts.Length > 1 ? parts[1] : "-";
+    var accion   = parts.Length > 2 ? parts[2] : "-";
+    var extra    = parts.Length > 3 ? parts[3] : "-";
+    var fecha    = parts.Length > 4 ? parts[4] : DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+
+    string TipoClase() => tipo switch
+    {
+        var t when t.Contains("Sql", StringComparison.OrdinalIgnoreCase)     => "err-sql",
+        var t when t.Contains("Http", StringComparison.OrdinalIgnoreCase)    => "err-http",
+        var t when t.Contains("Timeout", StringComparison.OrdinalIgnoreCase) => "err-timeout",
+        var t when t.Contains("Cancel", StringComparison.OrdinalIgnoreCase)  => "err-timeout",
+        _ => "err-generic"
+    };
+
+    string TipoIcono() => tipo switch
+    {
+        var t when t.Contains("Sql", StringComparison.OrdinalIgnoreCase)     => "BD",
+        var t when t.Contains("Http", StringComparison.OrdinalIgnoreCase)    => "NET",
+        var t when t.Contains("Timeout", StringComparison.OrdinalIgnoreCase) => "TMO",
+        var t when t.Contains("Cancel", StringComparison.OrdinalIgnoreCase)  => "TMO",
+        _ => "ERR"
+    };
+
+    string TipoTexto() => tipo switch
+    {
+        var t when t.Contains("Sql", StringComparison.OrdinalIgnoreCase)     => "Error de base de datos",
+        var t when t.Contains("Http", StringComparison.OrdinalIgnoreCase)    => "Error de conexion a internet / API",
+        var t when t.Contains("Timeout", StringComparison.OrdinalIgnoreCase) => "Tiempo de espera agotado",
+        var t when t.Contains("Cancel", StringComparison.OrdinalIgnoreCase)  => "Operacion cancelada (timeout)",
+        _ => "Error inesperado"
+    };
+}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error — Control Taxi</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .err-card {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-top: 5px solid var(--accent, #e53e3e);
+            border-radius: 10px;
+            max-width: 680px;
+            width: 100%;
+            padding: 32px 36px;
+            box-shadow: 0 8px 32px rgba(0,0,0,.10);
+        }
+
+        .err-sql     { --accent: #c53030; }
+        .err-http    { --accent: #d69e2e; }
+        .err-timeout { --accent: #c05621; }
+        .err-generic { --accent: #553c9a; }
+
+        .err-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .err-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: color-mix(in srgb, var(--accent) 12%, white);
+            color: var(--accent);
+            font-weight: 900;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+
+        .err-title { font-size: 1.35rem; font-weight: 800; color: #1a202c; }
+        .err-subtitle { font-size: 0.85rem; color: #718096; margin-top: 2px; }
+
+        .err-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            margin-bottom: 24px;
+        }
+
+        .err-table tr { border-bottom: 1px solid #e2e8f0; }
+        .err-table tr:last-child { border-bottom: none; }
+
+        .err-table th {
+            text-align: left;
+            padding: 10px 12px;
+            width: 150px;
+            color: #4a5568;
+            font-weight: 700;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            background: #f7fafc;
+        }
+
+        .err-table td {
+            padding: 10px 12px;
+            color: #2d3748;
+            word-break: break-word;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 0.85rem;
+        }
+
+        .err-msg {
+            background: #fff5f5;
+            border: 1px solid #fed7d7;
+            border-radius: 6px;
+            padding: 14px 16px;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 0.83rem;
+            color: #c53030;
+            word-break: break-word;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .err-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .err-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+        }
+
+        .err-btn-primary { background: #2d6cdf; color: #fff; }
+        .err-btn-secondary { background: #edf2f7; color: #2d3748; }
+
+        .err-hint {
+            margin-top: 20px;
+            padding: 12px 14px;
+            background: #ebf8ff;
+            border: 1px solid #bee3f8;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            color: #2c5282;
+            line-height: 1.6;
+        }
+
+        .err-hint strong { display: block; margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+<div class="err-card @TipoClase()">
+    <div class="err-header">
+        <div class="err-badge">@TipoIcono()</div>
+        <div>
+            <div class="err-title">@TipoTexto()</div>
+            <div class="err-subtitle">Control Taxi — @fecha</div>
+        </div>
+    </div>
+
+    <table class="err-table">
+        <tr>
+            <th>Tipo de error</th>
+            <td>@tipo</td>
+        </tr>
+        <tr>
+            <th>Accion / Ruta</th>
+            <td>@accion</td>
+        </tr>
+        @if (extra != "-")
+        {
+        <tr>
+            <th>Codigo / Inner</th>
+            <td>@extra</td>
+        </tr>
+        }
+    </table>
+
+    <div class="err-msg">@mensaje</div>
+
+    @{
+        string hint = tipo switch
+        {
+            var t when t.Contains("Sql", StringComparison.OrdinalIgnoreCase) =>
+                "Verifica que SQL Server este corriendo y que la cadena de conexion en appsettings.json sea correcta. " +
+                "Codigo de error SQL puede ayudar: 53 = servidor no encontrado, 18456 = usuario/password incorrecto, 4060 = base de datos no existe.",
+            var t when t.Contains("Http", StringComparison.OrdinalIgnoreCase) =>
+                "No se pudo conectar con la API o hay un problema de internet. " +
+                "Verifica la conexion de red, que la URL en TaxiApi:BaseUrl en appsettings.json sea correcta, y que el servidor remoto este en linea.",
+            var t when t.Contains("Timeout", StringComparison.OrdinalIgnoreCase) || t.Contains("Cancel", StringComparison.OrdinalIgnoreCase) =>
+                "La operacion tomo demasiado tiempo. Puede ser una consulta SQL lenta, la API remota sin responder, " +
+                "o una conexion de red inestable. Revisa el rendimiento de la BD o aumenta el timeout en la configuracion.",
+            _ =>
+                "Error no clasificado. Revisa los logs del servidor (dotnet run o el visor de eventos de Windows) " +
+                "para obtener el stack trace completo y localizar el archivo y linea exacta donde ocurrio."
+        };
+    }
+
+    <div class="err-hint">
+        <strong>Como diagnosticar:</strong>
+        @hint
+    </div>
+
+    <div class="err-actions" style="margin-top:20px;">
+        <a class="err-btn err-btn-primary" href="/Pos/Index">Volver al menu</a>
+        <a class="err-btn err-btn-secondary" href="/Pos/Login">Cerrar sesion e intentar</a>
+        <button class="err-btn err-btn-secondary" onclick="window.history.back()">Regresar</button>
+    </div>
+</div>
+</body>
+</html>

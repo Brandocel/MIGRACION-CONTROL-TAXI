@@ -1,0 +1,65 @@
+@model ControlTaxiWeb.Models.OperationsPageViewModel
+@{
+    ViewData["Title"] = "Operaciones";
+}
+
+<div class="page-shell">
+    <div class="hero-card">
+        <div>
+            <p class="eyebrow">@Model.Database</p>
+            <h1>Operaciones del dia</h1>
+            <p>Consulta principal de remisiones guardadas en la base seleccionada.</p>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <form method="get" class="filters-grid">
+            <input type="hidden" name="database" value="@Model.Database" />
+            <div>
+                <label class="input-label">Fecha</label>
+                <input type="date" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" class="text-input" />
+            </div>
+            <div>
+                <label class="input-label">Buscar</label>
+                <input type="text" name="query" value="@Model.Query" class="text-input" placeholder="Folio, vendedor o cliente" />
+            </div>
+            <div class="button-stack">
+                <button type="submit" class="primary-button">Filtrar</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="section-card">
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Vendedor</th>
+                        <th>Cliente</th>
+                        <th>Pax</th>
+                        <th>Total</th>
+                        <th>Saldo</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Operations)
+                {
+                    <tr>
+                        <td>@item.Folio</td>
+                        <td>@(item.OperationDate?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                        <td>@item.SellerName</td>
+                        <td>@item.Hotel</td>
+                        <td>@item.PassengerCount</td>
+                        <td>@item.Total.ToString("C")</td>
+                        <td>@item.Balance.ToString("C")</td>
+                        <td>@item.PaymentSummary</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

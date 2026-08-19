@@ -70,3 +70,6 @@ tmp_sqlite_read.cs
 tmp_verify_pw.cs
 new_diagnostics.cs
 *.txt.tmp
+
+# Excepcion: los .bak dentro de la referencia Web son respaldos de vistas, no de SQL Server
+!ReferenciaWeb/**/*.bak

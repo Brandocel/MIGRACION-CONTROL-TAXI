@@ -1,0 +1,79 @@
+@model ControlTaxiWeb.Models.PosTriton.PosUsuariosViewModel
+@{
+    ViewData["Title"] = "Usuarios";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window users-window">
+    <div class="classic-titlebar">USUARIOS Y PERMISOS</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+
+            <form id="usuario-save-form" method="post" asp-action="GuardarUsuario" class="classic-form users-form">
+                <div class="field"><label>USUARIO</label><input name="usuario" value="@Model.UsuarioEdicion" /></div>
+                <div class="field"><label>NUEVA CONTRASENA</label><input name="password" type="password" placeholder="Dejar vacia para conservar" /></div>
+                <div class="field">
+                    <label>ROL</label>
+                    <select name="rol">
+                        <option value="Administrador" selected="@(Model.RolEdicion == "Administrador" ? "selected" : null)">Administrador</option>
+                        <option value="Supervisor" selected="@(Model.RolEdicion == "Supervisor" ? "selected" : null)">Supervisor</option>
+                        <option value="Cajero" selected="@(Model.RolEdicion == "Cajero" ? "selected" : null)">Cajero</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>ESTATUS</label>
+                    <select name="estatus">
+                        <option value="Activo" selected="@(Model.EstatusEdicion == "Activo" ? "selected" : null)">Activo</option>
+                        <option value="Inactivo" selected="@(Model.EstatusEdicion == "Inactivo" ? "selected" : null)">Inactivo</option>
+                    </select>
+                </div>
+
+                <section class="permission-panel">
+                    <div class="mini-title">MODULOS VISIBLES PARA ESTE USUARIO</div>
+                    <div class="permission-grid">
+                        @foreach (var modulo in Model.Modulos)
+                        {
+                            <label class="permission-item">
+                                <input type="checkbox" name="permisos" value="@modulo.Clave" checked="@(Model.PermisosEdicion.Contains(modulo.Clave) ? "checked" : null)" />
+                                <span>@modulo.Nombre</span>
+                            </label>
+                        }
+                    </div>
+                </section>
+            </form>
+
+            <section class="classic-table-panel">
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr><th>Usuario</th><th>Rol</th><th>Estatus</th><th>Permisos</th><th>Alta</th><th>Accion</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Usuarios)
+                        {
+                            <tr>
+                                <td>@row.Usuario</td>
+                                <td>@row.Rol</td>
+                                <td>@row.Estatus</td>
+                                <td>@string.Join(", ", row.Permisos)</td>
+                                <td>@row.FechaAlta</td>
+                                <td><a class="mini-action-btn" asp-action="Usuarios" asp-route-usuario="@row.Usuario">EDITAR</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <button form="usuario-save-form" type="submit" class="action-btn green sidebar-submit">GUARDAR</button>
+            <a class="action-btn blue" asp-action="Usuarios">NUEVO</a>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn red" asp-action="Index">SALIR</a>
+        </aside>
+    </div>
+</div>

@@ -1,0 +1,689 @@
+@model ControlTaxiWeb.Models.PosTriton.PosRegistroAppViewModel
+@{
+    ViewData["Title"] = "Registro App";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+<style>
+    .registro-app-window {
+        width: min(100%, 1280px);
+    }
+
+    .registro-app-form {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .registro-app-form .field.wide {
+        grid-column: span 2;
+    }
+
+    .registro-app-form .field.full {
+        grid-column: 1 / -1;
+    }
+
+    .registro-app-form > .full {
+        grid-column: 1 / -1;
+    }
+
+    .field select,
+    .field textarea {
+        width: 100%;
+        border: 1px solid #aebed0;
+        background: #fff;
+        padding: 8px 10px;
+        color: #102033;
+        font-size: 1rem;
+    }
+
+    .field select {
+        height: 42px;
+    }
+
+    .field textarea {
+        min-height: 86px;
+        resize: vertical;
+    }
+
+    .registro-app-summary {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .registro-app-summary div {
+        border: 1px solid #b6c8da;
+        background: #f7fbff;
+        padding: 12px;
+    }
+
+    .registro-app-summary span,
+    .registro-app-summary strong {
+        display: block;
+    }
+
+    .registro-app-summary span {
+        color: #526a83;
+        font-size: 0.78rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .registro-app-summary strong {
+        margin-top: 4px;
+        color: #0d3f73;
+        font-size: 1rem;
+        font-weight: 900;
+    }
+
+    .registro-mobile-card {
+        border: 1px solid #c5d4e3;
+        border-radius: 8px;
+        background: #fff;
+        padding: 14px;
+        box-shadow: 0 8px 18px rgba(31, 54, 78, 0.06);
+    }
+
+    .registro-mobile-card h3 {
+        margin: 0 0 4px;
+        color: #173652;
+        font-size: 0.98rem;
+        font-weight: 900;
+    }
+
+    .registro-mobile-card p {
+        margin: 0 0 12px;
+        color: #657b91;
+        font-size: 0.78rem;
+        font-weight: 800;
+    }
+
+    .registro-search-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+    }
+
+    .registro-scan-btn {
+        min-height: 42px;
+        padding: 0 14px;
+        border: 1px solid #c8d6e5;
+        border-radius: 999px;
+        background: #fff;
+        color: #24374d;
+        font-size: 0.84rem;
+        font-weight: 900;
+    }
+
+    .gafete-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-height: 36px;
+        margin-top: 8px;
+        padding: 8px;
+        border: 1px dashed #b6c8da;
+        background: #f7fbff;
+    }
+
+    .gafete-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        padding: 4px 8px;
+        border: 1px solid #a9c4dd;
+        border-radius: 999px;
+        background: #eef6ff;
+        color: #0d3f73;
+        font-size: 0.86rem;
+        font-weight: 900;
+    }
+
+    .gafete-chip button {
+        display: inline-grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border: 0;
+        border-radius: 50%;
+        background: #dbeaf7;
+        color: #36526d;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    @@media (max-width: 1100px) {
+        .registro-app-form,
+        .registro-app-summary {
+            grid-template-columns: 1fr;
+        }
+
+        .registro-app-form .field.wide,
+        .registro-app-form .field.full {
+            grid-column: auto;
+        }
+    }
+</style>
+
+<div class="classic-window registro-app-window">
+    <div class="classic-titlebar">REGISTRO APP MOVIL</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+
+            <form id="registro-app-form" method="post" asp-action="GuardarRegistroApp" class="classic-form registro-app-form">
+                <input type="hidden" name="FolioOriginal" value="@Model.FolioOriginal" />
+                <input type="hidden" name="SucursalAsignada" value="@Model.SucursalAsignada" />
+
+                <section class="registro-mobile-card full">
+                    <h3>Busqueda y carga</h3>
+                    <p>Sucursal asignada: @Model.SucursalAsignada</p>
+                    <div class="classic-form registro-app-form">
+                        <div class="field wide">
+                            <label>SUCURSAL ASIGNADA</label>
+                            <input value="@Model.SucursalAsignada" readonly />
+                        </div>
+                        <div class="field wide">
+                            <label>NRO GAFETE</label>
+                            <input data-gafete-entry autocomplete="off" inputmode="numeric" placeholder="Escribe el gafete y presiona Enter" />
+                            <input type="hidden" name="Gafete" value="@Model.Gafete" data-gafete-hidden />
+                            <div class="gafete-chip-list" data-gafete-list></div>
+                        </div>
+                        <div class="field wide">
+                            <label>BUSCAR TAXISTA</label>
+                            <input name="TaxistaNombre" value="@Model.TaxistaNombre" list="taxistas-list" autocomplete="off" data-taxista-input />
+                            <datalist id="taxistas-list">
+                                @foreach (var taxista in Model.Taxistas)
+                                {
+                                    <option value="@taxista.Display"></option>
+                                }
+                            </datalist>
+                        </div>
+                        <div class="field wide">
+                            <label>TAXISTA ENCONTRADO</label>
+                            <select data-taxista-select>
+                                <option value="">SELECCIONA TAXISTA</option>
+                                @foreach (var taxista in Model.Taxistas)
+                                {
+                                    <option value="@taxista.Clave"
+                                            data-name="@taxista.Nombre"
+                                            data-phone="@taxista.Telefono"
+                                            data-unit="@taxista.Unidad"
+                                            data-plates="@taxista.Placas"
+                                            data-model="@taxista.Modelo"
+                                            data-nationality="@taxista.Nacionalidad"
+                                            data-hotel="@taxista.Hotel"
+                                            data-site="@taxista.Sitio"
+                                            data-destination="@taxista.Destino"
+                                            data-badge="@taxista.Gafete"
+                                            data-suggested="@taxista.SuggestedAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                            data-transport="@taxista.TransporteTipo">@taxista.Display</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>ESCANEAR</label>
+                            <button type="button" class="registro-scan-btn" data-focus-gafete>Escanear</button>
+                        </div>
+                    </div>
+                    <button type="button" class="action-btn search" data-load-taxista>BUSCAR TAXISTA Y CARGAR DATOS</button>
+                </section>
+
+                <section class="registro-mobile-card full">
+                    <h3>Datos del taxista</h3>
+                    <p>Informacion principal de la unidad y el conductor.</p>
+                    <div class="classic-form registro-app-form">
+                <div class="field">
+                    <label>TAXISTA ID</label>
+                    <input type="number" name="TaxistaId" value="@Model.TaxistaId" data-taxista-id />
+                </div>
+                <div class="field">
+                    <label>TELEFONO</label>
+                    <input name="Telefono" value="@Model.Telefono" data-taxista-telefono />
+                </div>
+                <div class="field">
+                    <label>TELEFONO CONTACTO</label>
+                    <input name="TelefonoContacto" value="@Model.TelefonoContacto" data-taxista-contacto />
+                </div>
+                <div class="field">
+                    <label>NACIONALIDAD</label>
+                    <input name="Nacionalidad" value="@Model.Nacionalidad" data-taxista-nacionalidad />
+                </div>
+                <div class="field">
+                    <label>UNIDAD</label>
+                    <input name="Unidad" value="@Model.Unidad" data-taxista-unidad />
+                </div>
+                <div class="field">
+                    <label>PLACAS</label>
+                    <input name="Placas" value="@Model.Placas" data-taxista-placas />
+                </div>
+                <div class="field">
+                    <label>MODELO</label>
+                    <input name="Modelo" value="@Model.Modelo" data-taxista-modelo />
+                </div>
+                    </div>
+                </section>
+
+                <section class="registro-mobile-card full">
+                    <h3>Datos del viaje</h3>
+                    <p>Define hotel, servicio y trayecto. La dejada se carga desde la configuracion del transporte.</p>
+                    <div class="classic-form registro-app-form">
+                <div class="field wide">
+                    <label>BUSCAR HOTEL / DESTINO</label>
+                    <input name="Hotel" value="@Model.Hotel" list="hoteles-list" autocomplete="off" data-hotel-input />
+                    <datalist id="hoteles-list">
+                        @foreach (var hotel in Model.Hoteles)
+                        {
+                            <option value="@hotel"></option>
+                        }
+                    </datalist>
+                </div>
+                <div class="field wide">
+                    <label>HOTEL</label>
+                    <select data-hotel-select>
+                        <option value="">SELECCIONA HOTEL</option>
+                        @foreach (var hotel in Model.Hoteles)
+                        {
+                            <option value="@hotel">@hotel</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label>SITIO</label>
+                    <input name="Sitio" value="@Model.Sitio" />
+                </div>
+                <div class="field">
+                    <label>ORIGEN</label>
+                    <input name="Origen" value="@Model.Origen" />
+                </div>
+                <div class="field">
+                    <label>NUMERO DE PERSONAS</label>
+                    <input type="number" min="1" name="Pax" value="@Model.Pax" />
+                </div>
+                <div class="field wide">
+                    <label>DESTINO</label>
+                    <input name="Destino" value="@Model.Destino" />
+                </div>
+                <div class="field wide">
+                    <label>DEJADA / TIPO TRANSPORTE</label>
+                    <select name="TipoOperacion" data-tarifa-select>
+                        <option value="@Model.TipoOperacion" data-amount="@Model.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)">@Model.TipoOperacion</option>
+                        @foreach (var tarifa in Model.Tarifas)
+                        {
+                            <option value="@tarifa.Tipo" data-amount="@tarifa.Dejada.ToString(System.Globalization.CultureInfo.InvariantCulture)">@tarifa.Display</option>
+                        }
+                    </select>
+                </div>
+                <div class="field">
+                    <label>DEJADA CONFIGURADA</label>
+                    <input type="number" step="0.01" min="0" name="Total" value="@Model.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-total-input />
+                    <small data-total-warning style="display:none;color:#a64b00;font-weight:800;">MAJESTIC requiere monto real. No se guardara con 0 o 1.</small>
+                </div>
+                <div class="field full">
+                    <label>NOTAS</label>
+                    <textarea name="Notas">@Model.Notas</textarea>
+                </div>
+                <div class="field">
+                    <label>FECHA</label>
+                    <input type="date" data-fecha-only value="@Model.FechaOperacion.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field">
+                    <label>HORA</label>
+                    <input type="time" data-hora-only value="@Model.FechaOperacion.ToString("HH:mm")" />
+                    <input type="hidden" name="FechaOperacion" value="@Model.FechaOperacion.ToString("yyyy-MM-ddTHH:mm")" data-fecha-operacion />
+                </div>
+                    </div>
+                </section>
+            </form>
+
+            <section class="registro-app-summary">
+                <div><span>Origen</span><strong>CONTROL TAXI WEB</strong></div>
+                <div><span>Destino local</span><strong>AppMovilRegistro</strong></div>
+                <div><span>Sincronizacion</span><strong>Hostinger / historial movil</strong></div>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <button form="registro-app-form" type="submit" class="action-btn save sidebar-submit">GUARDAR</button>
+            <a class="action-btn search" asp-action="RegistroDiario">REGISTRO</a>
+            <a class="action-btn blue" asp-action="Relaciones">RELACION</a>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn red" asp-action="Index">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+<script>
+    (() => {
+        let taxistas = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Taxistas));
+
+        const taxistaInput = document.querySelector('[data-taxista-input]');
+        const taxistaId = document.querySelector('[data-taxista-id]');
+        const taxistaTelefono = document.querySelector('[data-taxista-telefono]');
+        const taxistaContacto = document.querySelector('[data-taxista-contacto]');
+        const taxistaUnidad = document.querySelector('[data-taxista-unidad]');
+        const taxistaPlacas = document.querySelector('[data-taxista-placas]');
+        const taxistaModelo = document.querySelector('[data-taxista-modelo]');
+        const taxistaNacionalidad = document.querySelector('[data-taxista-nacionalidad]');
+        const taxistasList = document.getElementById('taxistas-list');
+        const taxistaSelect = document.querySelector('[data-taxista-select]');
+        const hotelInput = document.querySelector('[data-hotel-input]');
+        const hotelesList = document.getElementById('hoteles-list');
+        const hotelSelect = document.querySelector('[data-hotel-select]');
+        const sitioInput = document.querySelector('[name="Sitio"]');
+        const origenInput = document.querySelector('[name="Origen"]');
+        const destinoInput = document.querySelector('[name="Destino"]');
+        const tarifaSelect = document.querySelector('[data-tarifa-select]');
+        const totalInput = document.querySelector('[data-total-input]');
+        const gafeteEntry = document.querySelector('[data-gafete-entry]');
+        const gafeteHidden = document.querySelector('[data-gafete-hidden]');
+        const gafeteList = document.querySelector('[data-gafete-list]');
+        const fechaOnly = document.querySelector('[data-fecha-only]');
+        const horaOnly = document.querySelector('[data-hora-only]');
+        const fechaOperacion = document.querySelector('[data-fecha-operacion]');
+        const totalWarning = document.querySelector('[data-total-warning]');
+        const form = document.getElementById('registro-app-form');
+        let gafetes = [];
+
+        const debounce = (fn, wait = 260) => {
+            let timer;
+            return (...args) => {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn(...args), wait);
+            };
+        };
+
+        const fillTaxistas = (items) => {
+            taxistas = items || [];
+            if (!taxistasList) return;
+            taxistasList.innerHTML = '';
+            if (taxistaSelect) {
+                taxistaSelect.innerHTML = '<option value="">SELECCIONA TAXISTA</option>';
+            }
+            taxistas.forEach((item) => {
+                const clave = item.Clave || item.clave || '';
+                const nombre = item.Nombre || item.nombre || '';
+                const telefono = item.Telefono || item.telefono || '';
+                const unidad = item.Unidad || item.unidad || '';
+                const placas = item.Placas || item.placas || '';
+                const modelo = item.Modelo || item.modelo || '';
+                const nacionalidad = item.Nacionalidad || item.nacionalidad || '';
+                const hotel = item.Hotel || item.hotel || '';
+                const sitio = item.Sitio || item.sitio || '';
+                const destino = item.Destino || item.destino || item.Destination || item.destination || hotel || sitio || '';
+                const gafete = item.Gafete || item.gafete || '';
+                const suggested = item.SuggestedAmount || item.suggestedAmount || 0;
+                const transporte = item.TransporteTipo || item.transporteTipo || '';
+                const display = item.Display || item.display || `${clave} | ${nombre} | ${transporte}`;
+                const option = document.createElement('option');
+                option.value = display;
+                taxistasList.appendChild(option);
+
+                if (taxistaSelect) {
+                    const selectOption = document.createElement('option');
+                    selectOption.value = clave;
+                    selectOption.textContent = display;
+                    selectOption.dataset.name = nombre;
+                    selectOption.dataset.phone = telefono;
+                    selectOption.dataset.unit = unidad;
+                    selectOption.dataset.plates = placas;
+                    selectOption.dataset.model = modelo;
+                    selectOption.dataset.nationality = nacionalidad;
+                    selectOption.dataset.hotel = hotel;
+                    selectOption.dataset.site = sitio;
+                    selectOption.dataset.destination = destino;
+                    selectOption.dataset.badge = gafete;
+                    selectOption.dataset.suggested = suggested;
+                    selectOption.dataset.transport = transporte;
+                    taxistaSelect.appendChild(selectOption);
+                }
+            });
+        };
+
+        const findTaxista = (value) => {
+            const normalized = (value || '').trim().toUpperCase();
+            return taxistas.find((item) => {
+                const display = (item.Display || item.display || '').trim().toUpperCase();
+                const clave = (item.Clave || item.clave || '').trim().toUpperCase();
+                const nombre = (item.Nombre || item.nombre || '').trim().toUpperCase();
+                const gafete = (item.Gafete || item.gafete || '').trim().toUpperCase();
+                return normalized === display || normalized === clave || normalized === nombre || normalized === gafete;
+            });
+        };
+
+        const applyTaxistaItem = (item) => {
+            if (!item) return false;
+            const hotel = item.Hotel || item.hotel || '';
+            const sitio = item.Sitio || item.sitio || '';
+            const destino = item.Destino || item.destino || item.Destination || item.destination || hotel || sitio || '';
+            const suggested = Number(item.SuggestedAmount || item.suggestedAmount || 0);
+            const gafete = item.Gafete || item.gafete || '';
+            if (gafete) addGafete(gafete);
+            if (taxistaInput) taxistaInput.value = item.Nombre || item.nombre || '';
+            if (taxistaId) taxistaId.value = item.Clave || item.clave || '';
+            if (taxistaTelefono) taxistaTelefono.value = item.Telefono || item.telefono || '';
+            if (taxistaContacto) taxistaContacto.value = item.Telefono || item.telefono || '';
+            if (taxistaUnidad) taxistaUnidad.value = item.Unidad || item.unidad || item.TransporteTipo || item.transporteTipo || '';
+            if (taxistaPlacas) taxistaPlacas.value = item.Placas || item.placas || '';
+            if (taxistaModelo) taxistaModelo.value = item.Modelo || item.modelo || '';
+            if (taxistaNacionalidad) taxistaNacionalidad.value = item.Nacionalidad || item.nacionalidad || '';
+            if (hotelInput && hotel) hotelInput.value = hotel;
+            if (hotelSelect && hotel) hotelSelect.value = hotel;
+            if (sitioInput && sitio) sitioInput.value = sitio;
+            if (origenInput && hotel && !origenInput.value.trim()) origenInput.value = hotel;
+            if (destinoInput && destino) destinoInput.value = destino;
+            if (totalInput && Number.isFinite(suggested) && suggested > 0) totalInput.value = suggested.toFixed(2);
+            return true;
+        };
+
+        const applyTaxista = async () => {
+            const item = findTaxista(taxistaInput?.value);
+            if (applyTaxistaItem(item)) {
+                applyTransport(item.TransporteTipo || item.transporteTipo || '');
+                const needsHostinger = !(item.Placas || item.placas) && !(item.Modelo || item.modelo) && !(item.Hotel || item.hotel) && !(item.Destino || item.destino);
+                if (!needsHostinger) return;
+            } else {
+                const q = taxistaInput?.value || '';
+                if (q.trim().length < 1) return;
+            }
+
+            const q = taxistaInput?.value || item?.Nombre || item?.nombre || item?.Clave || item?.clave || '';
+            if (q.trim().length < 1) return;
+            const response = await fetch(`@Url.Action("BuscarRegistroAppTaxistas")?q=${encodeURIComponent(q)}`);
+            if (!response.ok) return;
+            const items = await response.json();
+            fillTaxistas(items);
+            const selectedId = taxistaId?.value || '';
+            const enriched = (items || []).find((candidate) => {
+                const clave = candidate.Clave || candidate.clave || '';
+                return selectedId && clave && clave.toString() === selectedId.toString();
+            }) || (items && items.length > 0 ? items[0] : null);
+            if (enriched) {
+                applyTaxistaItem(enriched);
+                applyTransport(enriched.TransporteTipo || enriched.transporteTipo || '');
+                return;
+            }
+        };
+
+        const applyTransport = (transporte) => {
+            if (transporte && tarifaSelect) {
+                const match = Array.from(tarifaSelect.options).find((option) =>
+                    option.value.toUpperCase() === transporte.toUpperCase() ||
+                    option.textContent.toUpperCase().includes(transporte.toUpperCase()));
+                if (match) {
+                    tarifaSelect.value = match.value;
+                    applyTarifa();
+                }
+            }
+        };
+
+        const applyTaxistaOption = (option) => {
+            if (!option || !option.value) return;
+            if (taxistaInput) taxistaInput.value = option.dataset.name || '';
+            if (taxistaId) taxistaId.value = option.value || '';
+            if (taxistaTelefono) taxistaTelefono.value = option.dataset.phone || '';
+            if (taxistaContacto) taxistaContacto.value = option.dataset.phone || '';
+            if (taxistaUnidad) taxistaUnidad.value = option.dataset.unit || option.dataset.transport || '';
+            if (taxistaPlacas) taxistaPlacas.value = option.dataset.plates || '';
+            if (taxistaModelo) taxistaModelo.value = option.dataset.model || '';
+            if (taxistaNacionalidad) taxistaNacionalidad.value = option.dataset.nationality || '';
+            if (option.dataset.badge) addGafete(option.dataset.badge);
+            if (hotelInput && option.dataset.hotel) hotelInput.value = option.dataset.hotel;
+            if (hotelSelect && option.dataset.hotel) hotelSelect.value = option.dataset.hotel;
+            if (sitioInput && option.dataset.site) sitioInput.value = option.dataset.site;
+            if (origenInput && option.dataset.hotel && !origenInput.value.trim()) origenInput.value = option.dataset.hotel;
+            if (destinoInput) destinoInput.value = option.dataset.destination || option.dataset.hotel || option.dataset.site || '';
+            const suggested = Number(option.dataset.suggested || 0);
+            if (totalInput && Number.isFinite(suggested) && suggested > 0) totalInput.value = suggested.toFixed(2);
+
+            applyTransport(option.dataset.transport || '');
+            if (!option.dataset.plates && !option.dataset.model && !option.dataset.hotel && !option.dataset.destination) {
+                applyTaxista();
+            }
+        };
+
+        const normalizeGafete = (value) => (value || '').replace(/\D+/g, '');
+
+        const syncGafetes = () => {
+            if (gafeteHidden) {
+                gafeteHidden.value = gafetes.join(', ');
+            }
+
+            if (!gafeteList) return;
+            gafeteList.innerHTML = '';
+            gafetes.forEach((gafete) => {
+                const chip = document.createElement('span');
+                chip.className = 'gafete-chip';
+                chip.textContent = gafete;
+
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.textContent = 'x';
+                remove.setAttribute('aria-label', `Quitar gafete ${gafete}`);
+                remove.addEventListener('click', () => {
+                    gafetes = gafetes.filter((item) => item !== gafete);
+                    syncGafetes();
+                    gafeteEntry?.focus();
+                });
+
+                chip.appendChild(remove);
+                gafeteList.appendChild(chip);
+            });
+        };
+
+        const addGafete = (raw) => {
+            const gafete = normalizeGafete(raw);
+            if (!gafete || gafetes.includes(gafete)) return;
+            gafetes.push(gafete);
+            syncGafetes();
+        };
+
+        const commitGafeteEntry = () => {
+            if (!gafeteEntry) return;
+            addGafete(gafeteEntry.value);
+            gafeteEntry.value = '';
+        };
+
+        const syncFechaOperacion = () => {
+            if (!fechaOnly || !horaOnly || !fechaOperacion) return;
+            const fecha = fechaOnly.value || new Date().toISOString().slice(0, 10);
+            const hora = horaOnly.value || '00:00';
+            fechaOperacion.value = `${fecha}T${hora}`;
+        };
+
+        const isSuspiciousMajestic = () => {
+            const selected = tarifaSelect?.selectedOptions?.[0];
+            const tipo = (selected?.value || tarifaSelect?.value || '').toUpperCase();
+            const total = Number(totalInput?.value || 0);
+            return (tipo.includes('MAJESTIC') || tipo.includes('MAESTIC')) && total <= 1;
+        };
+
+        const refreshTotalWarning = () => {
+            if (!totalWarning) return;
+            totalWarning.style.display = isSuspiciousMajestic() ? 'block' : 'none';
+        };
+
+        const applyTarifa = () => {
+            if (!tarifaSelect || !totalInput) return;
+            const selected = tarifaSelect.selectedOptions[0];
+            const amount = Number(selected?.dataset.amount || 0);
+            const tipo = (selected?.value || '').toUpperCase();
+            const suspiciousMajesticRate = (tipo.includes('MAJESTIC') || tipo.includes('MAESTIC')) && amount <= 1;
+            if (Number.isFinite(amount) && amount > 0 && !suspiciousMajesticRate) {
+                totalInput.value = amount.toFixed(2);
+            }
+            refreshTotalWarning();
+        };
+
+        const searchTaxistas = debounce(async () => {
+            const q = taxistaInput?.value || '';
+            if (q.trim().length < 2) return;
+            const response = await fetch(`@Url.Action("BuscarRegistroAppTaxistas")?q=${encodeURIComponent(q)}`);
+            if (response.ok) fillTaxistas(await response.json());
+        });
+
+        const searchHoteles = debounce(async () => {
+            const q = hotelInput?.value || '';
+            if (q.trim().length < 2 || !hotelesList) return;
+            const response = await fetch(`@Url.Action("BuscarRegistroAppHoteles")?q=${encodeURIComponent(q)}`);
+            if (!response.ok) return;
+            const hoteles = await response.json();
+            hotelesList.innerHTML = '';
+            if (hotelSelect) {
+                hotelSelect.innerHTML = '<option value="">SELECCIONA HOTEL</option>';
+            }
+            hoteles.forEach((hotel) => {
+                const option = document.createElement('option');
+                option.value = hotel;
+                hotelesList.appendChild(option);
+                if (hotelSelect) {
+                    const selectOption = document.createElement('option');
+                    selectOption.value = hotel;
+                    selectOption.textContent = hotel;
+                    hotelSelect.appendChild(selectOption);
+                }
+            });
+        });
+
+        const initialGafetes = (gafeteHidden?.value || '')
+            .split(/[,\s;\/|]+/)
+            .map(normalizeGafete)
+            .filter(Boolean);
+        gafetes = Array.from(new Set(initialGafetes));
+        syncGafetes();
+
+        gafeteEntry?.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            commitGafeteEntry();
+        });
+        gafeteEntry?.addEventListener('blur', commitGafeteEntry);
+        document.querySelector('[data-focus-gafete]')?.addEventListener('click', () => gafeteEntry?.focus());
+        document.querySelector('[data-load-taxista]')?.addEventListener('click', () => applyTaxista());
+        taxistaSelect?.addEventListener('change', () => applyTaxistaOption(taxistaSelect.selectedOptions[0]));
+        hotelSelect?.addEventListener('change', () => {
+            if (hotelInput) hotelInput.value = hotelSelect.value || '';
+        });
+        fechaOnly?.addEventListener('change', syncFechaOperacion);
+        horaOnly?.addEventListener('change', syncFechaOperacion);
+        form?.addEventListener('submit', (event) => {
+            commitGafeteEntry();
+            syncFechaOperacion();
+            if (isSuspiciousMajestic()) {
+                event.preventDefault();
+                window.alert('MAJESTIC no se guardara con monto 0 o 1. Captura el importe real.');
+                totalInput?.focus();
+            }
+        });
+        taxistaInput?.addEventListener('input', searchTaxistas);
+        taxistaInput?.addEventListener('change', () => applyTaxista());
+        hotelInput?.addEventListener('input', searchHoteles);
+        tarifaSelect?.addEventListener('change', applyTarifa);
+        totalInput?.addEventListener('input', refreshTotalWarning);
+        refreshTotalWarning();
+    })();
+</script>

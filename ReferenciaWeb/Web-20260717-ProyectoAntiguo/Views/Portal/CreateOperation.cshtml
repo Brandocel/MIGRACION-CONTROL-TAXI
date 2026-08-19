@@ -1,0 +1,130 @@
+@model ControlTaxiWeb.Models.CreateOperationPageViewModel
+@{
+    ViewData["Title"] = "Nueva operacion";
+}
+
+<div class="page-shell">
+    <div class="hero-card">
+        <div>
+            <p class="eyebrow">@Model.Input.Database</p>
+            <h1>Nueva operacion</h1>
+            <p>Captura web para guardar remisiones en la base seleccionada usando Entity Framework.</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+    {
+        <div class="success-banner">@Model.SuccessMessage</div>
+    }
+
+    <div class="section-card">
+        <form asp-action="CreateOperation" method="post" class="form-grid">
+            @Html.AntiForgeryToken()
+            <input asp-for="Input.Database" type="hidden" />
+
+            <div>
+                <label asp-for="Input.SellerKey" class="input-label"></label>
+                <select asp-for="Input.SellerKey" class="text-input">
+                    <option value="">Selecciona un vendedor</option>
+                    @foreach (var vendor in Model.Vendors)
+                    {
+                        <option value="@vendor.VendorKey">@vendor.VendorKey - @vendor.Name</option>
+                    }
+                </select>
+                <span asp-validation-for="Input.SellerKey" class="text-danger"></span>
+            </div>
+
+            <div>
+                <label asp-for="Input.Hotel" class="input-label"></label>
+                <input asp-for="Input.Hotel" class="text-input" />
+                <span asp-validation-for="Input.Hotel" class="text-danger"></span>
+            </div>
+
+            <div>
+                <label asp-for="Input.OperationType" class="input-label"></label>
+                <input asp-for="Input.OperationType" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.SaleDate" class="input-label"></label>
+                <input asp-for="Input.SaleDate" type="datetime-local" value="@Model.Input.SaleDate.ToString("yyyy-MM-ddTHH:mm")" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.UserName" class="input-label"></label>
+                <input asp-for="Input.UserName" class="text-input" />
+                <span asp-validation-for="Input.UserName" class="text-danger"></span>
+            </div>
+
+            <div>
+                <label asp-for="Input.PassengerCount" class="input-label"></label>
+                <input asp-for="Input.PassengerCount" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.GuideCode" class="input-label"></label>
+                <select asp-for="Input.GuideCode" class="text-input">
+                    <option value="">Sin guia</option>
+                    @foreach (var guide in Model.Guides)
+                    {
+                        <option value="@guide.GuideKey">@guide.GuideKey - @guide.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label asp-for="Input.TransportCode" class="input-label"></label>
+                <select asp-for="Input.TransportCode" class="text-input">
+                    <option value="">Sin transporte</option>
+                    @foreach (var item in Model.Transports)
+                    {
+                        <option value="@item.Code">@item.Code - @item.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="full-span">
+                <label asp-for="Input.Notes" class="input-label"></label>
+                <textarea asp-for="Input.Notes" class="text-input text-area"></textarea>
+            </div>
+
+            <div>
+                <label asp-for="Input.Subtotal" class="input-label"></label>
+                <input asp-for="Input.Subtotal" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.Tax" class="input-label"></label>
+                <input asp-for="Input.Tax" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.Cash" class="input-label"></label>
+                <input asp-for="Input.Cash" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.Card" class="input-label"></label>
+                <input asp-for="Input.Card" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.Dollars" class="input-label"></label>
+                <input asp-for="Input.Dollars" class="text-input" />
+            </div>
+
+            <div>
+                <label asp-for="Input.ExchangeRate" class="input-label"></label>
+                <input asp-for="Input.ExchangeRate" class="text-input" />
+            </div>
+
+            <div class="full-span button-stack">
+                <button type="submit" class="primary-button">Guardar operacion</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

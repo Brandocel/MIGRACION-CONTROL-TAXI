@@ -1,0 +1,234 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosRegistroDiarioViewModel
+@{
+    ViewData["Title"] = "Registro";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window registro-window">
+    <div class="classic-titlebar">REGISTRO</div>
+
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            <form id="registro-filter-form" method="get" asp-action="RegistroDiario" class="classic-form classic-form-top">
+                <div class="field wide"><label>BUSCAR FOLIO / TICKET / TAXISTA / HOTEL / GAFETE</label><input name="folioOperacion" value="@(ViewBag.FolioOperacion ?? string.Empty)" /></div>
+                <div class="field small"><label>DE FECHA</label><input type="date" name="fechaInicio" value="@(ViewBag.FechaInicio ?? string.Empty)" /></div>
+                <div class="field small"><label>A FECHA</label><input type="date" name="fechaFin" value="@(ViewBag.FechaFin ?? string.Empty)" /></div>
+            </form>
+
+            <section class="classic-form classic-form-top">
+                <div class="field wide"><label>Nombre TAXISTA</label><input form="registro-save-form" name="staff" value="@Model.Staff" /></div>
+                <div class="field small"><label>No.</label><input value="" placeholder="TAXISTA" /></div>
+                <div class="field small"><label>Fecha</label><input form="registro-save-form" name="fechaTrabajo" value="@Model.FechaTrabajo.ToString("yyyy-MM-dd")" /></div>
+                <div class="field tiny"><label>PAX</label><input form="registro-save-form" name="pax" value="@Model.Pax" /></div>
+            </section>
+
+            <section class="classic-table-panel registro-table-panel">
+                <table class="table table-sm table-bordered classic-grid registro-grid">
+                    <thead>
+                        <tr>
+                            <th>Folio Operacion</th>
+                            <th>Fuente</th>
+                            <th>Ticket</th>
+                            <th>Gafete</th>
+                            <th>Tickets</th>
+                            <th>Hotel</th>
+                            <th>Llegada/Sucursal</th>
+                            <th>Fecha Vta.</th>
+                            <th>Hora</th>
+                            <th>Pax</th>
+                            <th>Taxista</th>
+                            <th>Nacionalidad</th>
+                            <th>Tipo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Operaciones.Select((value, index) => new { value, index }))
+                        {
+                            var folioVisible = string.IsNullOrWhiteSpace(item.value.FolioOperacion) ? item.value.FolioControl : item.value.FolioOperacion;
+                            <tr class="registro-master-row"
+                                data-folio="@folioVisible"
+                                data-ticket="@item.value.Ticket"
+                                data-fuente="@item.value.Fuente"
+                                data-usuario-origen="@item.value.UsuarioOrigen"
+                                data-gafete="@item.value.Gafete"
+                                data-taxista="@item.value.Vendedor"
+                                data-hotel="@item.value.Hotel"
+                                data-llegada="@item.value.LlegadaSucursal"
+                                data-origen="@item.value.Origen"
+                                data-sitio="@item.value.Sitio"
+                                data-destino="@item.value.Destino"
+                                data-unidad="@item.value.Unidad"
+                                data-placas="@item.value.Placas"
+                                data-telefono="@item.value.Telefono"
+                                data-nacionalidad="@item.value.Nacionalidad"
+                                data-notas="@item.value.Notas"
+                                data-total="@item.value.Total.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                data-efectivo="@item.value.Efectivo.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                                data-tarjeta="@item.value.Tarjeta.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                                <td><button type="button" class="registro-row-link">@folioVisible</button></td>
+                                <td>
+                                    <span class="source-pill @(item.value.Fuente.Contains("APP", StringComparison.OrdinalIgnoreCase) ? "app-source" : "pos-source")">@(!string.IsNullOrWhiteSpace(item.value.Fuente) ? item.value.Fuente : "SISTEMA/POS")</span>
+                                    <span class="source-user">@(!string.IsNullOrWhiteSpace(item.value.UsuarioOrigen) ? item.value.UsuarioOrigen : "SIN USUARIO")</span>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.value.Ticket))
+                                    {
+                                        <a asp-action="RemisionDetalle" asp-route-folio="@item.value.Ticket" asp-route-productoBusqueda="@(ViewBag.FolioOperacion ?? string.Empty)">@item.value.Ticket</a>
+                                    }
+                                    else
+                                    {
+                                        @:-
+                                    }
+                                </td>
+                                <td>@item.value.Gafete</td>
+                                <td>@item.value.CantidadTickets</td>
+                                <td>@item.value.Hotel</td>
+                                <td>@item.value.LlegadaSucursal</td>
+                                <td>@Model.FechaTrabajo.ToString("dd/MM/yyyy")</td>
+                                <td>@item.value.Hora</td>
+                                <td>@item.value.Pax</td>
+                                <td>@item.value.Vendedor</td>
+                                <td>@item.value.Nacionalidad</td>
+                                <td>@item.value.TipoOperacion</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+
+            <div class="classic-bottom-grid">
+                <section class="classic-mini-panel">
+                    <div class="mini-title">OPERACIONES Y TICKETS</div>
+                    <table class="table table-sm table-bordered classic-grid">
+                        <thead><tr><th>Folio Operacion</th><th>Ticket</th><th>Total</th><th>Taxista</th></tr></thead>
+                        <tbody>
+                            <tr>
+                                <td data-selected-field="folio"></td>
+                                <td data-selected-field="ticket"></td>
+                                <td data-selected-field="total">0</td>
+                                <td data-selected-field="taxista"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="registro-bottom-detail">
+                        <div class="registro-detail-header">
+                            <div>
+                                <span>Operacion seleccionada</span>
+                                <strong data-selected-field="folio"></strong>
+                            </div>
+                        </div>
+                        <div class="registro-detail-grid">
+                            <span class="detail-chip"><strong>Gafete</strong><b data-selected-field="gafete"></b></span>
+                            <span><strong>Fuente</strong><b data-selected-field="fuente"></b></span>
+                            <span><strong>Usuario origen</strong><b data-selected-field="usuarioOrigen"></b></span>
+                            <span><strong>Hotel</strong><b data-selected-field="hotel"></b></span>
+                            <span><strong>Llegada/Sucursal</strong><b data-selected-field="llegada"></b></span>
+                            <span><strong>Origen</strong><b data-selected-field="origen"></b></span>
+                            <span><strong>Sitio</strong><b data-selected-field="sitio"></b></span>
+                            <span><strong>Destino</strong><b data-selected-field="destino"></b></span>
+                            <span><strong>Unidad</strong><b data-selected-field="unidad"></b></span>
+                            <span><strong>Placas</strong><b data-selected-field="placas"></b></span>
+                            <span><strong>Telefono</strong><b data-selected-field="telefono"></b></span>
+                            <span><strong>Nacionalidad</strong><b data-selected-field="nacionalidad"></b></span>
+                            <span class="detail-wide"><strong>Notas</strong><b data-selected-field="notas"></b></span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="classic-mini-panel">
+                    <div class="mini-title">FORMA DE PAGO</div>
+                    <table class="table table-sm table-bordered classic-grid">
+                        <thead><tr><th>Tipo</th><th>Total</th></tr></thead>
+                        <tbody>
+                            <tr><td>Efectivo</td><td data-selected-field="efectivo">0</td></tr>
+                            <tr><td>Tarjetas</td><td data-selected-field="tarjeta">0</td></tr>
+                            <tr><td>Total</td><td data-selected-field="totalPago">0</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+            </div>
+        </div>
+
+        <aside class="action-sidebar">
+            <button form="registro-filter-form" type="submit" class="action-btn search sidebar-submit">BUSCAR</button>
+            <a class="action-btn warn" asp-action="Cortes">CIERRE</a>
+            <a class="action-btn pay"
+               asp-action="Comisiones"
+               asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")"
+               asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")"
+               data-registro-comision-link>COMISIONES</a>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn exit" asp-action="Index">SALIR</a>
+            <div class="sidebar-date">@Model.FechaTrabajo.ToString("dd/MM/yyyy")</div>
+            <a class="action-btn search" asp-action="Reportes">REPORTERIA</a>
+            <form id="registro-save-form" method="post" asp-action="GuardarRegistro">
+                <input type="hidden" name="folioOperacion" value="@(ViewBag.FolioOperacion ?? Model.FolioOperacion ?? string.Empty)" />
+                <button type="submit" class="action-btn save sidebar-submit">GUARDAR</button>
+            </form>
+            <a class="action-btn green" asp-action="ExportRegistroCsv" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion ?? string.Empty)" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">CSV</a>
+            <a class="action-btn green" asp-action="ExportRegistroPdf" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion ?? string.Empty)" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">PDF</a>
+        </aside>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const rows = Array.from(document.querySelectorAll('.registro-master-row'));
+        const comisionLink = document.querySelector('[data-registro-comision-link]');
+        const comisionBaseUrl = '@Url.Action("Comisiones")';
+        const fechaInicio = '@Model.FechaInicio?.ToString("yyyy-MM-dd")';
+        const fechaFin = '@Model.FechaFin?.ToString("yyyy-MM-dd")';
+        const setText = (name, value) => {
+            document.querySelectorAll(`[data-selected-field="${name}"]`).forEach(el => el.textContent = value || '');
+        };
+        const money = value => {
+            const number = Number(value || 0);
+            return Number.isFinite(number) ? number.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '0';
+        };
+        const selectRow = row => {
+            rows.forEach(item => item.classList.toggle('is-selected', item === row));
+            const data = row.dataset;
+            setText('folio', data.folio);
+            setText('ticket', data.ticket);
+            setText('fuente', data.fuente || 'SISTEMA/POS');
+            setText('usuarioOrigen', data.usuarioOrigen || 'SIN USUARIO');
+            setText('taxista', data.taxista);
+            setText('gafete', data.gafete);
+            setText('hotel', data.hotel);
+            setText('llegada', data.llegada);
+            setText('origen', data.origen);
+            setText('sitio', data.sitio);
+            setText('destino', data.destino);
+            setText('unidad', data.unidad);
+            setText('placas', data.placas);
+            setText('telefono', data.telefono);
+            setText('nacionalidad', data.nacionalidad);
+            setText('notas', data.notas);
+            setText('total', money(data.total));
+            setText('efectivo', money(data.efectivo));
+            setText('tarjeta', money(data.tarjeta));
+            setText('totalPago', money(data.total));
+            if (comisionLink) {
+                const params = new URLSearchParams();
+                if (data.folio) params.set('folioOperacion', data.folio);
+                if (fechaInicio) params.set('fechaInicio', fechaInicio);
+                if (fechaFin) params.set('fechaFin', fechaFin);
+                comisionLink.href = `${comisionBaseUrl}?${params.toString()}`;
+            }
+        };
+        document.addEventListener('click', event => {
+            const row = event.target.closest('.registro-master-row');
+            if (!row) return;
+            selectRow(row);
+        });
+        if (rows.length > 0) {
+            selectRow(rows[0]);
+        }
+    })();
+</script>
+

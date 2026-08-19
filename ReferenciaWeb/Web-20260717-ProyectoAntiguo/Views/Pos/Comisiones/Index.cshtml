@@ -1,0 +1,292 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosComisionesViewModel
+@{
+    ViewData["Title"] = "Comisiones";
+    var sinPorcentaje = Model.Comisiones.Count(x => x.Base > 0 && x.Porcentaje <= 0);
+    var pendientes = Model.Comisiones.Count(x => x.Estatus == "PENDIENTE");
+    var pagadas = Model.Comisiones.Count(x => x.Estatus == "PAGADA");
+    var hayPagables = Model.Comisiones.Any(x => x.Importe > 0m && x.Pago < x.Importe && x.Estatus == "PENDIENTE");
+    string PorcentajeTexto(decimal value)
+    {
+        var absolute = Math.Abs(value);
+        return (absolute > 0m && absolute <= 1m ? value : value / 100m).ToString("P0");
+    }
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window comisiones-window screen-only">
+    <div class="classic-titlebar">COMISIONES</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            @if (sinPorcentaje > 0)
+            {
+                <div class="pos-notice warn-notice">
+                    Hay @sinPorcentaje movimiento(s) que necesitan revisar el porcentaje de comision.
+                </div>
+            }
+
+            <form id="comisiones-filter-form" method="get" asp-action="Comisiones" class="classic-form classic-form-top">
+                <input type="hidden" name="pagina" value="1" />
+                <div class="field wide">
+                    <label>BUSCAR FOLIO / TICKET / TAXISTA / HOTEL / GAFETE</label>
+                    <input name="folioOperacion" value="@Model.FolioOperacion" />
+                </div>
+                <div class="field small">
+                    <label>DE FECHA</label>
+                    <input type="date" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                </div>
+                <div class="field small">
+                    <label>A FECHA</label>
+                    <input type="date" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                </div>
+            </form>
+
+            <section class="classic-summary-grid">
+                <div class="summary-panel"><span>VENTA</span><strong>@Model.TotalVenta.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>BASE</span><strong>@Model.TotalBase.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>COMISION</span><strong>@Model.TotalComision.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>PAGADO</span><strong>@Model.TotalPagado.ToString("C2")</strong></div>
+                <div class="summary-panel"><span>PENDIENTES</span><strong>@pendientes</strong></div>
+                <div class="summary-panel"><span>PAGADAS</span><strong>@pagadas</strong></div>
+                <div class="summary-panel"><span>SIN % CATALOGO</span><strong>@sinPorcentaje</strong></div>
+            </section>
+
+            <section class="classic-table-panel comisiones-table-panel">
+                <div class="mini-title">
+                    REGISTROS @(((Model.Pagina - 1) * Model.TamanoPagina) + (Model.Comisiones.Count > 0 ? 1 : 0))-@Math.Min(Model.Pagina * Model.TamanoPagina, Model.TotalFilas) DE @Model.TotalFilas
+                    <span style="float:right">PAGINA @Model.Pagina DE @Model.TotalPaginas</span>
+                </div>
+                <form id="comisiones-calc-form" method="post" asp-action="CalcularComisiones">
+                    <input type="hidden" name="folioOperacion" value="@Model.FolioOperacion" />
+                    <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                </form>
+                <form id="comisiones-seleccion-form" method="post" asp-action="PagarComisionesSeleccionadas">
+                    <input type="hidden" name="folioOperacion" value="@Model.FolioOperacion" />
+                    <input type="hidden" name="fechaInicio" value="@Model.FechaInicio?.ToString("yyyy-MM-dd")" />
+                    <input type="hidden" name="fechaFin" value="@Model.FechaFin?.ToString("yyyy-MM-dd")" />
+                </form>
+                <table class="table table-sm table-bordered classic-grid comisiones-grid">
+                    <thead>
+                        <tr>
+                            <th>Sel.</th>
+                            <th>Folios</th>
+                            <th>Unidad</th>
+                            <th>Num. unidad</th>
+                            <th>Nombre</th>
+                            <th>Pax</th>
+                            <th>Hotel</th>
+                            <th>V.A</th>
+                            <th>V.F</th>
+                            <th>V.T</th>
+                            <th>V.J</th>
+                            <th>Vnt total</th>
+                            <th>Ticket</th>
+                            <th>F.P</th>
+                            <th>% descuento</th>
+                            <th>Dejada</th>
+                            <th>Bebidas y cajas regalo</th>
+                            <th>Rep</th>
+                            <th>Degustacion</th>
+                            <th>% comision</th>
+                            <th>Pago comision</th>
+                            <th>Estatus</th>
+                            <th>Vendedor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Comisiones)
+                        {
+                            var taxistaStaff = string.IsNullOrWhiteSpace(item.Staff) ? item.Beneficiario : item.Staff;
+                            var folioStatus = item.Pago > 0m ? "PAGADO" : item.Estatus;
+                            var descuentoAbs = Math.Abs(item.DescuentoAplicado);
+                            var descuento = descuentoAbs > 0m && descuentoAbs <= 1m
+                                ? item.DescuentoAplicado
+                                : item.DescuentoAplicado / 100m;
+                            var bebidasCajas = item.DeduccionBebidas + item.DeduccionCajasRegalo;
+                            var puedePagar = item.Importe > 0m && item.Pago < item.Importe && item.Estatus == "PENDIENTE";
+                            <tr>
+                                <td class="select-cell">
+                                    @if (puedePagar)
+                                    {
+                                        <input class="commission-check" form="comisiones-seleccion-form" type="checkbox" name="foliosSeleccionados" value="@item.Folio" data-amount="@((item.Importe - item.Pago).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" />
+                                    }
+                                    else
+                                    {
+                                        <input class="commission-check" type="checkbox" disabled title="Primero calcula o revisa la comision" />
+                                    }
+                                </td>
+                                <td><strong>@item.Folio</strong></td>
+                                <td>@item.Transporte</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.NumeroUnidad) ? "-" : item.NumeroUnidad)</td>
+                                <td>@taxistaStaff</td>
+                                <td>@item.Pax</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.Hotel) ? "-" : item.Hotel)</td>
+                                <td class="num">@item.VentaArtesania.ToString("C2")</td>
+                                <td class="num">@item.VentaFarmacia.ToString("C2")</td>
+                                <td class="num">@item.VentaTienda.ToString("C2")</td>
+                                <td class="num">@item.VentaJoyeria.ToString("C2")</td>
+                                <td class="num">@item.Base.ToString("C2")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.Ticket))
+                                    {
+                                        <a asp-action="RemisionDetalle" asp-route-folio="@item.Ticket" asp-route-productoBusqueda="@Model.FolioOperacion">@item.Ticket</a>
+                                    }
+                                    else
+                                    {
+                                        @item.Ticket
+                                    }
+                                </td>
+                                <td>@(string.IsNullOrWhiteSpace(item.FormaPago) ? "-" : item.FormaPago)</td>
+                                <td class="num">@descuento.ToString("P0")</td>
+                                <td class="num">@item.DeduccionDejada.ToString("C2")</td>
+                                <td class="num">@bebidasCajas.ToString("C2")</td>
+                                <td class="num">@item.DeduccionReparacion.ToString("C2")</td>
+                                <td class="num">@item.DeduccionDegustacion.ToString("C2")</td>
+                                <td class="num">@PorcentajeTexto(item.Porcentaje)</td>
+                                <td class="num"><strong>@item.Importe.ToString("C2")</strong></td>
+                                <td><span class="commission-status-pill @(folioStatus == "PAGADO" || folioStatus == "PAGADA" ? "paid" : "pending")">@folioStatus</span></td>
+                                <td>@(string.IsNullOrWhiteSpace(item.Vendedor) ? "-" : item.Vendedor)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="commission-selection-total">
+                    <span>Seleccionado</span>
+                    <strong data-selected-commission-total>$0.00</strong>
+                </div>
+                @if (Model.TotalPaginas > 1)
+                {
+                    <div class="commission-selection-total">
+                        <span>
+                            @if (Model.Pagina > 1)
+                            {
+                                <a asp-action="Comisiones"
+                                   asp-route-folioOperacion="@Model.FolioOperacion"
+                                   asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")"
+                                   asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")"
+                                   asp-route-pagina="@(Model.Pagina - 1)">ANTERIOR</a>
+                            }
+                        </span>
+                        <strong>
+                            @if (Model.Pagina < Model.TotalPaginas)
+                            {
+                                <a asp-action="Comisiones"
+                                   asp-route-folioOperacion="@Model.FolioOperacion"
+                                   asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")"
+                                   asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")"
+                                   asp-route-pagina="@(Model.Pagina + 1)">SIGUIENTE</a>
+                            }
+                        </strong>
+                    </div>
+                }
+            </section>
+        </div>
+
+        <aside class="action-sidebar comisiones-sidebar">
+            <button type="submit" form="comisiones-calc-form" class="action-btn save sidebar-submit">CALCULAR</button>
+            <button type="submit" form="comisiones-seleccion-form" class="action-btn pay sidebar-submit" @(hayPagables ? "" : "disabled")>PAGAR SELECCION</button>
+            <button form="comisiones-filter-form" type="submit" class="action-btn blue sidebar-submit">BUSCAR</button>
+            <a class="action-btn gold" asp-action="ExportComisionesCsv" asp-route-folioOperacion="@Model.FolioOperacion" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">CSV</a>
+            <a class="action-btn green" asp-action="ExportComisionesPdf" asp-route-folioOperacion="@Model.FolioOperacion" asp-route-fechaInicio="@Model.FechaInicio?.ToString("yyyy-MM-dd")" asp-route-fechaFin="@Model.FechaFin?.ToString("yyyy-MM-dd")">PDF</a>
+            <button type="button" class="action-btn green sidebar-submit" data-pos-print>IMPRIMIR</button>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn red" asp-action="Index">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+<section class="print-only triton-print-report">
+    <div class="triton-report-title">** REPORTE DE COMISIONES **</div>
+    <div class="triton-report-meta">
+        <span>Fecha del Reporte : @(Model.FechaInicio?.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy")) al @(Model.FechaFin?.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy"))</span>
+        <span>Page 1 of 1</span>
+    </div>
+    <table class="triton-report-table">
+        <thead>
+            <tr>
+                <th>folios</th>
+                <th>unidad</th>
+                <th>num.unidad</th>
+                <th>nombre</th>
+                <th>pax</th>
+                <th>hotel</th>
+                <th>v.a</th>
+                <th>v.f</th>
+                <th>v.t</th>
+                <th>v.j</th>
+                <th>vnt_total</th>
+                <th>ticket</th>
+                <th>f.p</th>
+                <th>%descuento</th>
+                <th>dejada</th>
+                <th>bebidas_cajas</th>
+                <th>rep</th>
+                <th>degustacion</th>
+                <th>%comision</th>
+                <th>pago_comision</th>
+                <th>vendedor</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in Model.Comisiones)
+            {
+                var taxistaStaff = string.IsNullOrWhiteSpace(item.Staff) ? item.Beneficiario : item.Staff;
+                var bebidasCajas = item.DeduccionBebidas + item.DeduccionCajasRegalo;
+                <tr>
+                    <td>@item.Folio</td>
+                    <td>@item.Transporte</td>
+                    <td>@item.NumeroUnidad</td>
+                    <td>@taxistaStaff</td>
+                    <td class="num">@item.Pax</td>
+                    <td>@item.Hotel</td>
+                    <td class="num">@item.VentaArtesania.ToString("N2")</td>
+                    <td class="num">@item.VentaFarmacia.ToString("N2")</td>
+                    <td class="num">@item.VentaTienda.ToString("N2")</td>
+                    <td class="num">@item.VentaJoyeria.ToString("N2")</td>
+                    <td class="num">@item.Base.ToString("N2")</td>
+                    <td>@item.Ticket</td>
+                    <td>@item.FormaPago</td>
+                    <td class="num">@PorcentajeTexto(item.DescuentoAplicado)</td>
+                    <td class="num">@item.DeduccionDejada.ToString("N2")</td>
+                    <td class="num">@bebidasCajas.ToString("N2")</td>
+                    <td class="num">@item.DeduccionReparacion.ToString("N2")</td>
+                    <td class="num">@item.DeduccionDegustacion.ToString("N2")</td>
+                    <td class="num">@PorcentajeTexto(item.Porcentaje)</td>
+                    <td class="num">@item.Importe.ToString("N2")</td>
+                    <td>@item.Vendedor</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <div class="triton-report-totals">
+        <span>Venta: @Model.TotalVenta.ToString("N2")</span>
+        <span>Base: @Model.TotalBase.ToString("N2")</span>
+        <span>Comision: @Model.TotalComision.ToString("N2")</span>
+        <span>Pagado: @Model.TotalPagado.ToString("N2")</span>
+    </div>
+</section>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const total = document.querySelector('[data-selected-commission-total]');
+        const checks = Array.from(document.querySelectorAll('.commission-check[name="foliosSeleccionados"]'));
+        const formatter = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+
+        function refreshTotal() {
+            const amount = checks
+                .filter(check => check.checked)
+                .reduce((sum, check) => sum + (parseFloat(check.dataset.amount || '0') || 0), 0);
+            if (total) {
+                total.textContent = formatter.format(amount);
+            }
+        }
+
+        checks.forEach(check => check.addEventListener('change', refreshTotal));
+        refreshTotal();
+    });
+</script>

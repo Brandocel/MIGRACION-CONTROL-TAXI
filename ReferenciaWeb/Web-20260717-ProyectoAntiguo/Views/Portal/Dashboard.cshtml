@@ -1,0 +1,65 @@
+@model ControlTaxiWeb.Models.DashboardPageViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="page-shell">
+    <div class="hero-card">
+        <div>
+            <p class="eyebrow">@Model.Database</p>
+            <h1>Panel principal</h1>
+            <p>Vista general de operaciones, tickets, comisiones y movimientos del dia.</p>
+        </div>
+        <form method="get" class="inline-form">
+            <input type="hidden" name="database" value="@Model.Database" />
+            <input type="date" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" class="text-input" />
+            <button type="submit" class="primary-button">Actualizar</button>
+        </form>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><span>Operaciones</span><strong>@Model.Metrics.OperationsCount</strong></div>
+        <div class="stat-card"><span>Tickets</span><strong>@Model.Metrics.TicketsCount</strong></div>
+        <div class="stat-card"><span>Artesanias</span><strong>@Model.Metrics.ArtesaniasTotal.ToString("C")</strong></div>
+        <div class="stat-card"><span>Joyeria</span><strong>@Model.Metrics.JoyeriaTotal.ToString("C")</strong></div>
+        <div class="stat-card"><span>Cobrado</span><strong>@Model.Metrics.PaymentsTotal.ToString("C")</strong></div>
+        <div class="stat-card"><span>Egresos</span><strong>@Model.Metrics.ExpensesTotal.ToString("C")</strong></div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-head">
+            <div>
+                <p class="section-eyebrow">REGISTRO DIARIO</p>
+                <h2>Ultimas operaciones</h2>
+            </div>
+            <a asp-action="Operations" asp-route-database="@Model.Database" asp-route-date="@Model.Date.ToString("yyyy-MM-dd")" class="ghost-link">Ver todo</a>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Fecha</th>
+                        <th>Vendedor</th>
+                        <th>Cliente</th>
+                        <th>Total</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.RecentOperations)
+                {
+                    <tr>
+                        <td>@item.Folio</td>
+                        <td>@(item.OperationDate?.ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                        <td>@item.SellerName</td>
+                        <td>@item.Hotel</td>
+                        <td>@item.Total.ToString("C")</td>
+                        <td>@item.PaymentSummary</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

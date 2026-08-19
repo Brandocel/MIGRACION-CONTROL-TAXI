@@ -1,0 +1,59 @@
+@model ControlTaxiWeb.Models.ProductsPageViewModel
+@{
+    ViewData["Title"] = "Productos";
+}
+
+<div class="page-shell">
+    <div class="hero-card">
+        <div>
+            <p class="eyebrow">@Model.Database</p>
+            <h1>Catalogo de productos</h1>
+            <p>Consulta por nombre, codigo de barras o clave interna.</p>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <form method="get" class="filters-grid">
+            <input type="hidden" name="database" value="@Model.Database" />
+            <div>
+                <label class="input-label">Buscar</label>
+                <input type="text" name="query" value="@Model.Query" class="text-input" placeholder="Nombre, codigo o producto" />
+            </div>
+            <div class="button-stack">
+                <button type="submit" class="primary-button">Filtrar</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="section-card">
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th>Codigo</th>
+                        <th>Nombre</th>
+                        <th>Departamento</th>
+                        <th>Precio</th>
+                        <th>IVA</th>
+                        <th>Moneda</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Products)
+                {
+                    <tr>
+                        <td>@item.ProductId</td>
+                        <td>@item.Code</td>
+                        <td>@item.Name</td>
+                        <td>@item.Department</td>
+                        <td>@item.Price.ToString("C")</td>
+                        <td>@item.Iva.ToString("0.##")</td>
+                        <td>@item.Currency</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

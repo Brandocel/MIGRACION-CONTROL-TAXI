@@ -1,0 +1,46 @@
+CONTROL TAXI EN RED
+
+RAPIDO PARA QUE SE VEA POR FUERA:
+
+1. En la PC servidor ejecuta como administrador:
+   REPARAR-CONTROL-TAXI-POR-FUERA.cmd
+
+2. Si al final los puertos locales salen True, prueba desde fuera:
+   http://26.38.252.71:5298
+
+3. Si local sale True pero desde fuera no abre, falta redireccionar en router/VPN:
+   TCP 5298 hacia la IP local de la PC servidor
+   TCP 1433 hacia la IP local de la PC servidor
+
+SI SALE "HA TARDADO DEMASIADO TIEMPO EN RESPONDER":
+
+1. En la PC servidor ejecuta:
+   DIAGNOSTICAR-CONTROL-TAXI-RED.cmd
+
+2. Si dice que 5298 NO esta escuchando:
+   abre Abrir-ControlTaxi.cmd
+
+3. Usa la URL que imprime el diagnostico. Si no aparece 26.38.252.71,
+   esa IP no esta activa en esta PC y no va a responder.
+
+PASOS NORMALES:
+
+1. En la maquina servidor abre:
+   Abrir-ControlTaxi.cmd
+
+2. En otras maquinas abre:
+   http://26.38.252.71:5298
+
+3. Si otra maquina no puede entrar, ejecuta en el servidor como administrador:
+   Abrir-Puerto-ControlTaxi-5298.cmd
+
+4. La app escucha en todas las interfaces del servidor:
+   http://0.0.0.0:5298
+
+5. La base de datos configurada es:
+   26.38.252.71,1433
+
+IMPORTANTE:
+- En Firewall revisa "Reglas de entrada", no "Reglas de salida".
+- SQL Server debe tener TCP/IP habilitado y puerto TCP fijo 1433.
+- Si estas fuera de la misma red/VPN, el router tambien debe redirigir 5298 y 1433 hacia la PC servidor.

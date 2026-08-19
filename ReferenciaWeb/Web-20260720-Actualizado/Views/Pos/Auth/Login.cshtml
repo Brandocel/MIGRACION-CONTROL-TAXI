@@ -1,0 +1,302 @@
+@{
+    ViewData["Title"] = "Acceso HOKA";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+<style>
+    body.pos-only-shell {
+        margin: 0;
+        background: #f4f0e8;
+        color: #17243a;
+        font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    body.pos-only-shell main {
+        min-height: 100vh;
+        padding: 18px;
+        background: linear-gradient(90deg, #143f55 0, #143f55 42%, #f4f0e8 42%, #f4f0e8 100%);
+    }
+
+    .pos-login-page {
+        min-height: calc(100vh - 36px);
+        display: grid;
+        place-items: center;
+    }
+
+    .pos-login-shell {
+        width: min(100%, 1120px);
+        min-height: 640px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+        overflow: hidden;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 28px 70px rgba(20, 35, 58, 0.22);
+    }
+
+    .pos-login-hero {
+        position: relative;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 28px;
+        padding: 46px;
+        background: linear-gradient(150deg, rgba(14, 58, 74, 0.96), rgba(11, 111, 99, 0.9)), url("/img/taxi.png");
+        background-size: cover;
+        background-position: center;
+        color: #ffffff;
+    }
+
+    .pos-login-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: rgba(9, 31, 45, 0.28);
+    }
+
+    .pos-login-brand,
+    .pos-login-copy,
+    .pos-login-emblem {
+        position: relative;
+        z-index: 1;
+    }
+
+    .pos-login-brand {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+    }
+
+    .pos-login-mark {
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 8px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+    }
+
+    .pos-login-hoka-logo {
+        width: 154px;
+        height: 72px;
+        padding: 8px;
+    }
+
+    .pos-login-mark img,
+    .pos-login-emblem img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .pos-login-brand strong,
+    .pos-login-brand span {
+        display: block;
+    }
+
+    .pos-login-brand strong {
+        color: #ffffff;
+        font-size: 1.02rem;
+        letter-spacing: 0.08em;
+    }
+
+    .pos-login-brand span {
+        margin-top: 4px;
+        color: #addbd7;
+        font-weight: 700;
+    }
+
+    .pos-login-emblem {
+        align-self: center;
+        justify-self: center;
+        width: min(68%, 360px);
+        aspect-ratio: 1;
+    }
+
+    .pos-login-copy h1 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 3.4rem;
+        line-height: 1;
+        font-weight: 900;
+    }
+
+    .pos-login-copy p {
+        max-width: 500px;
+        margin: 18px 0 0;
+        color: #d8eee9;
+        font-size: 1rem;
+    }
+
+    .pos-login-kicker {
+        margin: 0 0 14px !important;
+        color: #f0bd67 !important;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .pos-login-card {
+        display: grid;
+        align-content: center;
+        gap: 28px;
+        padding: 54px;
+        background: #ffffff;
+    }
+
+    .pos-login-card-head span,
+    .pos-login-card-head strong {
+        display: block;
+    }
+
+    .pos-login-card-head span {
+        color: #0f8f83;
+        font-size: 0.86rem;
+        font-weight: 900;
+        text-transform: uppercase;
+    }
+
+    .pos-login-card-head strong {
+        margin-top: 8px;
+        color: #14243a;
+        font-size: 2rem;
+        line-height: 1.1;
+    }
+
+    .pos-login-form {
+        display: grid;
+        gap: 18px;
+    }
+
+    .pos-login-form label {
+        display: grid;
+        gap: 8px;
+    }
+
+    .pos-login-form label span {
+        color: #34445a;
+        font-size: 0.92rem;
+        font-weight: 800;
+    }
+
+    .pos-login-form input {
+        height: 56px;
+        width: 100%;
+        border: 1px solid #c8d6e3;
+        border-radius: 8px;
+        padding: 0 16px;
+        background: #f8fbfd;
+        color: #152339;
+        font-size: 1rem;
+        outline: 0;
+    }
+
+    .pos-login-form input:focus {
+        border-color: #0f9b8e;
+        box-shadow: 0 0 0 4px rgba(15, 155, 142, 0.14);
+    }
+
+    .pos-login-submit {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 58px;
+        border: 0;
+        border-radius: 8px;
+        padding: 0 18px;
+        background: #0f8f83;
+        color: #ffffff;
+        font-weight: 900;
+        cursor: pointer;
+    }
+
+    .pos-login-submit:hover {
+        background: #0b766d;
+    }
+
+    .pos-login-submit svg {
+        width: 24px;
+        height: 24px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    @@media (max-width: 900px) {
+        body.pos-only-shell main {
+            padding: 12px;
+            background: #f4f0e8;
+        }
+
+        .pos-login-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .pos-login-hero,
+        .pos-login-card {
+            padding: 28px;
+        }
+
+        .pos-login-copy h1 {
+            font-size: 2.2rem;
+        }
+    }
+</style>
+
+<section class="pos-login-page">
+    <div class="pos-login-shell">
+        <div class="pos-login-hero">
+            <div class="pos-login-brand">
+                <span class="pos-login-mark pos-login-hoka-logo">
+                    <img src="~/img/hoka-logo.png" asp-append-version="true" alt="Grupo HOKA" />
+                </span>
+                <div>
+                    <strong>GRUPO HOKA</strong>
+                    <span>Control Taxi</span>
+                </div>
+            </div>
+
+            <div class="pos-login-emblem" aria-hidden="true">
+                <span></span>
+                <img src="~/img/taxi.png" asp-append-version="true" alt="" />
+            </div>
+
+            <div class="pos-login-copy">
+                <p class="pos-login-kicker">Caja operativa</p>
+                <h1>CONTROL TAXI</h1>
+                <p>Operacion diaria de taxistas, pagos, cortes y catalogos en un solo sistema.</p>
+            </div>
+        </div>
+
+        <aside class="pos-login-card">
+            <div class="pos-login-card-head">
+                <span>Bienvenido</span>
+                <strong>Iniciar sesion</strong>
+            </div>
+
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice login-notice">@ViewBag.PosNotice</div>
+            }
+
+            <form method="post" asp-action="Login" class="pos-login-form">
+                <label>
+                    <span>Usuario</span>
+                    <input name="usuario" value="WEB" autocomplete="username" autofocus />
+                </label>
+
+                <label>
+                    <span>Contrasena</span>
+                    <input name="password" type="password" autocomplete="current-password" />
+                </label>
+
+                <button type="submit" class="pos-login-submit">
+                    <span>Entrar al POS</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 12h13M13 6l6 6-6 6" />
+                    </svg>
+                </button>
+            </form>
+        </aside>
+    </div>
+</section>

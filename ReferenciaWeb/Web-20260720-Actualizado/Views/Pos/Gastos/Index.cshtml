@@ -1,0 +1,108 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosGastosViewModel
+@{
+    ViewData["Title"] = "Gastos";
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window screen-only">
+    <div class="classic-titlebar">GASTOS</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+            <form method="get" asp-action="Gastos" class="classic-form classic-form-top classic-form-payments">
+                <div class="field wide"><label>BUSCAR FOLIO / NOMBRE / HOTEL / GAFETE</label><input name="folioOperacion" value="@(ViewBag.FolioOperacion ?? string.Empty)" /></div>
+                <div class="field small"><label></label><button type="submit" class="action-btn search inline-btn">BUSCAR</button></div>
+            </form>
+            <section class="classic-form catalog-form">
+                <div class="field"><label>FECHA</label><input value="@DateTime.Today.ToString("dd/MM/yyyy")" /></div>
+                <div class="field"><label>CONCEPTO</label><input form="gasto-save-form" name="concepto" value="" placeholder="CONCEPTO" /></div>
+                <div class="field"><label>IMPORTE</label><input form="gasto-save-form" name="importe" value="@Model.ImporteCaptura.ToString("0.00")" /></div>
+                <div class="field"><label>OBSERVACIONES</label><input form="gasto-save-form" name="observaciones" value="" placeholder="OBSERVACIONES" /></div>
+            </section>
+
+            <section class="classic-summary-grid single">
+                <div class="summary-panel">
+                    <span>TOTAL GASTOS DEL DIA</span>
+                    <strong>@Model.TotalDia.ToString("C2")</strong>
+                </div>
+            </section>
+
+            <section class="classic-table-panel">
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr>
+                            <th>FECHA</th>
+                            <th>CONCEPTO</th>
+                            <th>IMPORTE</th>
+                            <th>OBSERVACION</th>
+                            <th>ESTATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Filas)
+                        {
+                            <tr>
+                                @foreach (var col in row)
+                                {
+                                    <td>@col</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <form id="gasto-save-form" method="post" asp-action="GuardarGasto">
+                <input type="hidden" name="folioOperacion" value="@(ViewBag.FolioOperacion ?? Model.FolioOperacion ?? string.Empty)" />
+                <button type="submit" class="action-btn save sidebar-submit">GUARDAR</button>
+            </form>
+            <a class="action-btn search" asp-action="Gastos" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion ?? string.Empty)">BUSCAR</a>
+            <a class="action-btn green" asp-action="ExportGastosCsv" asp-route-folioOperacion="@(ViewBag.FolioOperacion ?? Model.FolioOperacion ?? string.Empty)">CSV</a>
+            <button type="button" class="action-btn green sidebar-submit" data-pos-print>IMPRIMIR</button>
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+            <a class="action-btn exit" asp-action="Index">SALIR</a>
+        </aside>
+    </div>
+</div>
+
+<section class="print-only triton-print-report">
+    <div class="triton-report-title">** REPORTE DE GASTOS **</div>
+    <div class="triton-report-meta">
+        <span>Fecha del Reporte : @DateTime.Today.ToString("dd/MM/yyyy") al @DateTime.Today.ToString("dd/MM/yyyy")</span>
+        <span>Page 1 of 1</span>
+    </div>
+    <table class="triton-report-table">
+        <thead>
+            <tr>
+                <th>fecha</th>
+                <th>concepto</th>
+                <th>observacion</th>
+                <th>estatus</th>
+                <th>importe</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model.Filas)
+            {
+                <tr>
+                    <td>@row.ElementAtOrDefault(0)</td>
+                    <td>@row.ElementAtOrDefault(1)</td>
+                    <td>@row.ElementAtOrDefault(3)</td>
+                    <td>@row.ElementAtOrDefault(4)</td>
+                    <td class="num">@row.ElementAtOrDefault(2)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <div class="triton-report-totals">
+        <span>Total Gastos del Dia: @Model.TotalDia.ToString("N2")</span>
+    </div>
+</section>
+
+

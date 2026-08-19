@@ -1,0 +1,39 @@
+bin/
+obj/
+**/bin/
+**/obj/
+
+.vs/
+.vscode/
+*.user
+
+*.log
+*.err
+*.out
+*.tmp
+
+.keys/
+.tmp_*/
+.verify_*/
+.build_verify/
+
+Publicacion_IIS_HOKA/
+publicacion_iis_*/
+tmp_pago_excel/
+video_frames/
+video_frames_*/
+
+# Carpetas antiguas/alternativas de publicacion
+OLD_PUBLICACION_2_5/
+PUBLICAR_CONTROL_TAXI_SIN_DOTNET/
+
+# Archivos comprimidos
+*.zip
+
+# Binarios compilados dentro de la carpeta de publicacion
+PUBLICAR_CONTROL_TAXI/*.dll
+PUBLICAR_CONTROL_TAXI/*.pdb
+PUBLICAR_CONTROL_TAXI/*.exe
+PUBLICAR_CONTROL_TAXI/*.deps.json
+PUBLICAR_CONTROL_TAXI/*.runtimeconfig.json
+PUBLICAR_CONTROL_TAXI/*.staticwebassets.endpoints.json

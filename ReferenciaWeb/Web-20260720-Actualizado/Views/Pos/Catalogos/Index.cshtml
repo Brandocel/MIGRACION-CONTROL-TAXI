@@ -1,0 +1,331 @@
+﻿@model ControlTaxiWeb.Models.PosTriton.PosCatalogoViewModel
+@{
+    ViewData["Title"] = Model.Titulo;
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+    var isTransportes = currentAction == "Transportes";
+    var isTaxistas = currentAction == "Taxistas";
+    var saveAction = currentAction switch
+    {
+        "Transportes" => "GuardarTransporte",
+        "Guias" => "GuardarGuia",
+        "Taxistas" => "GuardarTaxista",
+        _ => string.Empty
+    };
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+<style>
+    .catalog-toolbar {
+        align-items: end;
+        display: grid;
+        gap: 14px;
+        grid-template-columns: minmax(240px, 1fr) 180px;
+        margin-bottom: 14px;
+    }
+
+    .catalog-action-cell {
+        white-space: nowrap;
+        width: 168px;
+    }
+
+    .catalog-edit-link {
+        align-items: center;
+        color: #184d9a;
+        display: inline-flex;
+        gap: 6px;
+        text-decoration: none;
+    }
+
+    .catalog-edit-link svg {
+        height: 14px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        width: 14px;
+    }
+
+    .catalog-shortcuts {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-left: 8px;
+    }
+
+    .catalog-shortcuts a {
+        color: #184d9a;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+    }
+
+    .catalog-row-selectable {
+        cursor: pointer;
+    }
+
+    .catalog-row-selectable.is-selected {
+        background: #e8f1ff;
+    }
+
+    .catalog-mode-badge {
+        color: #184d9a;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+</style>
+
+<div class="pos-shell">
+    <div class="classic-window">
+        <div class="classic-titlebar">@Model.Titulo.ToUpper()</div>
+        <div class="classic-body with-sidebar">
+            <div class="classic-main">
+                @if (ViewBag.PosNotice != null)
+                {
+                    <div class="pos-notice">@ViewBag.PosNotice</div>
+                }
+                @if (isTransportes || isTaxistas)
+                {
+                    <div class="catalog-mode-badge" data-catalog-mode>Nuevo registro</div>
+                }
+                <form id="catalog-save-form" method="post" asp-action="@saveAction" class="classic-form catalog-form">
+                    @if (isTransportes)
+                    {
+                        <div class="field"><label>CLAVE</label><input name="clave" data-catalog-input="clave" /></div>
+                        <div class="field"><label>NOMBRE</label><input name="nombre" data-catalog-input="nombre" /></div>
+                        <div class="field"><label>MINIMO</label><input name="minimo" value="0" data-catalog-input="minimo" /></div>
+                        <div class="field"><label>MAXIMO</label><input name="maximo" value="0" data-catalog-input="maximo" /></div>
+                        <div class="field"><label>COMISION</label><input name="comision" value="0" data-catalog-input="comision" /></div>
+                        <div class="field"><label>DESC EFECTIVO</label><input name="descEfectivo" value="0" data-catalog-input="efectivo" /></div>
+                        <div class="field"><label>DESC TARJETA</label><input name="descTarjeta" value="0" data-catalog-input="tarjeta" /></div>
+                        <div class="field"><label>DESC AMEX</label><input name="descAmex" value="0" data-catalog-input="amex" /></div>
+                    }
+                    else if (currentAction == "Guias")
+                    {
+                        <div class="field"><label>CLAVE</label><input name="clave" /></div>
+                        <div class="field"><label>NOMBRE</label><input name="nombre" /></div>
+                        <div class="field"><label>TELEFONO</label><input name="telefono" /></div>
+                        <div class="field"><label>COMISION</label><input name="comision" value="0" /></div>
+                        <div class="field"><label>ESTATUS</label><input name="estatus" value="Activo" /></div>
+                    }
+                    else if (isTaxistas)
+                    {
+                        <div class="field"><label>CLAVE</label><input name="clave" data-catalog-input="clave" /></div>
+                        <div class="field"><label>NOMBRE</label><input name="nombre" data-catalog-input="nombre" /></div>
+                        <div class="field"><label>TELEFONO</label><input name="telefono" data-catalog-input="telefono" /></div>
+                        <div class="field"><label>UNIDAD</label><input name="unidad" data-catalog-input="unidad" /></div>
+                        <div class="field"><label>PLACAS</label><input name="placas" data-catalog-input="placas" /></div>
+                        <div class="field"><label>ESTATUS</label><input name="estatus" value="Activo" data-catalog-input="estatus" /></div>
+                    }
+                </form>
+
+                @if (isTaxistas || isTransportes)
+                {
+                    <form method="get" asp-action="@currentAction" class="catalog-toolbar">
+                        <div class="field small">
+                            <label>BUSCAR</label>
+                            <input name="busqueda" value="@Model.Busqueda" />
+                        </div>
+                        <button type="submit" class="action-btn search">BUSCAR</button>
+                    </form>
+                }
+
+                <section class="classic-table-panel">
+                    <table class="table table-sm table-bordered classic-grid">
+                        <thead>
+                            <tr>
+                                @foreach (var col in Model.Columnas)
+                                {
+                                    <th>@col</th>
+                                }
+                                @if (isTransportes || isTaxistas)
+                                {
+                                    <th>ACCION</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.Filas)
+                            {
+                                var dataPairs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                                if (isTransportes && row.Count >= 8)
+                                {
+                                    dataPairs["clave"] = row[0];
+                                    dataPairs["nombre"] = row[1];
+                                    dataPairs["minimo"] = row[2];
+                                    dataPairs["maximo"] = row[3];
+                                    dataPairs["comision"] = row[4];
+                                    dataPairs["efectivo"] = row[5];
+                                    dataPairs["tarjeta"] = row[6];
+                                    dataPairs["amex"] = row[7];
+                                }
+                                else if (isTaxistas && row.Count >= 6)
+                                {
+                                    dataPairs["clave"] = row[0];
+                                    dataPairs["nombre"] = row[1];
+                                    dataPairs["unidad"] = row[2];
+                                    dataPairs["placas"] = row[3];
+                                    dataPairs["telefono"] = row[4];
+                                    dataPairs["estatus"] = row[5];
+                                }
+                                var rowAttributes = string.Join(" ", dataPairs.Select(pair => $"data-{pair.Key}=\"{System.Net.WebUtility.HtmlEncode(pair.Value)}\""));
+
+                                <tr class="@((isTransportes || isTaxistas) ? "catalog-row-selectable" : string.Empty)" @Html.Raw(rowAttributes)>
+                                    @for (var i = 0; i < row.Count; i++)
+                                    {
+                                        var col = row[i];
+                                        <td>
+                                            @if ((isTransportes || isTaxistas) && i == 0)
+                                            {
+                                                <a href="#catalog-save-form" class="catalog-edit-link" data-catalog-edit>
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                                    <span>@col</span>
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                @col
+                                            }
+                                        </td>
+                                    }
+                                    @if (isTransportes || isTaxistas)
+                                    {
+                                        <td class="catalog-action-cell">
+                                            <a href="#catalog-save-form" class="catalog-edit-link" data-catalog-edit>
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                                                <span>EDITAR</span>
+                                            </a>
+                                            <span class="catalog-shortcuts">
+                                                @if (isTaxistas)
+                                                {
+                                                    <a asp-action="Relaciones" asp-route-busqueda="@row[0]">RELACION</a>
+                                                }
+                                                else if (isTransportes)
+                                                {
+                                                    <a asp-action="Relaciones" asp-route-busqueda="@row[1]">RELACION</a>
+                                                }
+                                            </span>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </section>
+                @if (isTaxistas)
+                {
+                    <div class="catalog-pager">
+                        <span>Pagina @Model.Pagina de @Model.TotalPaginas (@Model.TotalFilas registros)</span>
+                        @if (Model.Pagina > 1)
+                        {
+                            <a asp-action="Taxistas" asp-route-busqueda="@Model.Busqueda" asp-route-pagina="@(Model.Pagina - 1)">Anterior</a>
+                        }
+                        @if (Model.Pagina < Model.TotalPaginas)
+                        {
+                            <a asp-action="Taxistas" asp-route-busqueda="@Model.Busqueda" asp-route-pagina="@(Model.Pagina + 1)">Siguiente</a>
+                        }
+                    </div>
+                }
+            </div>
+
+            <aside class="action-sidebar">
+                @if (!string.IsNullOrWhiteSpace(saveAction))
+                {
+                    <button form="catalog-save-form" type="submit" class="action-btn save sidebar-submit">GUARDAR</button>
+                }
+                @if (isTransportes || isTaxistas)
+                {
+                    <button type="button" class="action-btn blue sidebar-submit" data-catalog-clear>NUEVO</button>
+                }
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+                <a class="action-btn exit" asp-action="Index">SALIR</a>
+            </aside>
+        </div>
+    </div>
+</div>
+
+@if (isTransportes || isTaxistas)
+{
+<script>
+    (() => {
+        const rows = document.querySelectorAll('.catalog-row-selectable');
+        const mode = document.querySelector('[data-catalog-mode]');
+        const clearBtn = document.querySelector('[data-catalog-clear]');
+        const inputs = {
+            clave: document.querySelector('[data-catalog-input="clave"]'),
+            nombre: document.querySelector('[data-catalog-input="nombre"]'),
+            minimo: document.querySelector('[data-catalog-input="minimo"]'),
+            maximo: document.querySelector('[data-catalog-input="maximo"]'),
+            comision: document.querySelector('[data-catalog-input="comision"]'),
+            efectivo: document.querySelector('[data-catalog-input="efectivo"]'),
+            tarjeta: document.querySelector('[data-catalog-input="tarjeta"]'),
+            amex: document.querySelector('[data-catalog-input="amex"]'),
+            telefono: document.querySelector('[data-catalog-input="telefono"]'),
+            unidad: document.querySelector('[data-catalog-input="unidad"]'),
+            placas: document.querySelector('[data-catalog-input="placas"]'),
+            estatus: document.querySelector('[data-catalog-input="estatus"]')
+        };
+
+        const defaults = {};
+        Object.entries(inputs).forEach(([key, input]) => {
+            if (input) {
+                defaults[key] = input.value;
+            }
+        });
+
+        const selectRow = (row) => {
+            rows.forEach((item) => item.classList.remove('is-selected'));
+            row.classList.add('is-selected');
+            Object.entries(inputs).forEach(([key, input]) => {
+                if (!input) {
+                    return;
+                }
+
+                input.value = row.dataset[key] || '';
+            });
+
+            if (mode) {
+                mode.textContent = 'Editando registro';
+            }
+        };
+
+        rows.forEach((row) => {
+            row.addEventListener('click', (event) => {
+                if (event.target.closest('[data-catalog-edit]') || event.target.closest('a')) {
+                    event.preventDefault();
+                }
+
+                selectRow(row);
+            });
+        });
+
+        document.querySelectorAll('[data-catalog-edit]').forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const row = link.closest('.catalog-row-selectable');
+                if (row) {
+                    selectRow(row);
+                }
+            });
+        });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                rows.forEach((item) => item.classList.remove('is-selected'));
+                Object.entries(inputs).forEach(([key, input]) => {
+                    if (!input) {
+                        return;
+                    }
+
+                    input.value = defaults[key] || '';
+                });
+
+                if (mode) {
+                    mode.textContent = 'Nuevo registro';
+                }
+            });
+        }
+    })();
+</script>
+}
+

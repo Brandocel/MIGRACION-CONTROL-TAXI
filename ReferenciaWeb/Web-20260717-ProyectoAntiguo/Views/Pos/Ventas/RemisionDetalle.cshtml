@@ -1,0 +1,188 @@
+@model ControlTaxiWeb.Models.PosTriton.PosVentasViewModel
+@{
+    ViewData["Title"] = "Detalle de remision";
+    var regresoVenta = ViewBag.RegresoVenta as string ?? Model.ProductoBusqueda;
+    var remisionFolio = ViewBag.RemisionFolio as string ?? string.Empty;
+    var gafetesActivos = Model.GafetesActivos.Count > 0
+        ? Model.GafetesActivos
+        : (Model.Gafete ?? string.Empty)
+            .Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+}
+
+<link rel="stylesheet" href="~/css/PosTriton.css" asp-append-version="true" />
+
+<div class="classic-window">
+    <div class="classic-titlebar">DETALLE DE REMISION</div>
+    <div class="classic-body with-sidebar">
+        <div class="classic-main">
+            @if (ViewBag.PosNotice != null)
+            {
+                <div class="pos-notice">@ViewBag.PosNotice</div>
+            }
+
+            <section class="classic-form classic-form-top">
+                <div class="field"><label>REMISION</label><input value="@remisionFolio" readonly /></div>
+                <div class="field"><label>FOLIO REGISTRO</label><input value="@Model.FolioRegistro" readonly /></div>
+                <div class="field"><label>FACTURA</label><input value="@Model.FolioFactura" readonly /></div>
+                <div class="field"><label>ORIGEN</label><input value="@Model.OrigenVenta" readonly /></div>
+                <div class="field"><label>CLIENTE</label><input value="@Model.Cliente" readonly /></div>
+                <div class="field"><label>USUARIO</label><input value="@Model.Usuario" readonly /></div>
+                <div class="field"><label>TAXISTA</label><input value="@Model.TaxistaNombre" readonly /></div>
+                <div class="field"><label>TAXISTA ID</label><input value="@Model.TaxistaId" readonly /></div>
+                <div class="field"><label>TRANSPORTE</label><input value="@Model.TransporteTipo" readonly /></div>
+                <div class="field"><label>FOLIO APP</label><input value="@Model.FolioApp" readonly /></div>
+                <div class="field"><label>FOLIO CONTROL</label><input value="@Model.FolioControl" readonly /></div>
+                <div class="field"><label>GAFETES ACTIVOS</label><input value="@(gafetesActivos.Count == 0 ? "SIN GAFETES ACTIVOS" : string.Join(", ", gafetesActivos))" readonly /></div>
+            </section>
+
+            <section class="classic-table-panel">
+                <div class="mini-title">IMPORTES</div>
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr>
+                            <th>Subtotal</th>
+                            <th>IVA</th>
+                            <th>Total</th>
+                            <th>Efectivo</th>
+                            <th>Tarjeta</th>
+                            <th>Dolares</th>
+                            <th>Tipo cambio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>@Model.Subtotal.ToString("C2")</td>
+                            <td>@Model.Iva.ToString("C2")</td>
+                            <td>@Model.Total.ToString("C2")</td>
+                            <td>@Model.Efectivo.ToString("C2")</td>
+                            <td>@Model.Tarjeta.ToString("C2")</td>
+                            <td>@Model.Dolares.ToString("C2")</td>
+                            <td>@Model.TipoCambio</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="classic-table-panel">
+                <div class="mini-title">VENTAS / REMISIONES RELACIONADAS</div>
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr>
+                            <th>Origen</th>
+                            <th>Referencia</th>
+                            <th>Factura</th>
+                            <th>Fecha</th>
+                            <th>Venta</th>
+                            <th>Gafetes</th>
+                            <th>Importe</th>
+                            <th>Ver</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr>
+                                <td>@item.OrigenVenta</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.Referencia))
+                                    {
+                                        <a asp-action="Ventas" asp-route-productoBusqueda="@item.Referencia">@item.Referencia</a>
+                                    }
+                                </td>
+                                <td>@item.Factura</td>
+                                <td>@item.FechaVenta</td>
+                                <td>@item.Producto</td>
+                                <td>
+                                    @{
+                                        var tokens = (item.GafetesAsignados ?? string.Empty)
+                                            .Split(new[] { ',', ';', '/', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                                            .ToList();
+                                    }
+                                    @if (tokens.Count == 0)
+                                    {
+                                        @:SIN GAFETE ASIGNADO
+                                    }
+                                    else
+                                    {
+                                        @for (var i = 0; i < tokens.Count; i++)
+                                        {
+                                            <a asp-action="Relaciones" asp-route-busqueda="@tokens[i]">@tokens[i]</a>
+                                            if (i < tokens.Count - 1)
+                                            {
+                                                @:,
+                                            }
+                                        }
+                                    }
+                                </td>
+                                <td>@item.Importe.ToString("C2")</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(item.Referencia))
+                                    {
+                                        <a class="mini-action-btn" asp-action="RemisionDetalle" asp-route-folio="@item.Referencia" asp-route-productoBusqueda="@Model.ProductoBusqueda">ABRIR</a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="classic-table-panel">
+                <div class="mini-title">GAFETES Y VENTAS</div>
+                <table class="table table-sm table-bordered classic-grid">
+                    <thead>
+                        <tr>
+                            <th>Gafete</th>
+                            <th>Venta</th>
+                            <th>Referencia</th>
+                            <th>Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.GafeteVentas)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!string.Equals(row.Gafete, "SIN GAFETE ASIGNADO", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        <a asp-action="Relaciones" asp-route-busqueda="@row.Gafete">@row.Gafete</a>
+                                    }
+                                    else
+                                    {
+                                        @row.Gafete
+                                    }
+                                </td>
+                                <td>@row.Venta</td>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(row.Referencia))
+                                    {
+                                        <a asp-action="Ventas" asp-route-productoBusqueda="@row.Referencia">@row.Referencia</a>
+                                    }
+                                </td>
+                                <td>@row.Importe.ToString("C2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        <aside class="action-sidebar">
+            <a class="action-btn search" asp-action="Ventas" asp-route-productoBusqueda="@regresoVenta">VOLVER VENTA</a>
+            @if (!string.IsNullOrWhiteSpace(Model.FolioRegistro))
+            {
+                <a class="action-btn" asp-action="RemisionProductos" asp-route-folioRegistro="@Model.FolioRegistro">VER PRODUCTOS</a>
+            }
+            @if (!string.IsNullOrWhiteSpace(Model.FolioRegistro))
+            {
+                <a class="action-btn blue" asp-action="Relaciones" asp-route-busqueda="@Model.FolioRegistro">RELACION</a>
+                <a class="action-btn gold" asp-action="Comisiones" asp-route-folioOperacion="@Model.FolioRegistro">COMISION</a>
+                <a class="action-btn warn" asp-action="RegistroDiario" asp-route-folioOperacion="@Model.FolioRegistro">REGISTRO</a>
+            }
+            <a class="action-btn menu" asp-action="Index"><span class="menu-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8" /><path d="M5 10v10h14V10" /><path d="M9 20v-6h6v6" /></svg></span><span>MENU</span></a>
+        </aside>
+    </div>
+</div>
