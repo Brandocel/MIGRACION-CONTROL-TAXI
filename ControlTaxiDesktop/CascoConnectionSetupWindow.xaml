@@ -1,0 +1,70 @@
+<Window x:Class="ControlTaxiDesktop.CascoConnectionSetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configuracion de Casco"
+        Width="520"
+        Height="430"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{StaticResource WebBodyBrush}">
+    <Border Margin="18" Padding="18" Background="White" BorderBrush="#B9CBE0" BorderThickness="1" CornerRadius="12">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Configuracion inicial de Casco Viejo" FontSize="22" FontWeight="Black" Foreground="#17324B"/>
+            <TextBlock Grid.Row="1" Margin="0,8,0,18" Text="Esta configuracion se guarda cifrada con DPAPI del equipo. No se almacena la contrasena en texto plano." TextWrapping="Wrap" Foreground="#5B6D80"/>
+
+            <TextBlock Grid.Row="2" Text="Servidor SQL" FontWeight="Black"/>
+            <TextBox Grid.Row="3" x:Name="ServerTextBox" Margin="0,6,0,12"/>
+
+            <Grid Grid.Row="4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Usuario SQL" FontWeight="Black"/>
+                    <TextBox x:Name="UserTextBox" Margin="0,6,0,12"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Base" FontWeight="Black"/>
+                    <TextBox x:Name="DatabaseTextBox" Margin="0,6,0,12" IsReadOnly="True"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="5">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Contrasena SQL" FontWeight="Black"/>
+                    <PasswordBox x:Name="PasswordTextBox" Margin="0,6,0,12"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Sucursal" FontWeight="Black"/>
+                    <TextBox x:Name="BranchTextBox" Margin="0,6,0,12" IsReadOnly="True"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Grid.Row="6" x:Name="StatusTextBlock" Foreground="#A92A2D" TextWrapping="Wrap" Margin="0,4,0,8"/>
+
+            <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancelar" Width="110" Margin="0,0,8,0" Click="Cancel_Click"/>
+                <Button Content="Probar conexion" Width="130" Margin="0,0,8,0" Background="#FBF3E4" BorderBrush="#ECD8A7" Foreground="#9A6F13" Click="Test_Click"/>
+                <Button Content="Guardar y continuar" Width="170" Background="#0F8F83" Foreground="White" BorderBrush="#0F8F83" Click="Save_Click"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

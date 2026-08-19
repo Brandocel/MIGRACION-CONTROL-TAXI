@@ -1,0 +1,362 @@
+        <TabItem Header="Relaciones">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <StackPanel Margin="6">
+
+            <!-- HEADER AZUL -->
+            <Border Margin="0,0,0,6" CornerRadius="12" Padding="10,7">
+              <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                  <GradientStop Color="#1B4FD8" Offset="0"/>
+                  <GradientStop Color="#0E2F8E" Offset="1"/>
+                </LinearGradientBrush>
+              </Border.Background>
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                  <Border Background="#25FFFFFF" CornerRadius="10" Width="40" Height="40" Margin="0,0,8,0" VerticalAlignment="Center">
+                    <TextBlock Text="🚕" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="RELACION TICKET - TAXISTA v2" FontSize="12" FontWeight="Black" Foreground="White"/>
+                    <TextBlock Text="Control y asignación de tickets a taxistas" FontSize="9" Foreground="#B0C8FF"/>
+                  </StackPanel>
+                </StackPanel>
+                <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right">
+                  <Button Content="BUSCAR"     Style="{StaticResource WebActionButton}"     Click="RefreshRelations_Click"    Margin="3,2"/>
+                  <Button Content="ACTUALIZAR" Style="{StaticResource WebActionSaveButton}" Click="ConfirmSaveRelation_Click" Margin="3,2"/>
+                  <Button Content="LIMPIAR"    Style="{StaticResource WebActionButton}"     Click="ClearRelationFilters_Click" Margin="3,2"/>
+                  <Button Content="NUEVO"      Style="{StaticResource WebActionButton}"     Click="ClearRelation_Click"       Margin="3,2"/>
+                  <Button Content="COMISION"   Style="{StaticResource WebActionGoldButton}" Click="OpenCommissions_Click"     Margin="3,2"/>
+                  <Button Content="MENU"       Style="{StaticResource WebActionButton}"     Click="CloseWindow_Click"         Margin="3,2"/>
+                  <Button Content="SALIR"      Style="{StaticResource WebActionRedButton}"  Click="CloseWindow_Click"         Margin="3,2"/>
+                  <StackPanel x:Name="RelationActionsLarge"  Visibility="Collapsed"/>
+                  <StackPanel x:Name="RelationActionsCompact" Visibility="Collapsed"/>
+                </WrapPanel>
+              </DockPanel>
+            </Border>
+
+            <!-- BUSQUEDA / FILTROS -->
+            <Border Style="{StaticResource FormPanel}">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                  <TextBlock Text="≡" FontSize="14" Foreground="#1B4FD8" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                  <TextBlock Text="BÚSQUEDA / FILTROS" FontSize="10" FontWeight="Black" Foreground="#0D2D65"/>
+                </StackPanel>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock Text="Buscar App / Ticket / Taxista / Hotel / Gafete" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationSearch" FontSize="11" Padding="5,5" TextChanged="RelationSearch_TextChanged" KeyDown="RelationSearch_KeyDown"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                    <TextBlock Text="Fecha Inicio" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <DatePicker x:Name="RelationStart"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="Fecha Fin" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <DatePicker x:Name="RelationEnd"/>
+                  </StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock Text="Ticket App otorgado" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationAssignedTicket" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                    <TextBlock Text="Folio App movil" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationAppFolio" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="Folio operacion asignado" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationOperationFolio" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                </Grid>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock Text="Ticket venta POS asignado" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationPosFolio" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                    <TextBlock Text="Gafete" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationBadge" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="Taxista ID" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationTaxistaId" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- DATOS DEL TAXISTA -->
+            <Border Style="{StaticResource FormPanel}">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                  <TextBlock Text="👤" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                  <TextBlock Text="DATOS DEL TAXISTA" FontSize="10" FontWeight="Black" Foreground="#0D2D65"/>
+                </StackPanel>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock Text="Nombre taxista" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationDriver" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="Vendedores" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <ComboBox x:Name="RelationVendor" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" FontSize="11" Padding="3,4"/>
+                  </StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock Text="Nacionalidad" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationNationality" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Text="Tipo Transporte" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationTransportType" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                </Grid>
+                <Grid Margin="0,0,0,6">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Grid.Column="0" Margin="0,0,6,0">
+                    <TextBlock Text="Venta" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationSale" Text="0" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,6,0">
+                    <TextBlock Text="Forma de pago" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationPaymentMethod" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Margin="0,0,6,0">
+                    <TextBlock Text="Moneda" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationCurrency" FontSize="11" Padding="5,5"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="3">
+                    <TextBlock Text="Comision" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                    <TextBox x:Name="RelationCommission" IsReadOnly="True" FontSize="11" Padding="5,5" Background="#F0F4F8"/>
+                  </StackPanel>
+                </Grid>
+                <StackPanel>
+                  <TextBlock Text="Notas / Observaciones" FontSize="9" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,2"/>
+                  <TextBox x:Name="RelationNotes" FontSize="11" Padding="5,5"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <!-- PASAJEROS / COBRO -->
+            <Border Style="{StaticResource FormPanel}">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                  <TextBlock Text="👥" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                  <TextBlock Text="PASAJEROS / COBRO" FontSize="10" FontWeight="Black" Foreground="#0D2D65"/>
+                </StackPanel>
+                <UniformGrid Rows="1" Columns="5">
+                  <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,0,5,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Background="#DBEAFE" CornerRadius="7" Width="32" Height="32" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <TextBlock Text="👤" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Adulto" FontSize="9" FontWeight="Bold" Foreground="#1E40AF"/>
+                        <TextBox x:Name="RelationAdultPassengers" Text="0" TextChanged="RelationPassengerBreakdown_TextChanged" FontSize="17" FontWeight="Black" Foreground="#1E40AF" Background="Transparent" BorderThickness="0" Padding="0" Width="46"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="#F0FDF4" BorderBrush="#BBF7D0" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,0,5,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Background="#DCFCE7" CornerRadius="7" Width="32" Height="32" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <TextBlock Text="🧑" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Joven" FontSize="9" FontWeight="Bold" Foreground="#15803D"/>
+                        <TextBox x:Name="RelationYouthPassengers" Text="0" TextChanged="RelationPassengerBreakdown_TextChanged" FontSize="17" FontWeight="Black" Foreground="#15803D" Background="Transparent" BorderThickness="0" Padding="0" Width="46"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,0,5,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Background="#FFEDD5" CornerRadius="7" Width="32" Height="32" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <TextBlock Text="👦" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Menores" FontSize="9" FontWeight="Bold" Foreground="#C2410C"/>
+                        <TextBox x:Name="RelationChildPassengers" Text="0" TextChanged="RelationPassengerBreakdown_TextChanged" FontSize="17" FontWeight="Black" Foreground="#C2410C" Background="Transparent" BorderThickness="0" Padding="0" Width="46"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="#FAF5FF" BorderBrush="#E9D5FF" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,0,5,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Background="#EDE9FE" CornerRadius="7" Width="32" Height="32" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <TextBlock Text="👥" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="PAX" FontSize="9" FontWeight="Bold" Foreground="#7C3AED"/>
+                        <TextBox x:Name="RelationPassengers" IsReadOnly="True" Text="0" FontSize="17" FontWeight="Black" Foreground="#7C3AED" Background="Transparent" BorderThickness="0" Padding="0" Width="46"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                  <Border Background="#FFFBEB" BorderBrush="#FCD34D" BorderThickness="1.5" CornerRadius="10" Padding="8,6">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <Border Background="#FEF3C7" CornerRadius="7" Width="32" Height="32" Margin="0,0,7,0" VerticalAlignment="Center">
+                        <TextBlock Text="$" FontSize="17" FontWeight="Black" Foreground="#D97706" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                      </Border>
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Dejada" FontSize="9" FontWeight="Bold" Foreground="#92400E"/>
+                        <TextBox x:Name="RelationPayout" Text="0" FontSize="17" FontWeight="Black" Foreground="#92400E" Background="Transparent" BorderThickness="0" Padding="0" Width="70"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                </UniformGrid>
+              </StackPanel>
+            </Border>
+
+            <!-- TABLA DE VIAJES -->
+            <Border Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1" Margin="0,0,0,6">
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="VIAJES RECIBIDOS DESDE LA APP MOVIL"
+                           HorizontalAlignment="Center" FontSize="11" FontWeight="Black"
+                           Foreground="#425A73" Margin="0,8,0,8"/>
+                <DataGrid x:Name="RelationsGrid" IsReadOnly="True" AutoGenerateColumns="False"
+                          RowHeight="132" SelectionMode="Single" SelectionUnit="FullRow"
+                          MinHeight="400"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                          ScrollViewer.CanContentScroll="True">
+                  <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow">
+                      <Setter Property="Background" Value="White"/>
+                      <Setter Property="BorderBrush" Value="#D9E5F2"/>
+                      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                      <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                          <Setter Property="Background" Value="#F3F8FD"/>
+                          <Setter Property="Foreground" Value="#244564"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter Property="Background" Value="#F7FBFF"/>
+                        </Trigger>
+                      </Style.Triggers>
+                    </Style>
+                  </DataGrid.RowStyle>
+                  <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="App / asignado" Width="190">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <Border Background="#EAF6FE" BorderBrush="#B9D3EF" BorderThickness="1" CornerRadius="8" Padding="6,2" HorizontalAlignment="Left" Margin="0,0,0,3">
+                            <TextBlock Text="{Binding Source, Converter={StaticResource UpperCaseConverter}}" FontSize="9" FontWeight="Black" Foreground="#285C88"/>
+                          </Border>
+                          <TextBlock Text="{Binding SourceUser, StringFormat='Usuario origen: {0}'}" FontSize="9" Foreground="#6A7789"/>
+                          <TextBlock Text="{Binding DisplayLocalFolio, StringFormat='Folio local: {0}'}" FontWeight="Black" Foreground="#1F5784" FontSize="13"/>
+                          <TextBlock Text="{Binding OperationFolio, StringFormat='Folio original: {0}'}" FontSize="10" Foreground="#6A7789"/>
+                          <TextBlock FontSize="9" Foreground="#1F5784" FontWeight="Bold">
+                            <TextBlock.Style><Style TargetType="TextBlock">
+                              <Setter Property="Text" Value="{Binding PosFolio, StringFormat='Ticket POS: {0}'}"/>
+                              <Style.Triggers><DataTrigger Binding="{Binding PosFolio}" Value=""><Setter Property="Text" Value="SIN TICKET POS"/></DataTrigger></Style.Triggers>
+                            </Style></TextBlock.Style>
+                          </TextBlock>
+                          <Button Content="EDITAR" Click="LoadRelation_Click" HorizontalAlignment="Left" Padding="0" Margin="0,2,0,0" Background="Transparent" BorderThickness="0" Foreground="#1F5784" FontSize="10" FontWeight="Bold" Cursor="Hand"/>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Fecha" Binding="{Binding DateText}" Width="120"/>
+                    <DataGridTemplateColumn Header="Viaje" Width="190">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <TextBlock Text="{Binding Hotel}" FontWeight="Bold" TextWrapping="Wrap"/>
+                          <TextBlock FontSize="10" Foreground="#6A7789" TextWrapping="Wrap"><Run Text="{Binding Origin, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding Site, Mode=OneWay}"/></TextBlock>
+                          <TextBlock FontSize="10" Foreground="#6A7789" TextWrapping="Wrap"><Run Text="{Binding Unit, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding Phone, Mode=OneWay}"/></TextBlock>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Taxista" Width="170">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <TextBlock Text="{Binding Driver}" FontWeight="Bold" Foreground="#1F5784" TextWrapping="Wrap"/>
+                          <TextBlock Text="{Binding TaxistaId, StringFormat='ID: {0}'}" FontSize="10" Foreground="#6A7789"/>
+                          <TextBlock FontSize="10" Foreground="#6A7789" TextWrapping="Wrap"><Run Text="Gafete: "/><Run Text="{Binding Badge, Mode=OneWay}"/></TextBlock>
+                          <TextBlock FontSize="10" Foreground="#0B5FA5" FontWeight="Bold" TextWrapping="Wrap"><Run Text="Vendedor: "/><Run Text="{Binding Vendor, Mode=OneWay}"/></TextBlock>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Nacionalidad" Binding="{Binding Nationality}" Width="110"/>
+                    <DataGridTemplateColumn Header="Unidad" Width="100">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <TextBlock Text="{Binding TransportType}" FontWeight="Bold" TextWrapping="Wrap"/>
+                          <TextBlock Text="{Binding Unit}" FontSize="10" Foreground="#6A7789"/>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Importes" Width="130">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <TextBlock FontSize="10" FontWeight="Bold"><Run Text="Venta: "/><Run Text="{Binding SaleDisplay, Mode=OneWay}"/></TextBlock>
+                          <TextBlock FontSize="11" FontWeight="Bold"><Run Text="Dejada: "/><Run Text="{Binding Payout, StringFormat=C2, Mode=OneWay}"/></TextBlock>
+                          <TextBlock FontSize="10"><Run Text="Comision: "/><Run Text="{Binding CommissionDisplay, Mode=OneWay}"/></TextBlock>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Pago dejada" Width="190">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <Border Background="{Binding PayoutStatus, Converter={StaticResource StatusBackgroundConverter}}"
+                                  BorderBrush="{Binding PayoutStatus, Converter={StaticResource StatusBorderConverter}}"
+                                  BorderThickness="1" CornerRadius="8" Padding="7,2" HorizontalAlignment="Left" Margin="0,0,0,3">
+                            <TextBlock Text="{Binding PayoutStatus, Converter={StaticResource UpperCaseConverter}}" FontSize="9" FontWeight="Black"
+                                       Foreground="{Binding PayoutStatus, Converter={StaticResource StatusForegroundConverter}}"/>
+                          </Border>
+                          <TextBlock Text="{Binding PayoutTicket, StringFormat='Ticket: {0}'}" FontSize="9" Foreground="#6A7789" TextWrapping="Wrap"/>
+                          <TextBlock Text="{Binding PayoutUser,   StringFormat='Usuario: {0}'}" FontSize="9" Foreground="#6A7789"/>
+                          <TextBlock Text="{Binding PayoutDate,   StringFormat='Fecha: {0}'}"   FontSize="9" Foreground="#6A7789"/>
+                          <TextBlock FontSize="9" Foreground="#6A7789"><Run Text="Pagado "/><Run Text="{Binding PayoutPaid, StringFormat=C2, Mode=OneWay}"/></TextBlock>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Forma de pago" Width="170">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Margin="4" TextWrapping="Wrap" Text="{Binding PaymentMethod}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Moneda" Width="90">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Margin="4" TextWrapping="Wrap" Text="{Binding Currency}"/></DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Comision" Width="120">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <StackPanel Margin="4">
+                          <Border Background="{Binding CommissionStatus, Converter={StaticResource StatusBackgroundConverter}}"
+                                  BorderBrush="{Binding CommissionStatus, Converter={StaticResource StatusBorderConverter}}"
+                                  BorderThickness="1" CornerRadius="8" Padding="7,2" HorizontalAlignment="Left" Margin="0,0,0,4">
+                            <TextBlock Text="{Binding CommissionStatus, Converter={StaticResource UpperCaseConverter}}" FontSize="9" FontWeight="Black"
+                                       Foreground="{Binding CommissionStatus, Converter={StaticResource StatusForegroundConverter}}"/>
+                          </Border>
+                          <TextBlock Text="{Binding Commission, StringFormat=C2}" FontSize="10" FontWeight="Bold" Foreground="#1F5784" Margin="0,0,0,4"/>
+                        </StackPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Accion" Width="230">
+                      <DataGridTemplateColumn.CellTemplate><DataTemplate>
+                        <WrapPanel>
+                          <Button Content="VENTA"    Style="{StaticResource WebMiniActionButton}" Click="RelationSale_Click"  Margin="0,0,4,0"/>
+                          <Button Content="PAGAR"    Style="{StaticResource WebMiniActionButton}" Click="RelationPay_Click"   Margin="0,0,4,0"
+                                  Visibility="{Binding PayoutStatus, Converter={StaticResource PaidStatusVisibilityConverter}}"/>
+                          <Button Content="IMPRIMIR" Style="{StaticResource WebMiniActionButton}" Click="RelationPrint_Click" Margin="0,0,4,0"
+                                  Visibility="{Binding PayoutStatus, Converter={StaticResource PaidStatusVisibilityConverter}, ConverterParameter=PaidOnly}"/>
+                        </WrapPanel>
+                      </DataTemplate></DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                  </DataGrid.Columns>
+                </DataGrid>
+              </DockPanel>
+            </Border>
+
+          </StackPanel>
+          </ScrollViewer>
+        </TabItem>

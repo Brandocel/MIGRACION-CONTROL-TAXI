@@ -1,0 +1,875 @@
+﻿<Window x:Class="ControlTaxiDesktop.PosWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Control Taxi Â· POS local"
+        Width="1280"
+        Height="760"
+        MinWidth="920"
+        MinHeight="620"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="SingleBorderWindow"
+        ResizeMode="CanResize"
+        SizeToContent="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Background="#DDECF7">
+  <Window.Resources>
+    <Style x:Key="FormPanel" TargetType="Border">
+      <Setter Property="Background" Value="#F8FCFF"/>
+      <Setter Property="BorderBrush" Value="#B6C8DA"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+      <Setter Property="HorizontalAlignment" Value="Center"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="ExtraBold"/>
+      <Setter Property="Foreground" Value="#425A73"/>
+      <Setter Property="Margin" Value="0,8,0,8"/>
+    </Style>
+    <Style x:Key="HiddenWebTabItem" TargetType="{x:Type TabItem}">
+      <Setter Property="Height" Value="0"/>
+      <Setter Property="Width" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="Opacity" Value="0"/>
+    </Style>
+    <Style x:Key="ReportToolbarButton" TargetType="Button">
+      <Setter Property="Padding" Value="12,7"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="MinHeight" Value="34"/>
+      <Setter Property="BorderBrush" Value="#C4D0DE"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#4D6074"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="ReportToolbarAccentButton" BasedOn="{StaticResource ReportToolbarButton}" TargetType="Button">
+      <Setter Property="BorderBrush" Value="#E7C88A"/>
+      <Setter Property="Background" Value="#FFF8E8"/>
+      <Setter Property="Foreground" Value="#7B5314"/>
+    </Style>
+    <Style x:Key="ReportTabItemStyle" TargetType="{x:Type TabItem}">
+      <Setter Property="Foreground" Value="#31506C"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Padding" Value="16,8"/>
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#B6C8DA"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Margin" Value="0,0,8,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type TabItem}">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" ContentSource="Header" Margin="{TemplateBinding Padding}"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="#0F988F"/>
+          <Setter Property="Foreground" Value="White"/>
+          <Setter Property="BorderBrush" Value="#0F988F"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="ReportCardButton" TargetType="Button">
+      <Setter Property="Margin" Value="4"/>
+      <Setter Property="Padding" Value="12"/>
+      <Setter Property="BorderBrush" Value="#D7E2EE"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="White"/>
+    </Style>
+    <Style x:Key="DashboardPanelCard" TargetType="Border">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#D7E2F2"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="18"/>
+      <Setter Property="Padding" Value="22"/>
+      <Setter Property="Margin" Value="0,0,0,18"/>
+    </Style>
+    <Style x:Key="DashboardHeroCard" TargetType="Border" BasedOn="{StaticResource DashboardPanelCard}">
+      <Setter Property="Padding" Value="16"/>
+      <Setter Property="CornerRadius" Value="22"/>
+      <Setter Property="BorderBrush" Value="#0B3D9B"/>
+      <Setter Property="Background">
+        <Setter.Value>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#0A3D99" Offset="0"/>
+            <GradientStop Color="#1855CB" Offset="0.56"/>
+            <GradientStop Color="#0B3C99" Offset="1"/>
+          </LinearGradientBrush>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="DashboardActionButtonBase" TargetType="Button">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#0F3E95"/>
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#D7E2F2"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="12,9"/>
+      <Setter Property="Margin" Value="4,4,0,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="MinWidth" Value="108"/>
+      <Setter Property="MinHeight" Value="44"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="14"
+                    TextElement.Foreground="{TemplateBinding Foreground}">
+              <ContentPresenter HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Margin="{TemplateBinding Padding}"
+                                TextElement.Foreground="{TemplateBinding Foreground}"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="DashboardPrimaryButton" TargetType="Button" BasedOn="{StaticResource DashboardActionButtonBase}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="#1347B8"/>
+      <Setter Property="BorderBrush" Value="#0D368A"/>
+    </Style>
+    <Style x:Key="DashboardSuccessButton" TargetType="Button" BasedOn="{StaticResource DashboardActionButtonBase}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="#17A65A"/>
+      <Setter Property="BorderBrush" Value="#118349"/>
+    </Style>
+    <Style x:Key="DashboardGoldButton" TargetType="Button" BasedOn="{StaticResource DashboardActionButtonBase}">
+      <Setter Property="Foreground" Value="#C77C00"/>
+      <Setter Property="Background" Value="#FFF8E5"/>
+      <Setter Property="BorderBrush" Value="#F2C766"/>
+    </Style>
+    <Style x:Key="DashboardDangerButton" TargetType="Button" BasedOn="{StaticResource DashboardActionButtonBase}">
+      <Setter Property="Foreground" Value="#D62828"/>
+      <Setter Property="Background" Value="#FFF6F6"/>
+      <Setter Property="BorderBrush" Value="#F0B5B5"/>
+    </Style>
+    <Style x:Key="DashboardGridHeader" TargetType="DataGridColumnHeader">
+      <Setter Property="OverridesDefaultStyle" Value="True"/>
+      <Setter Property="Background" Value="#0E4DB7"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Padding" Value="12,11"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="BorderBrush" Value="#1C63D2"/>
+      <Setter Property="BorderThickness" Value="0,0,1,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="DataGridColumnHeader">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="Center"
+                                Margin="{TemplateBinding Padding}"
+                                TextElement.Foreground="White">
+                <ContentPresenter.Resources>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="FontWeight" Value="Bold"/>
+                    <Setter Property="FontSize" Value="13"/>
+                  </Style>
+                </ContentPresenter.Resources>
+              </ContentPresenter>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="DashboardGridCell" TargetType="DataGridCell">
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="BorderBrush" Value="#E3ECF8"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="#16326B"/>
+    </Style>
+    <Style x:Key="DashboardGridRow" TargetType="DataGridRow">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="#16326B"/>
+      <Setter Property="BorderBrush" Value="#E3ECF8"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Style.Triggers>
+        <Trigger Property="AlternationIndex" Value="1">
+          <Setter Property="Background" Value="#F9FBFF"/>
+        </Trigger>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="#EEF5FF"/>
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="#E6F0FF"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+  </Window.Resources>
+
+  <Border Margin="18" Background="#E6F3FC" BorderBrush="#9DB8D3" BorderThickness="1">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="32"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+
+      <Border Background="#FAF8F8" BorderBrush="#B6C8DA" BorderThickness="0,0,0,1">
+        <TextBlock x:Name="TitleBarText" Text="VENTAS" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" FontWeight="SemiBold" Foreground="#304A65"/>
+      </Border>
+
+      <TabControl x:Name="PosTabs" Grid.Row="1" Margin="10" ItemContainerStyle="{StaticResource HiddenWebTabItem}">
+        <TabItem Header="Ventas">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <Grid Margin="10" MinWidth="1120">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Border Style="{StaticResource FormPanel}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2.2*"/>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="1.2*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Margin="0,0,10,0">
+                    <TextBlock Text="BUSCAR PRODUCTO / FOLIO / NOMBRE / HOTEL / GAFETE" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="SaleFolio" Height="34" Margin="0,6,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                    <TextBlock Text="CLIENTE" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="SaleCustomer" Height="34" Margin="0,6,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2">
+                    <TextBlock Text="REFERENCIA" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="ProductCode" Height="34" Margin="0,6,0,0" IsReadOnly="True"/>
+                  </StackPanel>
+                  <Button Grid.Column="3" Content="BUSCAR" Width="110" Height="34" Margin="10,20,8,0" Style="{StaticResource WebActionButton}" Click="RefreshSales_Click"/>
+                  <Button Grid.Column="4" Content="LIMPIAR" Width="110" Height="34" Margin="0,20,0,0" Style="{StaticResource WebActionButton}" Click="ClearSalesSearch_Click"/>
+                </Grid>
+              </Border>
+              <Border Grid.Row="1" Style="{StaticResource FormPanel}">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                  </Grid.RowDefinitions>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Margin="4">
+                    <TextBlock Text="CLIENTE / PRODUCTO" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="ProductName" Height="32" Margin="0,6,0,0" IsReadOnly="True"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="4">
+                    <TextBlock Text="SUBTOTAL" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="ProductPrice" Height="32" Margin="0,6,0,0" IsReadOnly="True"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Margin="4">
+                    <TextBlock Text="IVA" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="ProductTax" Height="32" Margin="0,6,0,0" IsReadOnly="True"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="3" Margin="4">
+                    <TextBlock Text="TOTAL" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="ProductStock" Height="32" Margin="0,6,0,0" IsReadOnly="True"/>
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Border Grid.Row="2" Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1" Margin="0,0,0,10">
+                <UniformGrid Columns="6">
+                  <StackPanel Margin="8"><TextBlock Text="FECHA" FontSize="10" FontWeight="Black"/><TextBlock x:Name="SaleDateText" Text="HOY" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="SUBTOTAL" FontSize="10" FontWeight="Black"/><TextBlock x:Name="SaleSubtotalText" Text="0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="IVA" FontSize="10" FontWeight="Black"/><TextBlock x:Name="SaleTaxText" Text="0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="TOTAL" FontSize="10" FontWeight="Black"/><TextBlock x:Name="SaleTotalText" Text="0.00" FontSize="18" FontWeight="Black" Foreground="#0F8F83"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="DEJADA" FontSize="10" FontWeight="Black"/><TextBlock x:Name="SalePayoutText" Text="0.00" FontSize="18" FontWeight="Black" Foreground="#1F5784"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="COMISION" FontSize="10" FontWeight="Black"/><TextBlock x:Name="SaleCommissionText" Text="0.00" FontSize="18" FontWeight="Black" Foreground="#B06B00"/></StackPanel>
+                </UniformGrid>
+              </Border>
+              <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="0.72*"/><ColumnDefinition Width="1.58*"/></Grid.ColumnDefinitions>
+                <Border Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1" Margin="0,0,6,0">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="TICKET ACTUAL / VENTA SELECCIONADA" Style="{StaticResource SectionTitle}"/>
+                    <DataGrid x:Name="ProductsGrid" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="58"/>
+                        <DataGridTextColumn Header="Producto" Binding="{Binding Producto}" Width="220"/>
+                        <DataGridTextColumn Header="Departamento" Binding="{Binding Departamento}" Width="150"/>
+                        <DataGridTextColumn Header="Precio" Binding="{Binding Precio, StringFormat=C2}" Width="90"/>
+                        <DataGridTextColumn Header="Importe" Binding="{Binding Importe, StringFormat=C2}" Width="95"/>
+                        <DataGridTextColumn Header="Referencia" Binding="{Binding Referencia}" Width="130"/>
+                        <DataGridTextColumn Header="Factura" Binding="{Binding Factura}" Width="110"/>
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding FechaVenta}" Width="135"/>
+                        <DataGridTextColumn Header="Origen" Binding="{Binding OrigenVenta}" Width="80"/>
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </DockPanel>
+                </Border>
+                <Border Grid.Column="1" Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1" Margin="6,0,0,0">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="RESULTADOS DE CONSULTA / VENTAS" Style="{StaticResource SectionTitle}"/>
+                    <DataGrid x:Name="SalesGrid" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" SelectionChanged="SalesGrid_SelectionChanged" MouseDoubleClick="OpenRemissionDetail_Click">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="Ticket" Binding="{Binding Folio}" Width="135"/>
+                        <DataGridTextColumn Header="Factura" Binding="{Binding Factura}" Width="95"/>
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, StringFormat=dd/MM/yyyy HH:mm}" Width="135"/>
+                        <DataGridTextColumn Header="Cliente" Binding="{Binding Cliente}" Width="150"/>
+                        <DataGridTextColumn Header="Vendedor" Binding="{Binding Vendedor}" Width="170"/>
+                        <DataGridTextColumn Header="Taxista" Binding="{Binding Taxista}" Width="170"/>
+                        <DataGridTextColumn Header="Folio Reg." Binding="{Binding FolioRegistro}" Width="90"/>
+                        <DataGridTextColumn Header="Gafete" Binding="{Binding Gafete}" Width="80"/>
+                        <DataGridTextColumn Header="Transporte" Binding="{Binding Transporte}" Width="110"/>
+                        <DataGridTextColumn Header="Subtotal" Binding="{Binding Subtotal, StringFormat=C2}" Width="95"/>
+                        <DataGridTextColumn Header="IVA" Binding="{Binding Iva, StringFormat=C2}" Width="85"/>
+                        <DataGridTextColumn Header="Total" Binding="{Binding Total, StringFormat=C2}" Width="95"/>
+                        <DataGridTextColumn Header="Pagos encontrados" Binding="{Binding TotalPagos, StringFormat=C2}" Width="130"/>
+                        <DataGridTextColumn Header="Diferencia pago" Binding="{Binding DiferenciaPago, StringFormat=C2}" Width="120"/>
+                        <DataGridTextColumn Header="Forma pago" Binding="{Binding FormaPagoDetalle}" Width="190"/>
+                        <DataGridTextColumn Header="Moneda" Binding="{Binding MonedaDetalle}" Width="110"/>
+                        <DataGridTextColumn Header="Origen" Binding="{Binding OrigenVenta}" Width="75"/>
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </DockPanel>
+                </Border>
+              </Grid>
+            </Grid>
+            <StackPanel Grid.Column="1" Style="{StaticResource WebActionSidebar}">
+              <Button Content="BORRA LINEA" Style="{StaticResource WebActionRedButton}" Click="DeleteLinePending_Click"/>
+              <Button Content="NUEVO" Style="{StaticResource WebActionGoldButton}" Click="NewSale_Click"/>
+              <Button Content="COBRAR" Style="{StaticResource WebActionGreenButton}" Click="CreateSale_Click"/>
+              <Button Content="CONSULTA PRECIOS" Style="{StaticResource WebActionButton}" Click="RefreshSales_Click"/>
+              <Button Content="CORTE" Style="{StaticResource WebActionGoldButton}" Click="OpenCuts_Click"/>
+              <Button Content="GASTOS" Style="{StaticResource WebActionButton}" Click="OpenExpenses_Click"/>
+              <Button Content="TICKETS" Style="{StaticResource WebActionButton}" Click="OpenTickets_Click"/>
+              <Button Content="EXCEL" Style="{StaticResource WebActionButton}" Click="ExportSalesExcel_Click"/>
+              <Button Content="PDF" Style="{StaticResource WebActionButton}" Click="ExportSalesPdf_Click"/>
+              <Button Content="MENU" Style="{StaticResource WebActionButton}" Click="CloseWindow_Click"/>
+              <Button Content="SALIR" Style="{StaticResource WebActionRedButton}" Click="CloseWindow_Click"/>
+            </StackPanel>
+          </Grid>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Pagos">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <Grid Margin="10" MinWidth="1180">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <Border Style="{StaticResource FormPanel}">
+                <WrapPanel>
+                  <TextBox x:Name="PaymentSaleFolio" Width="150" ToolTip="Folio venta"/>
+                  <TextBox x:Name="PaymentAmount" Width="100" Text="0"/>
+                  <ComboBox x:Name="PaymentMethod" Width="120" SelectedIndex="0"><ComboBoxItem Content="Efectivo"/><ComboBoxItem Content="Tarjeta"/></ComboBox>
+                  <TextBox x:Name="PaymentNotes" Width="340" ToolTip="Notas"/>
+                </WrapPanel>
+              </Border>
+              <DataGrid x:Name="PaymentsGrid" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="True"/>
+            </Grid>
+            <StackPanel Grid.Column="1" Style="{StaticResource WebActionSidebar}">
+              <Button Content="REGISTRAR PAGO" Style="{StaticResource WebActionSaveButton}" Click="RegisterPayment_Click"/>
+              <Button Content="CSV" Style="{StaticResource WebActionGreenButton}" Click="ExportPaymentsCsv_Click"/>
+              <Button Content="PDF" Style="{StaticResource WebActionButton}" Click="ExportPaymentsPdf_Click"/>
+              <Button Content="MENU" Style="{StaticResource WebActionButton}" Click="CloseWindow_Click"/>
+              <Button Content="SALIR" Style="{StaticResource WebActionRedButton}" Click="CloseWindow_Click"/>
+            </StackPanel>
+          </Grid>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Comisiones">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <Grid Margin="10" MinWidth="1520">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <Border Style="{StaticResource DashboardHeroCard}">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                  </Grid.RowDefinitions>
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
+                    <Border Width="62" Height="62" CornerRadius="15" Background="#1747A9" BorderBrush="#81B5FF" BorderThickness="1.2" Margin="0,0,14,0">
+                      <Viewbox Margin="12">
+                        <TextBlock Text="💰" Foreground="White"/>
+                      </Viewbox>
+                    </Border>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBlock Text="COMISIONES" FontSize="18" FontWeight="Black" Foreground="White"/>
+                      <TextBlock Text="Control de comisiones, pagos y selección de folios con el mismo estilo visual" FontSize="12" Foreground="#D3E2FF" Margin="0,4,0,0"/>
+                    </StackPanel>
+                  </StackPanel>
+                  <WrapPanel Grid.Row="1">
+                    <Button Content="CALCULAR" Style="{StaticResource DashboardGoldButton}" Click="RecalculateCommissions_Click"/>
+                    <Button Content="PAGAR" Style="{StaticResource DashboardSuccessButton}" Click="PaySelectedCommissions_Click"/>
+                    <Button Content="BUSCAR" Style="{StaticResource DashboardPrimaryButton}" Click="SearchCommissions_Click"/>
+                    <Button Content="CSV" Style="{StaticResource DashboardActionButtonBase}" Click="ExportCommissionsCsv_Click"/>
+                    <Button Content="PDF" Style="{StaticResource DashboardActionButtonBase}" Click="ExportCommissionsPdf_Click"/>
+                    <Button Content="IMPRIMIR" Style="{StaticResource DashboardActionButtonBase}" Click="PrintCommissions_Click"/>
+                    <Button Content="MENU" Style="{StaticResource DashboardActionButtonBase}" Click="CloseWindow_Click"/>
+                    <Button Content="SALIR" Style="{StaticResource DashboardDangerButton}" Click="CloseWindow_Click"/>
+                  </WrapPanel>
+                </Grid>
+              </Border>
+              <Border Grid.Row="1" Style="{StaticResource DashboardPanelCard}">
+                <WrapPanel>
+                  <StackPanel Width="260" Margin="0,0,18,0">
+                    <TextBlock Text="Folio comision" FontSize="12" FontWeight="Bold" Foreground="#16326B" Margin="0,0,0,8"/>
+                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
+                      <TextBox x:Name="CommissionFolio" Width="160" ToolTip="Folio comision" Background="Transparent" BorderThickness="0" Padding="14,12"/>
+                    </Border>
+                  </StackPanel>
+                  <StackPanel Width="220" Margin="0,0,18,0">
+                    <TextBlock Text="Fecha inicio" FontSize="12" FontWeight="Bold" Foreground="#16326B" Margin="0,0,0,8"/>
+                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
+                      <DatePicker x:Name="CommissionStartDate" Width="140" BorderThickness="0" Padding="12,10"/>
+                    </Border>
+                  </StackPanel>
+                  <StackPanel Width="220">
+                    <TextBlock Text="Fecha fin" FontSize="12" FontWeight="Bold" Foreground="#16326B" Margin="0,0,0,8"/>
+                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
+                      <DatePicker x:Name="CommissionEndDate" Width="140" BorderThickness="0" Padding="12,10"/>
+                    </Border>
+                  </StackPanel>
+                </WrapPanel>
+              </Border>
+              <Border Grid.Row="2" Style="{StaticResource DashboardPanelCard}">
+                <UniformGrid Columns="7">
+                  <StackPanel Margin="8"><TextBlock Text="VENTA" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalSaleText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="BASE" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalBaseText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="COMISION" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalAmountText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#0F8F83"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="PAGADO" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalPaidText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="PENDIENTES" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionPendingCountText" Text="0" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="PAGADAS" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionPaidCountText" Text="0" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                  <StackPanel Margin="8"><TextBlock Text="SELECCIONADO" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionSelectedTotalText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                </UniformGrid>
+              </Border>
+              <Border Grid.Row="3" Style="{StaticResource DashboardPanelCard}" Padding="0">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                  </Grid.RowDefinitions>
+                  <DockPanel Margin="16,12">
+                    <TextBlock x:Name="CommissionRowsText" DockPanel.Dock="Left" Text="REGISTROS 0-0 DE 0" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBlock x:Name="CommissionPageText" DockPanel.Dock="Right" Text="PAGINA 1 DE 1" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                  </DockPanel>
+                  <DataGrid x:Name="CommissionsGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="None" SelectionMode="Single" SelectionUnit="FullRow" MouseDoubleClick="CommissionsGrid_MouseDoubleClick"
+                            BorderThickness="0" Background="Transparent" Margin="14,0,14,14"
+                            ColumnHeaderStyle="{StaticResource DashboardGridHeader}" CellStyle="{StaticResource DashboardGridCell}" RowStyle="{StaticResource DashboardGridRow}" AlternationCount="2">
+                    <DataGrid.Columns>
+                      <DataGridTemplateColumn Header="Sel." Width="64">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding Source.PuedePagar}" Click="CommissionCheckBox_Click" HorizontalAlignment="Center" VerticalAlignment="Center" Width="18" Height="18"/>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      <DataGridTemplateColumn Header="Ticket" Width="58">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <Button Content="Ticket" ToolTip="Ver ticket de comision pagada" Click="PrintSingleCommissionTicket_Click" Padding="6,2" HorizontalAlignment="Center" IsEnabled="{Binding Source.PuedeImprimirTicket}">
+                              <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource WebMiniActionButton}">
+                                  <Setter Property="Visibility" Value="Visible"/>
+                                  <Style.Triggers>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                      <Setter Property="Visibility" Value="Collapsed"/>
+                                    </Trigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </Button.Style>
+                            </Button>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      <DataGridTextColumn Header="Folios" Binding="{Binding Source.Folio}" Width="150"/>
+                      <DataGridTextColumn Header="Unidad" Binding="{Binding Source.Unidad}" Width="140"/>
+                      <DataGridTextColumn Header="Num. unidad" Binding="{Binding Source.NumeroUnidad}" Width="95"/>
+                      <DataGridTextColumn Header="Nombre" Binding="{Binding Source.Nombre}" Width="170"/>
+                      <DataGridTextColumn Header="Pax" Binding="{Binding Source.Pax}" Width="55"/>
+                      <DataGridTextColumn Header="Hotel" Binding="{Binding Source.Hotel}" Width="160"/>
+                      <DataGridTextColumn Header="V.A" Binding="{Binding Source.VentaArtesania, StringFormat=C2}" Width="90"/>
+                      <DataGridTextColumn Header="V.F" Binding="{Binding Source.VentaFarmacia, StringFormat=C2}" Width="90"/>
+                      <DataGridTextColumn Header="V.T" Binding="{Binding Source.VentaTienda, StringFormat=C2}" Width="90"/>
+                      <DataGridTextColumn Header="V.J" Binding="{Binding Source.VentaJoyeria, StringFormat=C2}" Width="90"/>
+                      <DataGridTextColumn Header="Vnt total" Binding="{Binding Source.VentaTotal, StringFormat=C2}" Width="100"/>
+                      <DataGridTextColumn Header="Ticket" Binding="{Binding Source.Ticket}" Width="110"/>
+                      <DataGridTextColumn Header="F.P" Binding="{Binding Source.FormaPago}" Width="150"/>
+                      <DataGridTextColumn Header="% descuento" Binding="{Binding Source.DescuentoPorcentaje, StringFormat=P0}" Width="90"/>
+                      <DataGridTextColumn Header="Dejada" Binding="{Binding Source.Dejada, StringFormat=C2}" Width="90"/>
+                      <DataGridTextColumn Header="Bebidas y cajas regalo" Binding="{Binding Source.BebidasCajasRegalo, StringFormat=C2}" Width="140"/>
+                      <DataGridTextColumn Header="Rep" Binding="{Binding Source.Reparacion, StringFormat=C2}" Width="90"/>
+                      <DataGridTextColumn Header="Degustacion" Binding="{Binding Source.Degustacion, StringFormat=C2}" Width="100"/>
+                      <DataGridTextColumn Header="% comision" Binding="{Binding Source.PorcentajeComision, StringFormat=P0}" Width="90"/>
+                      <DataGridTextColumn Header="Pago comision" Binding="{Binding Source.PagoComision, StringFormat=C2}" Width="110"/>
+                      <DataGridTextColumn Header="Estatus" Binding="{Binding Source.Estatus}" Width="95"/>
+                      <DataGridTextColumn Header="Vendedor" Binding="{Binding Source.Vendedor}" Width="160"/>
+                    </DataGrid.Columns>
+                  </DataGrid>
+                </Grid>
+              </Border>
+              <DockPanel Grid.Row="4" Margin="0,10,0,0">
+                <TextBlock x:Name="CommissionSelectionFooterText" DockPanel.Dock="Left" Text="Seleccionado $0.00" FontSize="10" FontWeight="Black" Foreground="#425A73" VerticalAlignment="Center"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                  <Button x:Name="CommissionPrevPageButton" Content="ANTERIOR" Style="{StaticResource DashboardActionButtonBase}" MinWidth="96" MinHeight="32" Padding="10,5" Margin="0,0,8,0" Click="CommissionPrevPage_Click"/>
+                  <Button x:Name="CommissionNextPageButton" Content="SIGUIENTE" Style="{StaticResource DashboardActionButtonBase}" MinWidth="96" MinHeight="32" Padding="10,5" Click="CommissionNextPage_Click"/>
+                </StackPanel>
+              </DockPanel>
+            </Grid>
+          </Grid>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Cortes">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <Grid Margin="10" MinWidth="1320">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <Border Style="{StaticResource FormPanel}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="220"/>
+                    <ColumnDefinition Width="180"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Margin="0,0,12,0">
+                    <TextBlock Text="FECHA DE CORTE" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <DatePicker x:Name="CutDate" Margin="0,6,0,0"/>
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                    <TextBlock Text="CONTADO" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
+                    <TextBox x:Name="CutCounted" Height="34" Margin="0,6,0,0" Text="0"/>
+                  </StackPanel>
+                  <Button Grid.Column="2" Content="BUSCAR" Width="110" Height="34" Margin="0,18,0,0" Style="{StaticResource WebActionButton}" Click="RefreshCuts_Click"/>
+                </Grid>
+              </Border>
+              <Border Grid.Row="1" Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1" Margin="0,0,0,10" Padding="12">
+                <UniformGrid Columns="4">
+                  <StackPanel Margin="6"><TextBlock Text="FECHA DE CORTE" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutSummaryDateText" Text="-" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="MOVIMIENTOS" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutSummaryMovementsText" Text="0" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="ESTATUS" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutSummaryStatusText" Text="ABIERTO" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="TOTAL COBRADO" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutSummaryCollectedText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#0F8F83"/></StackPanel>
+                </UniformGrid>
+              </Border>
+              <Border Grid.Row="2" Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1" Margin="0,0,0,10" Padding="12">
+                <UniformGrid Columns="7">
+                  <StackPanel Margin="6"><TextBlock Text="EFECTIVO" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutCashText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="TARJETA" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutCardText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="PAGOS" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutPaymentsText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="GASTOS" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutExpensesText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="TOTAL DEL DIA" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutExpectedText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="CONTADO" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutCountedText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                  <StackPanel Margin="6"><TextBlock Text="DIFERENCIA" FontSize="10" FontWeight="Black"/><TextBlock x:Name="CutDifferenceText" Text="$0.00" FontSize="18" FontWeight="Black"/></StackPanel>
+                </UniformGrid>
+              </Border>
+              <Border Grid.Row="3" Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Top" Text="RESUMEN DE CORTE" Style="{StaticResource SectionTitle}"/>
+                  <DataGrid x:Name="CutsGrid"
+                            IsReadOnly="True"
+                            AutoGenerateColumns="False"
+                            SelectionChanged="CutsGrid_SelectionChanged"
+                            HeadersVisibility="Column"
+                            GridLinesVisibility="Horizontal"
+                            AlternatingRowBackground="#F7FBFF"
+                            RowBackground="White">
+                    <DataGrid.Columns>
+                      <DataGridTextColumn Header="Fecha" Binding="{Binding Date, StringFormat=dd/MM/yyyy}" Width="120"/>
+                      <DataGridTextColumn Header="Efectivo" Binding="{Binding Cash, StringFormat=C2}" Width="120"/>
+                      <DataGridTextColumn Header="Tarjeta" Binding="{Binding Card, StringFormat=C2}" Width="120"/>
+                      <DataGridTextColumn Header="Pagos" Binding="{Binding Payments, StringFormat=C2}" Width="120"/>
+                      <DataGridTextColumn Header="Gastos" Binding="{Binding Expenses, StringFormat=C2}" Width="120"/>
+                      <DataGridTextColumn Header="Total del dia" Binding="{Binding Expected, StringFormat=C2}" Width="140"/>
+                      <DataGridTextColumn Header="Contado" Binding="{Binding Counted, StringFormat=C2}" Width="120"/>
+                      <DataGridTextColumn Header="Diferencia" Binding="{Binding Difference, StringFormat=C2}" Width="130"/>
+                      <DataGridTextColumn Header="Estatus" Binding="{Binding Status}" Width="110"/>
+                      <DataGridTextColumn Header="Usuario" Binding="{Binding User}" Width="130"/>
+                      <DataGridTextColumn Header="Cierre" Binding="{Binding ClosedAt}" Width="160"/>
+                    </DataGrid.Columns>
+                  </DataGrid>
+                </DockPanel>
+              </Border>
+            </Grid>
+            <StackPanel Grid.Column="1" Style="{StaticResource WebActionSidebar}">
+              <Button Content="CALCULAR" Style="{StaticResource WebActionButton}" Click="CalculateCut_Click"/>
+              <Button Content="CERRAR" Style="{StaticResource WebActionRedButton}" Click="CloseCut_Click"/>
+              <Button Content="CSV" Style="{StaticResource WebActionGreenButton}" Click="ExportCutsCsv_Click"/>
+              <Button Content="PDF" Style="{StaticResource WebActionButton}" Click="ExportCutsPdf_Click"/>
+              <Button Content="IMPRIMIR" Style="{StaticResource WebActionGreenButton}" Click="PrintCuts_Click"/>
+              <Button Content="MENU" Style="{StaticResource WebActionButton}" Click="CloseWindow_Click"/>
+              <Button Content="SALIR" Style="{StaticResource WebActionRedButton}" Click="CloseWindow_Click"/>
+            </StackPanel>
+          </Grid>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Reportes especializados">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <Grid Margin="10">
+            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Top">
+          <Grid Width="1520">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Border Style="{StaticResource DashboardHeroCard}">
+              <StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
+                  <Border Width="62" Height="62" CornerRadius="15" Background="#1747A9" BorderBrush="#81B5FF" BorderThickness="1.2" Margin="0,0,14,0">
+                    <Viewbox Margin="12">
+                      <TextBlock Text="📊" Foreground="White"/>
+                    </Viewbox>
+                  </Border>
+                  <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="CENTRO DE REPORTES" FontSize="18" FontWeight="Black" Foreground="White"/>
+                    <TextBlock Text="Operaciones, pagos y exportaciones con el mismo estilo visual del resto del sistema" FontSize="12" Foreground="#D3E2FF" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </StackPanel>
+                <WrapPanel>
+                  <Button Content="MENU" Style="{StaticResource DashboardActionButtonBase}" Click="CloseWindow_Click"/>
+                  <Button Content="BUSCAR" Style="{StaticResource DashboardPrimaryButton}" Click="OpenReportSearch_Click"/>
+                  <Button Content="VISTA PREVIA" Style="{StaticResource DashboardActionButtonBase}" Click="PreviewReport_Click"/>
+                  <Button Content="IMPRIMIR" Style="{StaticResource DashboardActionButtonBase}" Click="PrintReport_Click"/>
+                  <Button Content="PDF" Style="{StaticResource DashboardSuccessButton}" Click="ExportReportPdf_Click"/>
+                  <Button Content="EXCEL DEJADAS" Style="{StaticResource DashboardActionButtonBase}" Click="ExportOperationalExcel_Click"/>
+                  <Button Content="EXCEL CONCENTRADO" Style="{StaticResource DashboardGoldButton}" Click="ExportConcentratedExcel_Click"/>
+                  <Button Content="EXCEL CUADRE" Style="{StaticResource DashboardGoldButton}" Click="ExportCuadreExcel_Click"/>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Border Grid.Row="1" Style="{StaticResource DashboardPanelCard}">
+              <WrapPanel>
+                <StackPanel Margin="4">
+                  <TextBlock Text="FECHA INICIO" FontSize="10" FontWeight="Bold" Foreground="#425A73"/>
+                  <DatePicker x:Name="ReportStart" Width="160"/>
+                </StackPanel>
+                <StackPanel Margin="4">
+                  <TextBlock Text="FECHA FIN" FontSize="10" FontWeight="Bold" Foreground="#425A73"/>
+                  <DatePicker x:Name="ReportEnd" Width="160"/>
+                </StackPanel>
+                <Button Content="Consultar" Margin="8,20,8,4" MinWidth="240" Height="32" Style="{StaticResource DashboardSuccessButton}" Click="CalculateReport_Click"/>
+                <Button Content="Limpiar" Margin="8,20,8,4" MinWidth="240" Height="32" Style="{StaticResource DashboardActionButtonBase}" Click="ClearReport_Click"/>
+              </WrapPanel>
+            </Border>
+            <TabControl Grid.Row="2" x:Name="ReportsTabControl" SelectionChanged="ReportsTabControl_SelectionChanged" Margin="0,0,0,10" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource ReportTabItemStyle}">
+              <TabItem Header="Operaciones"/>
+              <TabItem Header="Pagos de comisiones"/>
+            </TabControl>
+            <Border Grid.Row="3" Style="{StaticResource DashboardPanelCard}">
+              <StackPanel>
+                <DockPanel Margin="0,0,0,10">
+                  <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="REPORTE OPERATIVO" FontSize="10" FontWeight="Bold" Foreground="#6A7789"/>
+                    <TextBlock x:Name="ReportHeroTitleText" Text="Operaciones del dia" FontSize="22" FontWeight="Black" Foreground="#1F5784"/>
+                    <TextBlock x:Name="ReportHeroPeriodText" Text="-" FontSize="11" Foreground="#6A7789"/>
+                  </StackPanel>
+                  <Border DockPanel.Dock="Right" Background="#FFFFFF" BorderBrush="#B6C8DA" BorderThickness="1" Padding="12,6" HorizontalAlignment="Right">
+                    <TextBlock Text="Page 1 of 1" FontWeight="Bold" Foreground="#425A73"/>
+                  </Border>
+                </DockPanel>
+                <WrapPanel Margin="0,0,0,10">
+                  <Border Width="250" Background="White" BorderBrush="#D4E0EC" BorderThickness="1" Margin="4" Padding="12"><StackPanel><TextBlock x:Name="ReportMovementsLabelText" Text="MOVIMIENTOS" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="ReportMovementsText" FontSize="22" FontWeight="Black" Text="0" Foreground="#123E6E"/></StackPanel></Border>
+                  <Border Width="250" Background="White" BorderBrush="#D4E0EC" BorderThickness="1" Margin="4" Padding="12"><StackPanel><TextBlock x:Name="ReportPaxLabelText" Text="PAX" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="ReportPaxText" FontSize="22" FontWeight="Black" Text="0" Foreground="#123E6E"/></StackPanel></Border>
+                  <Border Width="250" Background="White" BorderBrush="#D4E0EC" BorderThickness="1" Margin="4" Padding="12"><StackPanel><TextBlock x:Name="ReportAmountLabelText" Text="IMPORTE" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="ReportAmountText" FontSize="22" FontWeight="Black" Text="$0.00" Foreground="#123E6E"/></StackPanel></Border>
+                  <Border Width="250" Background="White" BorderBrush="#D4E0EC" BorderThickness="1" Margin="4" Padding="12"><StackPanel><TextBlock x:Name="ReportDriverLabelText" Text="TAXISTA / GUIA" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="ReportDriverText" FontSize="16" FontWeight="Black" Text="Sin movimientos" TextWrapping="Wrap" Foreground="#123E6E"/></StackPanel></Border>
+                </WrapPanel>
+              </StackPanel>
+            </Border>
+            <Grid Grid.Row="4">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="3*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <Border Style="{StaticResource DashboardPanelCard}" Padding="0">
+                <Grid>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                  </Grid.RowDefinitions>
+                  <DockPanel Margin="4,2,4,8">
+                    <StackPanel DockPanel.Dock="Left">
+                      <TextBlock Text="Vista previa" FontSize="10" FontWeight="Bold" Foreground="#6A7789"/>
+                      <TextBlock x:Name="ReportPreviewHeaderText" Text="Reporte de operaciones total" FontSize="13" FontWeight="Black" Foreground="#1F5784"/>
+                    </StackPanel>
+                    <TextBlock x:Name="ReportPreviewMetaText" DockPanel.Dock="Right" Text="-" FontSize="12" FontWeight="SemiBold" Foreground="#425A73" VerticalAlignment="Center"/>
+                  </DockPanel>
+                  <Grid Grid.Row="1">
+                    <DataGrid x:Name="ReportOperationsGrid" IsReadOnly="True" AutoGenerateColumns="False" Margin="4" HeadersVisibility="Column" GridLinesVisibility="None"
+                              BorderThickness="0" Background="Transparent"
+                              ColumnHeaderStyle="{StaticResource DashboardGridHeader}" CellStyle="{StaticResource DashboardGridCell}" RowStyle="{StaticResource DashboardGridRow}" AlternationCount="2"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              CanUserResizeColumns="True" CanUserReorderColumns="True" FrozenColumnCount="2" MinHeight="300">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="Folio original" Binding="{Binding FolioOriginal}" MinWidth="100" Width="100"/>
+                        <DataGridTextColumn Header="Folio local" Binding="{Binding FolioLocal}" MinWidth="100" Width="100"/>
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" MinWidth="140" Width="140"/>
+                        <DataGridTextColumn Header="Taxista" Binding="{Binding Taxista}" MinWidth="180" Width="220"/>
+                        <DataGridTextColumn Header="Gafete" Binding="{Binding Gafete}" MinWidth="90" Width="90"/>
+                        <DataGridTextColumn Header="PAX" Binding="{Binding Pax, StringFormat={}{0:0}}" MinWidth="70" Width="70"/>
+                        <DataGridTextColumn Header="Hotel" Binding="{Binding Hotel}" MinWidth="180" Width="220"/>
+                        <DataGridTextColumn Header="Origen" Binding="{Binding Origen}" MinWidth="180" Width="220"/>
+                        <DataGridTextColumn Header="Destino" Binding="{Binding Destino}" MinWidth="180" Width="220"/>
+                        <DataGridTextColumn Header="Sucursal" Binding="{Binding Sitio}" MinWidth="130" Width="140"/>
+                        <DataGridTextColumn Header="Unidad" Binding="{Binding Unidad}" MinWidth="100" Width="100"/>
+                        <DataGridTextColumn Header="Placas" Binding="{Binding Placas}" MinWidth="100" Width="110"/>
+                        <DataGridTextColumn Header="Tipo servicio" Binding="{Binding TipoServicio}" MinWidth="170" Width="190"/>
+                        <DataGridTextColumn Header="Dejada" Binding="{Binding Dejada, StringFormat=C2}" MinWidth="100" Width="100"/>
+                        <DataGridTextColumn Header="Importe" Binding="{Binding Importe, StringFormat=C2}" MinWidth="110" Width="110"/>
+                        <DataGridTextColumn Header="Comision" Binding="{Binding Comision, StringFormat=C2}" MinWidth="110" Width="110"/>
+                        <DataGridTextColumn Header="Pago" Binding="{Binding Pago, StringFormat=C2}" MinWidth="110" Width="110"/>
+                        <DataGridTextColumn Header="Estado pago" Binding="{Binding Estatus}" MinWidth="120" Width="120"/>
+                        <DataGridTextColumn Header="Fecha pago" Binding="{Binding FechaPago}" MinWidth="150" Width="150"/>
+                        <DataGridTextColumn Header="Usuario pago" Binding="{Binding UsuarioPago}" MinWidth="130" Width="150"/>
+                        <DataGridTextColumn Header="Ticket pago" Binding="{Binding TicketPago}" MinWidth="160" Width="180"/>
+                        <DataGridTextColumn Header="Notas" Binding="{Binding Notas}" MinWidth="220" Width="260"/>
+                      </DataGrid.Columns>
+                    </DataGrid>
+                    <DataGrid x:Name="ReportCommissionPaymentsGrid" IsReadOnly="True" AutoGenerateColumns="False" Margin="4" Visibility="Collapsed" HeadersVisibility="Column" GridLinesVisibility="None"
+                              BorderThickness="0" Background="Transparent"
+                              ColumnHeaderStyle="{StaticResource DashboardGridHeader}" CellStyle="{StaticResource DashboardGridCell}" RowStyle="{StaticResource DashboardGridRow}" AlternationCount="2"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              CanUserResizeColumns="True" CanUserReorderColumns="True" FrozenColumnCount="2" MinHeight="300">
+                      <DataGrid.Columns>
+                        <DataGridTextColumn Header="Folio original" Binding="{Binding Folio}" MinWidth="100" Width="110"/>
+                        <DataGridTextColumn Header="Folio local" Binding="{Binding FolioLocal}" MinWidth="100" Width="110"/>
+                        <DataGridTextColumn Header="Fecha pago" Binding="{Binding FechaPago}" MinWidth="150" Width="160"/>
+                        <DataGridTextColumn Header="Taxista" Binding="{Binding Taxista}" MinWidth="180" Width="220"/>
+                        <DataGridTextColumn Header="Gafete" Binding="{Binding Gafete}" MinWidth="90" Width="90"/>
+                        <DataGridTextColumn Header="Transporte" Binding="{Binding Transporte}" MinWidth="170" Width="190"/>
+                        <DataGridTextColumn Header="Dejada" Binding="{Binding Dejada, StringFormat=C2}" MinWidth="100" Width="100"/>
+                        <DataGridTextColumn Header="Importe" Binding="{Binding Importe, StringFormat=C2}" MinWidth="110" Width="110"/>
+                        <DataGridTextColumn Header="Comision" Binding="{Binding Comision, StringFormat=C2}" MinWidth="110" Width="110"/>
+                        <DataGridTextColumn Header="Pago" Binding="{Binding Pago, StringFormat=C2}" MinWidth="110" Width="110"/>
+                        <DataGridTextColumn Header="Estatus" Binding="{Binding Estatus}" MinWidth="120" Width="120"/>
+                        <DataGridTextColumn Header="Usuario pago" Binding="{Binding UsuarioPago}" MinWidth="130" Width="140"/>
+                        <DataGridTextColumn Header="Ticket pago" Binding="{Binding TicketPago}" MinWidth="160" Width="180"/>
+                        <DataGridTextColumn Header="Sitio" Binding="{Binding Sitio}" MinWidth="130" Width="140"/>
+                      </DataGrid.Columns>
+                    </DataGrid>
+                  </Grid>
+                </Grid>
+              </Border>
+              <WrapPanel Grid.Row="1" Margin="0,0,0,10">
+                <Button Width="300" Style="{StaticResource ReportCardButton}" Click="OpenReportMovementsModule_Click">
+                  <DockPanel>
+                    <StackPanel DockPanel.Dock="Left">
+                      <TextBlock Text="MOVIMIENTOS" FontWeight="Black" Foreground="#1F5784"/>
+                      <TextBlock Text="Registro diario" FontSize="10" Foreground="#6A7789"/>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="ABRIR" VerticalAlignment="Center" Foreground="#B56E1E" FontWeight="Black"/>
+                  </DockPanel>
+                </Button>
+                <Button Width="300" Style="{StaticResource ReportCardButton}" Click="OpenReportCommissionsModule_Click">
+                  <DockPanel>
+                    <StackPanel DockPanel.Dock="Left">
+                      <TextBlock Text="COMISIONES" FontWeight="Black" Foreground="#1F5784"/>
+                      <TextBlock Text="Control de comisiones y pagos" FontSize="10" Foreground="#6A7789"/>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="ABRIR" VerticalAlignment="Center" Foreground="#B56E1E" FontWeight="Black"/>
+                  </DockPanel>
+                </Button>
+                <Button Width="300" Style="{StaticResource ReportCardButton}" Click="OpenReportCutsModule_Click">
+                  <DockPanel>
+                    <StackPanel DockPanel.Dock="Left">
+                      <TextBlock Text="CIERRES" FontWeight="Black" Foreground="#1F5784"/>
+                      <TextBlock Text="Corte del dia" FontSize="10" Foreground="#6A7789"/>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="ABRIR" VerticalAlignment="Center" Foreground="#B56E1E" FontWeight="Black"/>
+                  </DockPanel>
+                </Button>
+                <Button Width="300" Style="{StaticResource ReportCardButton}" Click="OpenReportPaymentsModule_Click">
+                  <DockPanel>
+                    <StackPanel DockPanel.Dock="Left">
+                      <TextBlock Text="PAGOS COMISION" FontWeight="Black" Foreground="#1F5784"/>
+                      <TextBlock Text="Pagos generados y descargables" FontSize="10" Foreground="#6A7789"/>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="ABRIR" VerticalAlignment="Center" Foreground="#0B8C74" FontWeight="Black"/>
+                  </DockPanel>
+                </Button>
+              </WrapPanel>
+              <Border Grid.Row="2" Style="{StaticResource DashboardPanelCard}" Padding="16">
+                <StackPanel>
+                  <TextBlock Text="Vista imprimible" FontSize="10" FontWeight="Bold" Foreground="#6A7789" Margin="0,0,0,8"/>
+                  <Border BorderBrush="#D8E1EC" BorderThickness="1" Background="#FFFFFF" Padding="14">
+                    <TextBox x:Name="ReportPrintPreviewText"
+                             IsReadOnly="True"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"
+                             FontFamily="Consolas"
+                             FontSize="11"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             MinHeight="220"/>
+                  </Border>
+                </StackPanel>
+              </Border>
+            </Grid>
+          </Grid>
+            </Viewbox>
+          </Grid>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Auditoria">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <Grid Margin="10" MinWidth="1320">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+              <Border Style="{StaticResource FormPanel}">
+                <WrapPanel><DatePicker x:Name="AuditStart"/><DatePicker x:Name="AuditEnd"/></WrapPanel>
+              </Border>
+              <DataGrid x:Name="AuditGrid" Grid.Row="1" IsReadOnly="True" AutoGenerateColumns="True"/>
+            </Grid>
+            <StackPanel Grid.Column="1" Style="{StaticResource WebActionSidebar}">
+              <Button Content="BUSCAR" Style="{StaticResource WebActionButton}" Click="RefreshAudit_Click"/>
+              <Button Content="MENU" Style="{StaticResource WebActionButton}" Click="CloseWindow_Click"/>
+              <Button Content="SALIR" Style="{StaticResource WebActionRedButton}" Click="CloseWindow_Click"/>
+            </StackPanel>
+          </Grid>
+          </ScrollViewer>
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </Border>
+</Window>

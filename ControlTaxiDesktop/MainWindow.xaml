@@ -1,0 +1,311 @@
+﻿<Window x:Class="ControlTaxiDesktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Control Taxi Desktop" Width="1260" Height="820" MinWidth="980" MinHeight="660"
+        ResizeMode="CanResize" SizeToContent="Manual" WindowStyle="SingleBorderWindow"
+        WindowStartupLocation="CenterScreen" Background="#12324A"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Window.Resources>
+        <Style x:Key="AdminTileButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinHeight" Value="138"/>
+            <Setter Property="Padding" Value="18"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#CBD8E6"/>
+            <Setter Property="BorderThickness" Value="1,5,1,1"/>
+            <Setter Property="Foreground" Value="#8C641A"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Black"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        </Style>
+
+        <Style x:Key="AdminTileIcon" TargetType="{x:Type Image}">
+            <Setter Property="Width" Value="60"/>
+            <Setter Property="Height" Value="60"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="LoginInput" TargetType="{x:Type TextBox}" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="Background" Value="#F8FBFD"/>
+            <Setter Property="BorderBrush" Value="#0F9B8E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+
+        <Style x:Key="LoginPassword" TargetType="{x:Type PasswordBox}" BasedOn="{StaticResource {x:Type PasswordBox}}">
+            <Setter Property="Height" Value="42"/>
+            <Setter Property="Background" Value="#F8FBFD"/>
+            <Setter Property="BorderBrush" Value="#C8D6E3"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style x:Key="LoginActionButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="Background" Value="#0F8F83"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="Black"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid x:Name="LoginPanel" Background="#15324A">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Width="1140" Height="700" Margin="18">
+                <Border CornerRadius="0" Background="White" BorderThickness="0" SnapsToDevicePixels="True">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.45*"/>
+                            <ColumnDefinition Width="0.88*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Grid Grid.Column="0" Background="#2E7A76" ClipToBounds="True">
+                            <Grid>
+                                <Border Background="#2E7A76"/>
+                                <Border Margin="1" BorderBrush="#E8F0EF" BorderThickness="1"/>
+                                <Image Source="pack://application:,,,/Assets/taxi.png"
+                                       Stretch="Uniform"
+                                       Opacity="0.06"
+                                       Width="860"
+                                       Height="860"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                                <Image Source="pack://application:,,,/Assets/taxi.png"
+                                       Stretch="Uniform"
+                                       Opacity="0.035"
+                                       Width="520"
+                                       Height="520"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Bottom"
+                                       Margin="0,0,-120,-120"/>
+                                <Image Source="pack://application:,,,/Assets/taxi.png"
+                                       Stretch="Uniform"
+                                       Opacity="0.03"
+                                       Width="420"
+                                       Height="420"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Top"
+                                       Margin="-120,-80,0,0"/>
+                                <Rectangle Margin="0">
+                                    <Rectangle.Fill>
+                                        <RadialGradientBrush Center="0.5,0.4" GradientOrigin="0.5,0.4" RadiusX="0.9" RadiusY="0.9">
+                                            <GradientStop Color="#00000000" Offset="0"/>
+                                            <GradientStop Color="#120D2B2A" Offset="0.72"/>
+                                            <GradientStop Color="#22071B1B" Offset="1"/>
+                                        </RadialGradientBrush>
+                                    </Rectangle.Fill>
+                                </Rectangle>
+                                <Grid Margin="38">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                        <Border Width="152" Height="74" CornerRadius="10" Background="White" Padding="10" VerticalAlignment="Center">
+                                            <Image Source="pack://application:,,,/Assets/hoka-logo.png" Stretch="Uniform"/>
+                                        </Border>
+                                        <StackPanel Margin="20,10,0,0">
+                                            <TextBlock Text="GRUPO HOKA" Foreground="White" FontWeight="Black" FontSize="17"/>
+                                            <TextBlock Text="Control Taxi" Foreground="#D7F1EA" FontWeight="Bold" FontSize="15" Margin="0,6,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Border Grid.Row="1"
+                                            Background="#0000001C"
+                                            CornerRadius="34"
+                                            BorderBrush="#E4B858"
+                                            BorderThickness="4"
+                                            Padding="12"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Width="296"
+                                            Height="296"
+                                            Margin="0,10,0,10">
+                                        <Image Source="pack://application:,,,/Assets/taxi.png"
+                                               Stretch="Uniform"
+                                               Width="268"
+                                               Height="268"/>
+                                    </Border>
+
+                                    <StackPanel Grid.Row="2" Margin="0,0,0,12">
+                                        <TextBlock Text="CAJA OPERATIVA" Foreground="#FFBE5B" FontWeight="Black" FontSize="15"/>
+                                        <TextBlock Text="CONTROL TAXI" Foreground="White" FontWeight="Black" FontSize="36" Margin="0,14,0,0"/>
+                                        <TextBlock Text="Operacion diaria de taxistas, pagos, cortes y catalogos en un solo sistema." Foreground="#E0F4EF" FontSize="13" HorizontalAlignment="Left" Width="430" TextWrapping="Wrap" Margin="0,14,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+
+                        <Grid Grid.Column="1" Background="White">
+                            <Border HorizontalAlignment="Left" Width="4" Background="#E2B95A"/>
+                            <StackPanel Margin="52,34,54,34" VerticalAlignment="Center">
+                                <!-- Navieras shortcut removed -->
+                                <TextBlock Text="BIENVENIDO" Foreground="#0F8F83" FontWeight="Black" FontSize="12"/>
+                                <TextBlock Text="Iniciar sesion" Foreground="#14243A" FontWeight="Black" FontSize="32" Margin="0,8,0,28"/>
+                                <TextBlock Text="Usuario" Foreground="#34445A" FontWeight="Bold" FontSize="11"/>
+                                <TextBox x:Name="UserNameTextBox" Style="{StaticResource LoginInput}" Margin="0,6,0,18"/>
+                                <TextBlock Text="Sucursal" Foreground="#34445A" FontWeight="Bold" FontSize="11"/>
+                                <ComboBox x:Name="BranchSelector"
+                                          Height="44"
+                                          Margin="0,6,0,18"
+                                          Background="#F9FCFE"
+                                          BorderBrush="#B9D4E5"
+                                          BorderThickness="1"
+                                          DisplayMemberPath="Name"
+                                          SelectedValuePath="Code"/>
+                                <TextBlock Text="Contrasena" Foreground="#34445A" FontWeight="Bold" FontSize="11"/>
+                                <PasswordBox x:Name="PasswordTextBox" Style="{StaticResource LoginPassword}" Margin="0,6,0,24" KeyDown="PasswordTextBox_KeyDown"/>
+                                <Button Style="{StaticResource LoginActionButton}" Click="LoginButton_Click" Width="280" Height="54" HorizontalAlignment="Left">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="Entrar al POS" Foreground="White" FontWeight="Black" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="IR" Foreground="White" FontSize="20" FontWeight="Black" Margin="20,0,10,0" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Button>
+                                <TextBlock x:Name="LoginMessage" Foreground="#B42318" Margin="0,18,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <Grid x:Name="DesktopPanel" Visibility="Collapsed" Background="{StaticResource WebBodyBrush}">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="22">
+                <Border MinHeight="600" MinWidth="880" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                        Background="#DFEAF5" BorderBrush="#98ADC3" BorderThickness="1" Padding="26">
+                <Grid MinWidth="820">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Background="#FBFCFF" BorderBrush="#B4C5D7" BorderThickness="0,0,0,1" Padding="11,9" Margin="-26,-26,-26,0">
+                        <DockPanel>
+                            <TextBlock Text="ADMINISTRACION" Foreground="#263A53" FontSize="11" HorizontalAlignment="Center" DockPanel.Dock="Top" TextAlignment="Center"/>
+                            <TextBlock x:Name="DatabaseStatus" Foreground="#6A7789" FontSize="10" HorizontalAlignment="Right"/>
+                        </DockPanel>
+                    </Border>
+
+                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" Margin="0,18,0,26">
+                        <Image Source="pack://application:,,,/Assets/hoka-logo.png" Width="330" Height="86" Stretch="Uniform"/>
+                        <TextBlock x:Name="UserStatus" Foreground="#526A83" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <UniformGrid Grid.Row="2" Columns="3" Rows="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="-8">
+                        <Button Tag="Registro diario" Style="{StaticResource AdminTileButton}" BorderBrush="#2D6CDF" Foreground="#2458B2" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/registro_diario.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="REGISTRO DIARIO" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Registro aplicacion movil" Style="{StaticResource AdminTileButton}" BorderBrush="#0F8F83" Foreground="#0B6F65" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/registro_app.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="REGISTRO APP" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Comisiones" Style="{StaticResource AdminTileButton}" BorderBrush="#E28B16" Foreground="#9A5A08" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/comision.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="COMISIONES" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Tag="Transportes" Style="{StaticResource AdminTileButton}" BorderBrush="#7C5CE6" Foreground="#5C41BA" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/transporte.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="TRANSPORTE" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Relaciones" Style="{StaticResource AdminTileButton}" BorderBrush="#BE185D" Foreground="#9D174D" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/relacion_ticket2.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="RELACION TICKET-TAXISTA" TextAlignment="Center" Margin="0,12,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Taxistas" Style="{StaticResource AdminTileButton}" BorderBrush="#DB5A3A" Foreground="#A53F28" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/taxista.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="TAXISTAS" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Tag="Gafetes" Style="{StaticResource AdminTileButton}" BorderBrush="#D9467A" Foreground="#A72F59" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/gafete.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="GAFETES" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Reportes" Style="{StaticResource AdminTileButton}" BorderBrush="#2563EB" Foreground="#1D4ED8" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/reporte.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="REPORTES" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Gastos" Style="{StaticResource AdminTileButton}" BorderBrush="#B7791F" Foreground="#8C5A10" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/gastos.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="GASTOS" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Tag="Cortes" Style="{StaticResource AdminTileButton}" BorderBrush="#334155" Foreground="#243142" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/corte.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="CORTES" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Configuracion de comisiones" Style="{StaticResource AdminTileButton}" BorderBrush="#0F988F" Foreground="#0B6F65" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/comision2.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="CONFIGURACION DE COMISIONES" TextAlignment="Center" Margin="0,12,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Tag="Usuarios" Style="{StaticResource AdminTileButton}" BorderBrush="#0891B2" Foreground="#0E7490" Click="ModuleTile_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/usuarios.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="USUARIOS" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <!-- Navieras module tile removed -->
+                        <Button Style="{StaticResource AdminTileButton}" BorderBrush="#C23B2D" Foreground="#C23B2D" Click="LogoutButton_Click">
+                            <StackPanel VerticalAlignment="Center">
+                                <Image Source="pack://application:,,,/Assets/salir.png" Style="{StaticResource AdminTileIcon}"/>
+                                <TextBlock Text="SALIR" TextAlignment="Center" Margin="0,12,0,0"/>
+                            </StackPanel>
+                        </Button>
+                    </UniformGrid>
+
+                    <ListBox x:Name="ModulesList" Visibility="Collapsed" SelectionChanged="ModulesList_SelectionChanged" MouseDoubleClick="ModulesList_MouseDoubleClick"/>
+                    <TextBlock x:Name="PageTitle" Visibility="Collapsed"/>
+                    <TextBlock x:Name="PageDescription" Visibility="Collapsed"/>
+                    <TextBlock x:Name="PageDetail" Visibility="Collapsed"/>
+                </Grid>
+            </Border>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Window>

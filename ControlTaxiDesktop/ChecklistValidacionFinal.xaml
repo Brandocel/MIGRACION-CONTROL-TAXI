@@ -1,0 +1,49 @@
+<Window x:Class="ControlTaxiDesktop.ChecklistValidacionFinal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Checklist Validación Final" Width="1320" Height="760" MinWidth="1100" MinHeight="620"
+        WindowStartupLocation="CenterOwner" Background="{StaticResource WebBodyBrush}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="#FFFDF9" BorderBrush="{StaticResource WebLineBrush}" BorderThickness="1" CornerRadius="24" Padding="20" Margin="0,0,0,12">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left">
+                                        <TextBlock Text="CHECKLIST DE VALIDACIÓN FINAL PARA RETIRO DEL WEB" FontSize="24" FontWeight="Black" Foreground="{StaticResource WebNavyBrush}"/>
+                    <TextBlock Text="Marca módulo por módulo lo que ya comprobaste manualmente contra el Web. Esta herramienta no cambia datos ni lógica de negocio." Foreground="{StaticResource WebMutedBrush}" Margin="0,4,0,0"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Marcar todos pendientes" Padding="12,8" Margin="0,0,8,0" Click="Reset_Click"/>
+                    <Button Content="Exportar Markdown" Padding="12,8" Click="Export_Click"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <DataGrid x:Name="ChecklistGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False"
+                  HeadersVisibility="Column" GridLinesVisibility="All" RowHeaderWidth="0"
+                  Background="White" AlternatingRowBackground="#F8FAFC">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Módulo" Binding="{Binding Module}" IsReadOnly="True" Width="190"/>
+                <DataGridTextColumn Header="Estado" Binding="{Binding Status, UpdateSourceTrigger=PropertyChanged}" Width="115"/>
+                <DataGridCheckBoxColumn Header="Pantalla abre" Binding="{Binding ScreenOpens}" Width="95"/>
+                <DataGridCheckBoxColumn Header="Botones" Binding="{Binding ButtonsWork}" Width="75"/>
+                <DataGridCheckBoxColumn Header="Filtros" Binding="{Binding FiltersWork}" Width="70"/>
+                <DataGridCheckBoxColumn Header="Búsquedas" Binding="{Binding SearchWorks}" Width="80"/>
+                <DataGridCheckBoxColumn Header="Totales Web" Binding="{Binding TotalsMatchWeb}" Width="90"/>
+                <DataGridCheckBoxColumn Header="Exportación" Binding="{Binding ExportWorks}" Width="90"/>
+                <DataGridCheckBoxColumn Header="Impresión" Binding="{Binding PrintWorks}" Width="80"/>
+                <DataGridCheckBoxColumn Header="Permisos" Binding="{Binding PermissionsWork}" Width="80"/>
+                <DataGridCheckBoxColumn Header="Offline" Binding="{Binding Offline}" Width="70"/>
+                <DataGridTextColumn Header="Observaciones" Binding="{Binding Observations, UpdateSourceTrigger=PropertyChanged}" Width="260"/>
+                <DataGridTextColumn Header="Evidencia" Binding="{Binding Evidence, UpdateSourceTrigger=PropertyChanged}" Width="220"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="2" Margin="0,10,0,0" Foreground="#476275" TextWrapping="Wrap"
+                   Text="Criterio recomendado: no retirar el Web hasta que todos los módulos aplicables estén en Validado, con evidencia y sin dependencias de internet/localhost/WebView/API remota."/>
+    </Grid>
+</Window>

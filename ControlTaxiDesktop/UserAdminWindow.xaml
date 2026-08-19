@@ -1,0 +1,134 @@
+<Window x:Class="ControlTaxiDesktop.UserAdminWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Control Taxi · Usuarios y permisos"
+        Width="1180"
+        Height="700"
+        WindowStartupLocation="CenterOwner"
+        Background="#DDECF7">
+  <Window.Resources>
+    <Style x:Key="FieldLabel" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="Black"/>
+      <Setter Property="Foreground" Value="#425A73"/>
+      <Setter Property="Margin" Value="3,0,3,2"/>
+    </Style>
+    <Style x:Key="ClassicPanel" TargetType="Border">
+      <Setter Property="Background" Value="#F8FCFF"/>
+      <Setter Property="BorderBrush" Value="#B6C8DA"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+    </Style>
+    <Style x:Key="PermissionCheck" TargetType="{x:Type CheckBox}">
+      <Setter Property="Margin" Value="6,4"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="#243244"/>
+    </Style>
+  </Window.Resources>
+
+  <Border Margin="18" Background="#E6F3FC" BorderBrush="#9DB8D3" BorderThickness="1">
+    <Grid>
+      <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Border Background="#FAF8F8" BorderBrush="#B6C8DA" BorderThickness="0,0,0,1">
+        <TextBlock Text="USUARIOS Y PERMISOS" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" FontWeight="SemiBold" Foreground="#304A65"/>
+      </Border>
+
+      <Grid Grid.Row="1" Margin="10">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Style="{StaticResource ClassicPanel}">
+          <StackPanel>
+            <TextBlock Text="DATOS DEL USUARIO" FontSize="12" FontWeight="Black" Foreground="#304A65" Margin="0,0,0,10"/>
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="1.4*"/>
+                <ColumnDefinition Width="1.2*"/>
+              </Grid.ColumnDefinitions>
+
+              <StackPanel Grid.Row="0" Grid.Column="0">
+                <TextBlock Text="Usuario" Style="{StaticResource FieldLabel}"/>
+                <TextBox x:Name="UserName" />
+              </StackPanel>
+              <StackPanel Grid.Row="0" Grid.Column="1">
+                <TextBlock Text="Contraseña" Style="{StaticResource FieldLabel}"/>
+                <PasswordBox x:Name="UserPassword" ToolTip="Dejar vacía para conservar"/>
+              </StackPanel>
+              <StackPanel Grid.Row="0" Grid.Column="2">
+                <TextBlock Text="Rol" Style="{StaticResource FieldLabel}"/>
+                <ComboBox x:Name="UserRole" SelectionChanged="UserRole_SelectionChanged">
+                  <ComboBoxItem Content="Administrador"/>
+                  <ComboBoxItem Content="Supervisor"/>
+                  <ComboBoxItem Content="Cajero"/>
+                </ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Row="0" Grid.Column="3">
+                <TextBlock Text="Estatus" Style="{StaticResource FieldLabel}"/>
+                <ComboBox x:Name="UserStatus">
+                  <ComboBoxItem Content="Activo"/>
+                  <ComboBoxItem Content="Inactivo"/>
+                </ComboBox>
+              </StackPanel>
+
+              <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" Margin="0,10,0,0">
+                <TextBlock Text="Sucursal" Style="{StaticResource FieldLabel}"/>
+                <ComboBox x:Name="UserBranchCode" SelectedValuePath="Code" DisplayMemberPath="Name"/>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Style="{StaticResource ClassicPanel}">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="MODULOS VISIBLES PARA ESTE USUARIO" HorizontalAlignment="Center" FontSize="11" FontWeight="Black" Foreground="#425A73" Margin="0,0,0,8"/>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="150">
+              <ItemsControl x:Name="PermissionsList">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <UniformGrid Columns="4"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+
+        <Border Grid.Row="2" Background="#F8FCFF" BorderBrush="#B6C8DA" BorderThickness="1">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="USUARIOS" HorizontalAlignment="Center" FontSize="11" FontWeight="Black" Foreground="#425A73" Margin="0,8,0,8"/>
+            <DataGrid x:Name="UsersGrid" IsReadOnly="True" AutoGenerateColumns="False" SelectionChanged="UsersGrid_SelectionChanged">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Usuario" Binding="{Binding UserName}" Width="150"/>
+                <DataGridTextColumn Header="Rol" Binding="{Binding Role}" Width="120"/>
+                <DataGridTextColumn Header="Sucursal" Binding="{Binding BranchName}" Width="150"/>
+                <DataGridTextColumn Header="Estatus" Binding="{Binding Status}" Width="100"/>
+                <DataGridTextColumn Header="Permisos" Binding="{Binding Permissions}" Width="*"/>
+                <DataGridTextColumn Header="Alta" Binding="{Binding CreatedAt}" Width="150"/>
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </Border>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+          <Button Content="GUARDAR" Style="{StaticResource WebActionGreenButton}" Click="SaveUser_Click" Margin="0,0,10,0"/>
+          <Button Content="NUEVO" Style="{StaticResource WebActionButton}" Click="NewUser_Click" Margin="0,0,10,0"/>
+          <Button Content="MENU" Style="{StaticResource WebActionButton}" Click="CloseWindow_Click" Margin="0,0,10,0"/>
+          <Button Content="SALIR" Style="{StaticResource WebActionRedButton}" Click="CloseWindow_Click"/>
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>

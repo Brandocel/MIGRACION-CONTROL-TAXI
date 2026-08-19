@@ -1,0 +1,469 @@
+<Window x:Class="ControlTaxiDesktop.Navieras.Views.NavierasWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Control Taxi | Navieras"
+        Height="920"
+        Width="1460"
+        WindowStartupLocation="CenterOwner"
+        Background="#EAF3FA">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="#12324A" Padding="24" CornerRadius="0,0,24,24">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Navieras" Foreground="White" FontSize="30" FontWeight="Black"/>
+                    <TextBlock x:Name="SessionTextBlock" Foreground="#BDD7ED" Margin="0,10,0,0" FontSize="12"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="RefreshButton" Margin="0,0,10,0" Padding="16,10" Content="Actualizar" Click="RefreshButton_Click" Style="{StaticResource WebActionButton}"/>
+                    <Button x:Name="ChangePasswordButton" Margin="0,0,10,0" Padding="16,10" Content="Cambiar contraseña" Click="ChangePasswordButton_Click" Style="{StaticResource WebActionButton}"/>
+                    <Button x:Name="LogoutButton" Margin="0" Padding="16,10" Content="Cerrar sesión" Click="LogoutButton_Click" Style="{StaticResource WebActionButton}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Background="#12324A" CornerRadius="24" Padding="18" MinHeight="760">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Navegación" Foreground="White" FontSize="16" FontWeight="Black" Margin="0,0,0,18"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Tablero" Tag="0" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Acciones rápidas" Tag="1" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Próximas llegadas" Tag="2" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Barcos del día" Tag="3" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Mapa de muelles" Tag="4" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Indicadores" Tag="5" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Servicios" Tag="6" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Folios de operación" Tag="7" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Línea de tiempo" Tag="8" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Catálogos" Tag="9" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Detalle de catálogo" Tag="10" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte diario" Tag="11" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte por naviera" Tag="12" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte de barcos" Tag="13" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte de guías" Tag="14" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte de capitanes" Tag="15" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte de pasajeros" Tag="16" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte de puntualidad" Tag="17" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Reporte de brazaletes" Tag="18" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Vista de exportación" Tag="19" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Administración" Tag="20" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Roles" Tag="21" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Alias" Tag="22" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Margin="0,0,0,10" Padding="14" Content="Cola de sincronización" Tag="23" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                        <Button Padding="14" Content="Importación" Tag="24" Click="MenuButton_Click" Style="{StaticResource WebActionButton}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <TabControl x:Name="MainTabControl" Grid.Column="2" Background="Transparent" BorderThickness="0">
+                <TabItem Header="Tablero">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel Margin="8">
+                            <UniformGrid Columns="6" Margin="0,0,0,16">
+                                <Border Margin="6" Padding="16" Background="White" CornerRadius="14"><StackPanel><TextBlock Text="Barcos"/><TextBlock x:Name="DashboardBoatsTextBlock" FontSize="24" FontWeight="Bold"/></StackPanel></Border>
+                                <Border Margin="6" Padding="16" Background="White" CornerRadius="14"><StackPanel><TextBlock Text="Servicios"/><TextBlock x:Name="DashboardServicesTextBlock" FontSize="24" FontWeight="Bold"/></StackPanel></Border>
+                                <Border Margin="6" Padding="16" Background="White" CornerRadius="14"><StackPanel><TextBlock Text="PAX"/><TextBlock x:Name="DashboardPassengersTextBlock" FontSize="24" FontWeight="Bold"/></StackPanel></Border>
+                                <Border Margin="6" Padding="16" Background="White" CornerRadius="14"><StackPanel><TextBlock Text="En operación"/><TextBlock x:Name="DashboardInOperationTextBlock" FontSize="24" FontWeight="Bold"/></StackPanel></Border>
+                                <Border Margin="6" Padding="16" Background="White" CornerRadius="14"><StackPanel><TextBlock Text="Finalizados"/><TextBlock x:Name="DashboardFinishedTextBlock" FontSize="24" FontWeight="Bold"/></StackPanel></Border>
+                                <Border Margin="6" Padding="16" Background="White" CornerRadius="14"><StackPanel><TextBlock Text="Retrasos"/><TextBlock x:Name="DashboardDelayedTextBlock" FontSize="24" FontWeight="Bold"/></StackPanel></Border>
+                            </UniformGrid>
+                            <Border Background="White" CornerRadius="14" Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="Servicios del día" FontSize="18" FontWeight="Bold"/>
+                                    <DataGrid x:Name="DashboardServicesGrid" Margin="0,12,0,0" AutoGenerateColumns="False" IsReadOnly="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Folio" Binding="{Binding ServiceFolio}"/>
+                                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                                            <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                                            <DataGridTextColumn Header="Estado" Binding="{Binding Status}"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </TabItem>
+
+                <TabItem Header="Acciones rápidas">
+                    <DataGrid x:Name="QuickActionsGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Acción" Binding="{Binding Title}" Width="*"/>
+                            <DataGridTextColumn Header="Descripción" Binding="{Binding Description}" Width="2*"/>
+                            <DataGridTextColumn Header="Vista" Binding="{Binding TargetView}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Próximas llegadas">
+                    <DataGrid x:Name="UpcomingArrivalsGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Hora llegada" Binding="{Binding ScheduledArrival}"/>
+                            <DataGridTextColumn Header="Folio" Binding="{Binding ServiceFolio}"/>
+                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                            <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                            <DataGridTextColumn Header="Muelle" Binding="{Binding ScheduledDockName}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Barcos del día">
+                    <DataGrid x:Name="ShipsOfDayGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                            <DataGridTextColumn Header="Servicios" Binding="{Binding ServiceCount}"/>
+                            <DataGridTextColumn Header="Estado" Binding="{Binding DominantStatus}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Mapa de muelles">
+                    <DataGrid x:Name="DockMapGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Muelle" Binding="{Binding DockName}" Width="*"/>
+                            <DataGridTextColumn Header="Zona" Binding="{Binding Zone}"/>
+                            <DataGridTextColumn Header="Servicios" Binding="{Binding ScheduledServices}"/>
+                            <DataGridTextColumn Header="Activos" Binding="{Binding ActiveServices}"/>
+                            <DataGridTextColumn Header="PAX prog." Binding="{Binding ScheduledPassengers}"/>
+                            <DataGridTextColumn Header="PAX llegada" Binding="{Binding ArrivalPassengers}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Indicadores">
+                    <DataGrid x:Name="IndicatorsGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Indicador" Binding="{Binding Title}" Width="*"/>
+                            <DataGridTextColumn Header="Valor" Binding="{Binding Value}"/>
+                            <DataGridTextColumn Header="Detalle" Binding="{Binding Detail}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Servicios">
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                            <Button Margin="0,0,8,0" Content="Nuevo" Click="NewServiceButton_Click" IsEnabled="False"/>
+                            <Button Margin="0,0,8,0" Content="Editar" Click="EditServiceButton_Click" IsEnabled="False"/>
+                            <Button Margin="0,0,8,0" Content="Reprogramar" Click="RescheduleServiceButton_Click" IsEnabled="False"/>
+                            <Button Margin="0,0,8,0" Content="Llegada" Click="RegisterArrivalButton_Click" IsEnabled="False"/>
+                            <Button Margin="0,0,8,0" Content="Salida" Click="RegisterDepartureButton_Click" IsEnabled="False"/>
+                            <Button Margin="0,0,8,0" Content="Validar brazalete" Click="ValidateBraceletButton_Click" IsEnabled="False"/>
+                            <Button Margin="0,0,8,0" Content="Finalizar" Click="FinalizeServiceButton_Click" IsEnabled="False"/>
+                            <Button Content="Cancelar" Click="CancelServiceButton_Click" IsEnabled="False"/>
+                        </StackPanel>
+                        <DataGrid x:Name="ServicesGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Folio" Binding="{Binding ServiceFolio}"/>
+                                <DataGridTextColumn Header="Fecha" Binding="{Binding OperationDate}"/>
+                                <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                                <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                                <DataGridTextColumn Header="Llegada prog." Binding="{Binding ScheduledArrival}"/>
+                                <DataGridTextColumn Header="Salida prog." Binding="{Binding ScheduledDeparture}"/>
+                                <DataGridTextColumn Header="PAX prog." Binding="{Binding ScheduledPax}"/>
+                                <DataGridTextColumn Header="PAX reales" Binding="{Binding RealPax}"/>
+                                <DataGridTextColumn Header="Estado" Binding="{Binding Status}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Folios">
+                    <Grid Margin="8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Servicio para captura masiva" FontWeight="Bold"/>
+                                <ComboBox x:Name="FolioServiceComboBox" Margin="0,8,0,12" DisplayMemberPath="ServiceFolio" SelectedValuePath="ServiceId"/>
+                                <TextBlock Text="Pega un folio por linea" FontWeight="Bold"/>
+                                <TextBox x:Name="FolioBatchTextBox" Height="120" Margin="0,8,0,12" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Width="180" Content="Guardar folios" Click="SaveFoliosButton_Click" IsEnabled="False"/>
+                                    <Button Width="180" Margin="8,0,0,0" Content="Validar lote" Click="ValidateFoliosButton_Click" IsEnabled="False"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Border Grid.Column="2" Background="White" CornerRadius="14" Padding="14">
+                                <StackPanel>
+                                    <TextBlock Text="Folios guardados" FontSize="18" FontWeight="Bold"/>
+                                    <Button HorizontalAlignment="Right" Margin="0,0,0,10" Content="Eliminar seleccionado" Click="DeleteFolioButton_Click" IsEnabled="False"/>
+                                    <DataGrid x:Name="FoliosGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="Folio" Binding="{Binding Folio}"/>
+                                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                                            <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                                            <DataGridTextColumn Header="Fecha" Binding="{Binding OperationDate}"/>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <TabItem Header="Timeline">
+                    <DataGrid x:Name="TimelineGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Fecha" Binding="{Binding Timestamp}"/>
+                            <DataGridTextColumn Header="Titulo" Binding="{Binding Title}" Width="*"/>
+                            <DataGridTextColumn Header="Descripcion" Binding="{Binding Description}" Width="2*"/>
+                            <DataGridTextColumn Header="Barco" Binding="{Binding ShipName}" Width="*"/>
+                            <DataGridTextColumn Header="Usuario" Binding="{Binding UserName}" Width="*"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Catalogos">
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                            <ComboBox x:Name="CatalogTypeComboBox" Width="180" SelectionChanged="CatalogTypeComboBox_SelectionChanged">
+                                <ComboBoxItem Content="companies"/>
+                                <ComboBoxItem Content="boats"/>
+                                <ComboBoxItem Content="guides"/>
+                                <ComboBoxItem Content="captains"/>
+                                <ComboBoxItem Content="docks"/>
+                            </ComboBox>
+                            <Button Margin="8,0,0,0" Content="Nuevo / Editar" Click="SaveCatalogButton_Click" IsEnabled="False"/>
+                            <Button Margin="8,0,0,0" Content="Activar / Desactivar" Click="ToggleCatalogButton_Click" IsEnabled="False"/>
+                        </StackPanel>
+                        <DataGrid x:Name="CatalogGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Clave" Binding="{Binding Code}"/>
+                                <DataGridTextColumn Header="Nombre" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="Detalle" Binding="{Binding Subtitle}" Width="*"/>
+                                <DataGridCheckBoxColumn Header="Activo" Binding="{Binding IsActive}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Catalog Detail">
+                    <DataGrid x:Name="CatalogDetailGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Tipo" Binding="{Binding Type}"/>
+                            <DataGridTextColumn Header="Clave" Binding="{Binding Code}"/>
+                            <DataGridTextColumn Header="Nombre" Binding="{Binding Name}" Width="*"/>
+                            <DataGridTextColumn Header="Detalle" Binding="{Binding Subtitle}" Width="*"/>
+                            <DataGridTextColumn Header="Uso" Binding="{Binding UsageCount}"/>
+                            <DataGridCheckBoxColumn Header="Activo" Binding="{Binding IsActive}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Reporte diario">
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                            <DatePicker x:Name="FromDatePicker"/>
+                            <DatePicker x:Name="ToDatePicker" Margin="8,0,0,0"/>
+                            <Button Margin="8,0,0,0" Content="Consultar reportes" Click="RefreshReportsButton_Click"/>
+                            <TextBlock x:Name="ReportStatusTextBlock" Margin="12,4,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <DataGrid x:Name="DailyReportGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Fecha" Binding="{Binding OperationDate}"/>
+                                <DataGridTextColumn Header="Folio" Binding="{Binding ServiceFolio}"/>
+                                <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                                <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                                <DataGridTextColumn Header="Muelle" Binding="{Binding DockName}" Width="*"/>
+                                <DataGridTextColumn Header="PAX prog." Binding="{Binding ScheduledPax}"/>
+                                <DataGridTextColumn Header="PAX llegada" Binding="{Binding RealPax}"/>
+                                <DataGridTextColumn Header="PAX salida" Binding="{Binding DeparturePax}"/>
+                                <DataGridTextColumn Header="Estado" Binding="{Binding Status}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Reporte por naviera">
+                    <DataGrid x:Name="CompanyReportGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                            <DataGridTextColumn Header="Barcos" Binding="{Binding UniqueBoatCount}"/>
+                            <DataGridTextColumn Header="Servicios" Binding="{Binding ServiceCount}"/>
+                            <DataGridTextColumn Header="PAX prog." Binding="{Binding ScheduledPassengers}"/>
+                            <DataGridTextColumn Header="PAX llegada" Binding="{Binding ArrivalPassengers}"/>
+                            <DataGridTextColumn Header="PAX salida" Binding="{Binding DeparturePassengers}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Reporte de barcos">
+                    <DataGrid x:Name="ShipReportGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                            <DataGridTextColumn Header="Servicios" Binding="{Binding ServiceCount}"/>
+                            <DataGridTextColumn Header="PAX prog." Binding="{Binding ScheduledPassengers}"/>
+                            <DataGridTextColumn Header="PAX llegada" Binding="{Binding ArrivalPassengers}"/>
+                            <DataGridTextColumn Header="PAX salida" Binding="{Binding DeparturePassengers}"/>
+                            <DataGridTextColumn Header="Estado" Binding="{Binding DominantStatus}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Reporte de guías">
+                    <DataGrid x:Name="GuideReportGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Guia" Binding="{Binding PersonName}" Width="*"/>
+                            <DataGridTextColumn Header="Programados" Binding="{Binding ProgrammedServices}"/>
+                            <DataGridTextColumn Header="Reales" Binding="{Binding RealServices}"/>
+                            <DataGridTextColumn Header="PAX prog." Binding="{Binding ProgrammedPassengers}"/>
+                            <DataGridTextColumn Header="PAX reales" Binding="{Binding RealPassengers}"/>
+                            <DataGridTextColumn Header="Cambios" Binding="{Binding AssignmentChanges}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Reporte de capitanes">
+                    <DataGrid x:Name="CaptainReportGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Capitan" Binding="{Binding PersonName}" Width="*"/>
+                            <DataGridTextColumn Header="Programados" Binding="{Binding ProgrammedServices}"/>
+                            <DataGridTextColumn Header="Reales" Binding="{Binding RealServices}"/>
+                            <DataGridTextColumn Header="PAX prog." Binding="{Binding ProgrammedPassengers}"/>
+                            <DataGridTextColumn Header="PAX reales" Binding="{Binding RealPassengers}"/>
+                            <DataGridTextColumn Header="Cambios" Binding="{Binding AssignmentChanges}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Reporte de pasajeros">
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                            <ComboBox x:Name="PassengerGroupingComboBox" Width="180" SelectionChanged="PassengerGroupingComboBox_SelectionChanged">
+                                <ComboBoxItem Content="service"/>
+                                <ComboBoxItem Content="ship"/>
+                                <ComboBoxItem Content="company"/>
+                                <ComboBoxItem Content="dock"/>
+                            </ComboBox>
+                            <Button Margin="8,0,0,0" Content="Actualizar" Click="RefreshReportsButton_Click"/>
+                        </StackPanel>
+                        <DataGrid x:Name="PassengerReportGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Etiqueta" Binding="{Binding Label}" Width="*"/>
+                                <DataGridTextColumn Header="Detalle" Binding="{Binding SecondaryLabel}" Width="*"/>
+                                <DataGridTextColumn Header="PAX prog." Binding="{Binding ScheduledPassengers}"/>
+                                <DataGridTextColumn Header="PAX llegada" Binding="{Binding ArrivalPassengers}"/>
+                                <DataGridTextColumn Header="PAX salida" Binding="{Binding DeparturePassengers}"/>
+                                <DataGridTextColumn Header="Pend. llegada" Binding="{Binding PendingArrival}"/>
+                                <DataGridTextColumn Header="Pend. salida" Binding="{Binding PendingDeparture}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Reporte de puntualidad">
+                    <DataGrid x:Name="PunctualityReportGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Grupo" Binding="{Binding Label}" Width="*"/>
+                            <DataGridTextColumn Header="% llegada a tiempo" Binding="{Binding ArrivalOnTimeRate}"/>
+                            <DataGridTextColumn Header="% salida a tiempo" Binding="{Binding DepartureOnTimeRate}"/>
+                            <DataGridTextColumn Header="Prom. retraso llegada" Binding="{Binding AverageArrivalDelay}"/>
+                            <DataGridTextColumn Header="Prom. retraso salida" Binding="{Binding AverageDepartureDelay}"/>
+                            <DataGridTextColumn Header="Servicios" Binding="{Binding ServiceCount}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Reporte de brazaletes">
+                    <DataGrid x:Name="BraceletReportGrid" Margin="8" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Folio servicio" Binding="{Binding ServiceFolio}"/>
+                            <DataGridTextColumn Header="Barco" Binding="{Binding BoatName}" Width="*"/>
+                            <DataGridTextColumn Header="Naviera" Binding="{Binding CompanyName}" Width="*"/>
+                            <DataGridTextColumn Header="Brazalete" Binding="{Binding BraceletFolio}"/>
+                            <DataGridCheckBoxColumn Header="Validado" Binding="{Binding IsValidated}"/>
+                            <DataGridTextColumn Header="Validado en" Binding="{Binding ValidatedAt}"/>
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Status}"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+
+                <TabItem Header="Vista de exportación">
+                    <TextBox x:Name="ExportPreviewTextBox" Margin="8" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" TextWrapping="Wrap" IsReadOnly="True"/>
+                </TabItem>
+
+                <TabItem Header="Administración">
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button Content="Guardar usuario" Click="SaveUserButton_Click" IsEnabled="False"/>
+                            <Button Margin="8,0,0,0" Content="Bloquear / desbloquear" Click="ToggleUserBlockButton_Click" IsEnabled="False"/>
+                            <Button Margin="8,0,0,0" Content="Restablecer contraseña" Click="ResetUserPasswordButton_Click" IsEnabled="False"/>
+                        </StackPanel>
+                        <DataGrid x:Name="UsersGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Usuario" Binding="{Binding User.Username}"/>
+                                <DataGridTextColumn Header="Nombre" Binding="{Binding User.FullName}" Width="*"/>
+                                <DataGridTextColumn Header="Rol" Binding="{Binding User.Role}" Width="*"/>
+                                <DataGridCheckBoxColumn Header="Activo" Binding="{Binding IsActive}"/>
+                                <DataGridCheckBoxColumn Header="Bloqueado" Binding="{Binding IsBlocked}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Roles">
+                    <DockPanel Margin="8">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button Content="Guardar rol" Click="SaveRoleButton_Click" IsEnabled="False"/>
+                            <Button Margin="8,0,0,0" Content="Activar / desactivar" Click="ToggleRoleButton_Click" IsEnabled="False"/>
+                        </StackPanel>
+                        <DataGrid x:Name="RolesGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Clave" Binding="{Binding Key}"/>
+                                <DataGridTextColumn Header="Nombre" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="Usuarios" Binding="{Binding UserCount}"/>
+                                <DataGridCheckBoxColumn Header="Activo" Binding="{Binding IsActive}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </TabItem>
+
+                <TabItem Header="Alias">
+                    <Border Margin="8" Padding="20" Background="White" CornerRadius="14">
+                        <TextBlock TextWrapping="Wrap" Text="La aplicacion Flutter devuelve alias vacios desde remoto. Esta vista queda lista y aislada, pero la funcion no esta disponible mediante la API actual."/>
+                    </Border>
+                </TabItem>
+
+                <TabItem Header="Cola de sincronización">
+                    <Border Margin="8" Padding="20" Background="White" CornerRadius="14">
+                        <TextBlock TextWrapping="Wrap" Text="La cola de sincronizacion remota aparece vacia o deshabilitada en Flutter. Esta vista queda reservada para activacion futura sin inventar endpoints."/>
+                    </Border>
+                </TabItem>
+
+                <TabItem Header="Importación">
+                    <Border Margin="8" Padding="20" Background="White" CornerRadius="14">
+                        <TextBlock TextWrapping="Wrap" Text="Import Preview no esta habilitado por la API remota de Navieras. La vista queda separada para activarla cuando el backend publique la funcionalidad."/>
+                    </Border>
+                </TabItem>
+            </TabControl>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#D8E5F0" Padding="12">
+            <TextBlock x:Name="StatusTextBlock" Foreground="#12324A"/>
+        </Border>
+    </Grid>
+</Window>

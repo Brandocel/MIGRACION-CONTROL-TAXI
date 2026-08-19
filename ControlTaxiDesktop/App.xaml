@@ -1,0 +1,291 @@
+<Application x:Class="ControlTaxiDesktop.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml"
+             ShutdownMode="OnMainWindowClose">
+    <Application.Resources>
+        <Color x:Key="WebNavyColor">#132238</Color>
+        <Color x:Key="WebNavySoftColor">#1F3653</Color>
+        <Color x:Key="WebTextColor">#243244</Color>
+        <Color x:Key="WebMutedColor">#6A7789</Color>
+        <Color x:Key="WebLineColor">#E8DCC8</Color>
+        <Color x:Key="WebPanelBlueColor">#EEF5FB</Color>
+        <Color x:Key="WebWindowBlueColor">#DFEAF5</Color>
+        <Color x:Key="WebGoldColor">#B48329</Color>
+        <Color x:Key="WebGreenColor">#0B8F79</Color>
+        <Color x:Key="WebRedColor">#C93F36</Color>
+
+        <SolidColorBrush x:Key="BrandBrush" Color="{StaticResource WebNavyColor}" />
+        <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource WebGoldColor}" />
+        <SolidColorBrush x:Key="WebNavyBrush" Color="{StaticResource WebNavyColor}" />
+        <SolidColorBrush x:Key="WebNavySoftBrush" Color="{StaticResource WebNavySoftColor}" />
+        <SolidColorBrush x:Key="WebTextBrush" Color="{StaticResource WebTextColor}" />
+        <SolidColorBrush x:Key="WebMutedBrush" Color="{StaticResource WebMutedColor}" />
+        <SolidColorBrush x:Key="WebLineBrush" Color="{StaticResource WebLineColor}" />
+        <SolidColorBrush x:Key="WebPanelBlueBrush" Color="{StaticResource WebPanelBlueColor}" />
+        <SolidColorBrush x:Key="WebWindowBlueBrush" Color="{StaticResource WebWindowBlueColor}" />
+        <SolidColorBrush x:Key="WebGoldBrush" Color="{StaticResource WebGoldColor}" />
+        <SolidColorBrush x:Key="WebGreenBrush" Color="{StaticResource WebGreenColor}" />
+        <SolidColorBrush x:Key="WebRedBrush" Color="{StaticResource WebRedColor}" />
+
+        <LinearGradientBrush x:Key="WebBodyBrush" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#F4F0E8" Offset="0" />
+            <GradientStop Color="#EEF5FB" Offset="0.15" />
+            <GradientStop Color="#EEF5FB" Offset="0.85" />
+            <GradientStop Color="#F4F0E8" Offset="1" />
+        </LinearGradientBrush>
+
+        <Style TargetType="{x:Type Window}">
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource WebTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource WebBodyBrush}" />
+        </Style>
+
+        <Style TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="{StaticResource WebTextBrush}" />
+        </Style>
+
+        <Style TargetType="{x:Type Button}">
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="13,6" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#D1C5AD" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="#26354D" />
+            <Setter Property="FontWeight" Value="ExtraBold" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="Border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#EEF4FB" />
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#B9D3EF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#E6F5EE" />
+                                <Setter TargetName="Border" Property="BorderBrush" Value="#B8DFC8" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="WebActionSidebar" TargetType="{x:Type StackPanel}">
+            <Setter Property="Width" Value="120" />
+            <Setter Property="Margin" Value="10,0,0,0" />
+            <Setter Property="Background" Value="#EAF6FE" />
+        </Style>
+
+        <Style x:Key="WebActionButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Black" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="#EEF4FB" />
+            <Setter Property="BorderBrush" Value="#B9D3EF" />
+            <Setter Property="Foreground" Value="#285C88" />
+        </Style>
+
+        <Style x:Key="WebActionSaveButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebActionButton}">
+            <Setter Property="Background" Value="#EAF8F2" />
+            <Setter Property="BorderBrush" Value="#BFE7D2" />
+            <Setter Property="Foreground" Value="#0F6F58" />
+        </Style>
+
+        <Style x:Key="WebActionGoldButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebActionButton}">
+            <Setter Property="Background" Value="#FBF3E4" />
+            <Setter Property="BorderBrush" Value="#ECD8A7" />
+            <Setter Property="Foreground" Value="#9A6F13" />
+        </Style>
+
+        <Style x:Key="WebActionGreenButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebActionButton}">
+            <Setter Property="Background" Value="#E6F5EE" />
+            <Setter Property="BorderBrush" Value="#B8DFC8" />
+            <Setter Property="Foreground" Value="#0B6648" />
+        </Style>
+
+        <Style x:Key="WebActionOrangeButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebActionButton}">
+            <Setter Property="Background" Value="#F8EFE0" />
+            <Setter Property="BorderBrush" Value="#E1C29D" />
+            <Setter Property="Foreground" Value="#A25E16" />
+        </Style>
+
+        <Style x:Key="WebActionRedButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebActionButton}">
+            <Setter Property="Background" Value="#FDE7E8" />
+            <Setter Property="BorderBrush" Value="#F4C6C8" />
+            <Setter Property="Foreground" Value="#A92A2D" />
+        </Style>
+
+        <Style x:Key="WebInlineActionButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebActionButton}">
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Margin" Value="0,0,4,5" />
+            <Setter Property="Padding" Value="7,2" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+
+        <Style x:Key="WebInlineSaveButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebInlineActionButton}">
+            <Setter Property="Background" Value="#EAF8F2" />
+            <Setter Property="BorderBrush" Value="#BFE7D2" />
+            <Setter Property="Foreground" Value="#0F6F58" />
+        </Style>
+
+        <Style x:Key="WebInlineGoldButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebInlineActionButton}">
+            <Setter Property="Background" Value="#FBF3E4" />
+            <Setter Property="BorderBrush" Value="#ECD8A7" />
+            <Setter Property="Foreground" Value="#9A6F13" />
+        </Style>
+
+        <Style x:Key="WebInlineGreenButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebInlineActionButton}">
+            <Setter Property="Background" Value="#E6F5EE" />
+            <Setter Property="BorderBrush" Value="#B8DFC8" />
+            <Setter Property="Foreground" Value="#0B6648" />
+        </Style>
+
+        <Style x:Key="WebInlineRedButton" TargetType="{x:Type Button}" BasedOn="{StaticResource WebInlineActionButton}">
+            <Setter Property="Background" Value="#FDE7E8" />
+            <Setter Property="BorderBrush" Value="#F4C6C8" />
+            <Setter Property="Foreground" Value="#A92A2D" />
+        </Style>
+
+        <Style x:Key="WebMiniActionButton" TargetType="{x:Type Button}" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="10,2" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Black" />
+            <Setter Property="Background" Value="#F8FCFF" />
+            <Setter Property="BorderBrush" Value="#BBD0E4" />
+            <Setter Property="Foreground" Value="#1F5784" />
+        </Style>
+
+        <Style TargetType="{x:Type TextBox}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="7,4" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#AEBED0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="#102033" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style TargetType="{x:Type PasswordBox}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="7,4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#AEBED0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+
+        <Style TargetType="{x:Type ComboBox}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="BorderBrush" Value="#AEBED0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+
+        <Style TargetType="{x:Type DatePicker}">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="BorderBrush" Value="#AEBED0" />
+            <Setter Property="Background" Value="#FFFFFF" />
+        </Style>
+
+        <Style TargetType="{x:Type TabControl}">
+            <Setter Property="Background" Value="{StaticResource WebWindowBlueBrush}" />
+            <Setter Property="BorderBrush" Value="#98ADC3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style TargetType="{x:Type TabItem}">
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="FontWeight" Value="ExtraBold" />
+            <Setter Property="Foreground" Value="#526A83" />
+        </Style>
+
+        <Style TargetType="{x:Type DataGrid}">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#B6C8DA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="GridLinesVisibility" Value="All" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="RowHeaderWidth" Value="0" />
+            <Setter Property="AlternatingRowBackground" Value="#F7FBFF" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#E1EBF3" />
+            <Setter Property="VerticalGridLinesBrush" Value="#E1EBF3" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="RowHeight" Value="32" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="ColumnHeaderStyle">
+                <Setter.Value>
+                    <Style TargetType="{x:Type DataGridColumnHeader}">
+                        <Setter Property="Background" Value="#F8FAFC" />
+                        <Setter Property="Foreground" Value="#24374D" />
+                        <Setter Property="FontWeight" Value="ExtraBold" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="Padding" Value="8,6" />
+                        <Setter Property="BorderBrush" Value="#D8E5F0" />
+                        <Setter Property="BorderThickness" Value="0,0,1,1" />
+                    </Style>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="CellStyle">
+                <Setter.Value>
+                    <Style TargetType="{x:Type DataGridCell}">
+                        <Setter Property="Padding" Value="7,5" />
+                        <Setter Property="BorderBrush" Value="#E1EBF3" />
+                        <Setter Property="BorderThickness" Value="0,0,1,1" />
+                        <Setter Property="Foreground" Value="{StaticResource WebTextBrush}" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#F3F8FD" />
+                                <Setter Property="Foreground" Value="#244564" />
+                                <Setter Property="BorderBrush" Value="#D9E5F2" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="{x:Type ListBox}">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <Style TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Margin" Value="0,3" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+    </Application.Resources>
+</Application>

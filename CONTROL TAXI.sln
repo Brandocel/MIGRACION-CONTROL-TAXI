@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTaxiDesktop.Tools", "ControlTaxiDesktop.Tools\ControlTaxiDesktop.Tools.csproj", "{3D3F35D8-93D4-45A9-94E3-7E84BC9E4A0F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ControlTaxiDesktop", "ControlTaxiDesktop\ControlTaxiDesktop.csproj", "{81DAD940-F02E-48B3-9BFA-E026FDD30B47}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3D3F35D8-93D4-45A9-94E3-7E84BC9E4A0F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D3F35D8-93D4-45A9-94E3-7E84BC9E4A0F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D3F35D8-93D4-45A9-94E3-7E84BC9E4A0F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D3F35D8-93D4-45A9-94E3-7E84BC9E4A0F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{81DAD940-F02E-48B3-9BFA-E026FDD30B47}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{81DAD940-F02E-48B3-9BFA-E026FDD30B47}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{81DAD940-F02E-48B3-9BFA-E026FDD30B47}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{81DAD940-F02E-48B3-9BFA-E026FDD30B47}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {DED96E7A-B4F3-4260-8F48-321EC630AE07}
+	EndGlobalSection
+EndGlobal

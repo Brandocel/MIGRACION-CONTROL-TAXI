@@ -1,0 +1,13 @@
+{
+  "SqlServer": "192.168.1.70,50807",
+  "SqlUser": "sa",
+  "MktDatabase": "mkt",
+  "ApiBaseUrl": "https://lightyellow-porpoise-679527.hostingersite.com/casco-api",
+  "SyncToken": "HokaTaxisSync2050",
+  "BranchCode": "CV",
+  "PullOnly": true,
+  "IntervalSeconds": 15,
+  "LogFilePath": "Logs/CascoSync/casco-badge-sync.log",
+  "StatusFilePath": "Logs/CascoSync/casco-badge-sync-status.json",
+  "LockFilePath": "Logs/CascoSync/casco-badge-sync.lock"
+}

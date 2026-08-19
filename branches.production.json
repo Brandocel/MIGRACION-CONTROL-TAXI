@@ -1,0 +1,40 @@
+{
+  "Branches": [
+    {
+      "Code": "P28",
+      "Name": "Plaza 28",
+      "SqlServer": "26.38.252.71\\SQLEXPRESS",
+      "Database": "mkt",
+      "CompuadmoDatabase": "compuadmo",
+      "JoyeriaDatabase": "joyeria",
+      "SiteName": "Plaza 28",
+      "ApiBaseUrl": "https://lightyellow-porpoise-679527.hostingersite.com/",
+      "SqlUser": "sa",
+      "IsReadOnly": false
+    },
+    {
+      "Code": "CV",
+      "Name": "Casco Viejo",
+      "SqlServer": "192.168.1.70,50807",
+      "Database": "mkt",
+      "CompuadmoDatabase": "compuadmo",
+      "JoyeriaDatabase": "joyeria",
+      "SiteName": "Casco Viejo",
+      "ApiBaseUrl": "https://lightyellow-porpoise-679527.hostingersite.com/casco-api/",
+      "SqlUser": "sa",
+      "IsReadOnly": true
+    },
+    {
+      "Code": "ALL",
+      "Name": "Ambas",
+      "SqlServer": "",
+      "Database": "",
+      "CompuadmoDatabase": "",
+      "JoyeriaDatabase": "",
+      "SiteName": "",
+      "ApiBaseUrl": "",
+      "SqlUser": "sa",
+      "IsReadOnly": false
+    }
+  ]
+}

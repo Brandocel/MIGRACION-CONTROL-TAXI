@@ -1,0 +1,24 @@
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'payout_ticket'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'payout_ticket'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'payout_ticket'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'ticket_pago_dejada'.
+Msg 207, Level 16, State 1, Server REYNA, Line 1
+Invalid column name 'payout_ticket'.

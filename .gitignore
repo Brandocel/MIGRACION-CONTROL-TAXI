@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------------------
+# Compilacion .NET
+# ---------------------------------------------------------------------------
+bin/
+obj/
+artifacts/
+*.user
+*_wpftmp.csproj
+
+# ---------------------------------------------------------------------------
+# Publicaciones y releases (se regeneran con dotnet publish)
+# ---------------------------------------------------------------------------
+Release/
+Release-ControlTaxi-*/
+_publish_ui_plaza28/
+PublishSelfContained/
+
+# ---------------------------------------------------------------------------
+# Base de datos local y sus respaldos (461 MB por archivo)
+# ---------------------------------------------------------------------------
+DatosLocal/
+*.db
+*.db-shm
+*.db-wal
+*.bak
+
+# ---------------------------------------------------------------------------
+# Respaldos manuales y areas de trabajo temporales
+# ---------------------------------------------------------------------------
+Backup/
+Backups/
+.codex-temp/
+TestLocalBackup/
+_plaza28_zip_review/
+_synctaxi_review/
+_navieras_ref/
+*.backup-*
+*.zip
+
+# ---------------------------------------------------------------------------
+# Credenciales: nunca deben viajar al repositorio
+# ---------------------------------------------------------------------------
+*.credentials.dat
+*.credentials.dat.*
+Config/*.dat*
+**/Config/*.dat*
+sync.local.config.json
+
+# ---------------------------------------------------------------------------
+# Logs y salidas de ejecucion
+# ---------------------------------------------------------------------------
+Logs/
+**/Logs/
+*.log
+**/SyncTaxi_Plaza28/logs/
+**/SyncTaxi_Plaza28/respaldos/
+
+# ---------------------------------------------------------------------------
+# Temporales de Office y del sistema
+# ---------------------------------------------------------------------------
+~$*
+Thumbs.db
+desktop.ini
+
+# Cache local de Visual Studio
+.vs/
+
+# Archivos sueltos de diagnostico en la raiz (no forman parte de ningun proyecto)
+tmp_sqlite_read.cs
+tmp_verify_pw.cs
+new_diagnostics.cs
+*.txt.tmp

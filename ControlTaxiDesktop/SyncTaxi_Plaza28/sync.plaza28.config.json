@@ -1,0 +1,11 @@
+{
+  "ApiBaseUrl": "https://lightyellow-porpoise-679527.hostingersite.com",
+  "SyncToken": "HokaTaxisSync2050",
+  "BranchCode": "28",
+  "SqlServer": "26.38.252.71\\SQLEXPRESS",
+  "SqlUser": "sa",
+  "MktDatabase": "mkt",
+  "PullLimit": 500,
+  "IntervalSeconds": 15,
+  "MaxRunSeconds": 180
+}

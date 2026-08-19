@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Fusionar estas reglas con el .htaccess real; no reemplazarlo ciegamente.
+# Si el archivo o carpeta existe, dejar que Apache lo sirva normalmente.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [QSA,L]

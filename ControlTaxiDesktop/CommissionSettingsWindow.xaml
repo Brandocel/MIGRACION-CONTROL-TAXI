@@ -1,0 +1,351 @@
+<Window x:Class="ControlTaxiDesktop.CommissionSettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Control Taxi · Configuración de comisiones"
+        Width="1360"
+        Height="760"
+        MinWidth="860"
+        MinHeight="560"
+        ResizeMode="CanResizeWithGrip"
+        SizeToContent="Manual"
+        WindowStyle="SingleBorderWindow"
+        WindowStartupLocation="CenterOwner"
+        Background="#DDECF7"
+        PreviewKeyDown="Window_PreviewKeyDown">
+  <Window.Resources>
+    <Style x:Key="PanelCard" TargetType="Border">
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#D7E2F2"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="18"/>
+      <Setter Property="Padding" Value="16"/>
+      <Setter Property="Margin" Value="0,0,0,14"/>
+    </Style>
+    <Style x:Key="ActionButton" TargetType="Button">
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Foreground" Value="#0F3E95"/>
+      <Setter Property="Background" Value="#FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#D7E2F2"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="12,8"/>
+      <Setter Property="Margin" Value="4"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="#1347B8"/>
+      <Setter Property="BorderBrush" Value="#0D368A"/>
+    </Style>
+    <Style x:Key="GoldButton" TargetType="Button" BasedOn="{StaticResource ActionButton}">
+      <Setter Property="Foreground" Value="#7B5314"/>
+      <Setter Property="Background" Value="#FFF8E8"/>
+      <Setter Property="BorderBrush" Value="#E7C88A"/>
+    </Style>
+    <Style x:Key="WindowControlButton" TargetType="Button">
+      <Setter Property="Width" Value="42"/>
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Margin" Value="4,0,0,0"/>
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="FontWeight" Value="Black"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="#0A3D99"/>
+      <Setter Property="BorderBrush" Value="#9FC4FF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+    <Style x:Key="GridHeader" TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="#0E4DB7"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontWeight" Value="Bold"/>
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="ContentTemplate">
+        <Setter.Value>
+          <DataTemplate>
+            <TextBlock Text="{Binding}"
+                       Foreground="White"
+                       FontWeight="Bold"
+                       TextAlignment="Center"
+                       TextWrapping="NoWrap"/>
+          </DataTemplate>
+        </Setter.Value>
+      </Setter>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="{x:Type DataGridColumnHeader}">
+            <Border x:Name="HeaderBorder"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="#0B3D9B"
+                    BorderThickness="0,0,1,1"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                RecognizesAccessKey="True"
+                                TextElement.Foreground="White"
+                                TextElement.FontWeight="Bold"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="HeaderBorder" Property="Background" Value="#0E4DB7"/>
+                <Setter Property="Foreground" Value="White"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter TargetName="HeaderBorder" Property="Background" Value="#0E4DB7"/>
+                <Setter Property="Foreground" Value="White"/>
+              </Trigger>
+              <Trigger Property="SortDirection" Value="Ascending">
+                <Setter TargetName="HeaderBorder" Property="Background" Value="#0E4DB7"/>
+                <Setter Property="Foreground" Value="White"/>
+              </Trigger>
+              <Trigger Property="SortDirection" Value="Descending">
+                <Setter TargetName="HeaderBorder" Property="Background" Value="#0E4DB7"/>
+                <Setter Property="Foreground" Value="White"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="GridCell" TargetType="DataGridCell">
+      <Setter Property="Padding" Value="8,6"/>
+      <Setter Property="BorderBrush" Value="#E3ECF8"/>
+      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+    <Style x:Key="ResponsiveDataGrid" TargetType="DataGrid">
+      <Setter Property="ColumnHeaderStyle" Value="{StaticResource GridHeader}"/>
+      <Setter Property="CellStyle" Value="{StaticResource GridCell}"/>
+      <Setter Property="AlternatingRowBackground" Value="#F9FBFF"/>
+      <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+      <Setter Property="CanUserResizeColumns" Value="True"/>
+      <Setter Property="CanUserReorderColumns" Value="True"/>
+      <Setter Property="EnableColumnVirtualization" Value="True"/>
+      <Setter Property="EnableRowVirtualization" Value="True"/>
+      <Setter Property="MinColumnWidth" Value="64"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0" CornerRadius="22" Padding="18" BorderBrush="#0B3D9B" BorderThickness="1">
+      <Border.Background>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+          <GradientStop Color="#0A3D99" Offset="0"/>
+          <GradientStop Color="#1855CB" Offset="0.56"/>
+          <GradientStop Color="#0B3C99" Offset="1"/>
+        </LinearGradientBrush>
+      </Border.Background>
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+          <Button Content="_" ToolTip="Minimizar" Style="{StaticResource WindowControlButton}" Click="Minimize_Click"/>
+          <Button Content="□" ToolTip="Maximizar o restaurar" Style="{StaticResource WindowControlButton}" Click="ToggleMaximize_Click"/>
+          <Button Content="X" ToolTip="Cerrar" Style="{StaticResource WindowControlButton}" Background="#B42318" BorderBrush="#FFB4A8" Click="Close_Click"/>
+        </StackPanel>
+        <StackPanel>
+          <TextBlock Text="CONFIGURACIÓN DE COMISIONES" Foreground="White" FontSize="24" FontWeight="Black"/>
+          <TextBlock Text="Administra porcentajes, retenciones, vigencias y reglas de comisión sin necesidad de recompilar el sistema." Foreground="#DCEBFF" FontSize="12" Margin="0,4,0,0"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <UniformGrid Grid.Row="1" Columns="5" Margin="0,14,0,0">
+      <Border Style="{StaticResource PanelCard}" Margin="0,0,8,14" Tag="ACTIVOS" Cursor="Hand" MouseLeftButtonUp="SummaryCard_Click" ToolTip="Mostrar solo reglas activas."><StackPanel><TextBlock Text="Reglas activas" Foreground="#6A7789"/><TextBlock x:Name="ActiveRulesCard" FontSize="24" FontWeight="Black" Foreground="#0F3E95"/></StackPanel></Border>
+      <Border Style="{StaticResource PanelCard}" Margin="0,0,8,14" Tag="TRANSPORTE" Cursor="Hand" MouseLeftButtonUp="SummaryCard_Click" ToolTip="Filtrar reglas de transportes."><StackPanel><TextBlock Text="Transportes" Foreground="#6A7789"/><TextBlock x:Name="TransportRulesCard" FontSize="24" FontWeight="Black" Foreground="#0F988F"/></StackPanel></Border>
+      <Border Style="{StaticResource PanelCard}" Margin="0,0,8,14" Tag="FALLBACK" Cursor="Hand" MouseLeftButtonUp="SummaryCard_Click" ToolTip="Ver reglas o diagnósticos que usan valores de respaldo."><StackPanel><TextBlock Text="Usando fallback" Foreground="#6A7789"/><TextBlock x:Name="FallbackRulesCard" FontSize="24" FontWeight="Black" Foreground="#9A5A08"/></StackPanel></Border>
+      <Border Style="{StaticResource PanelCard}" Margin="0,0,8,14" Tag="POR_VENCER" Cursor="Hand" MouseLeftButtonUp="SummaryCard_Click" ToolTip="Mostrar reglas próximas a vencer."><StackPanel><TextBlock Text="Por vencer" Foreground="#6A7789"/><TextBlock x:Name="ExpiringRulesCard" FontSize="24" FontWeight="Black" Foreground="#BE185D"/></StackPanel></Border>
+      <Border Style="{StaticResource PanelCard}" Margin="0,0,0,14" Tag="CAMBIOS" Cursor="Hand" MouseLeftButtonUp="SummaryCard_Click" ToolTip="Abrir historial de cambios recientes."><StackPanel><TextBlock Text="Cambios recientes" Foreground="#6A7789"/><TextBlock x:Name="RecentChangesCard" FontSize="24" FontWeight="Black" Foreground="#334155"/></StackPanel></Border>
+    </UniformGrid>
+
+    <TabControl Grid.Row="2" x:Name="SettingsTabs" SelectionChanged="SettingsTabs_SelectionChanged">
+      <TabItem Header="Catálogo">
+        <Grid Margin="0,12,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="520"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="360" MinWidth="300" MaxWidth="430"/>
+          </Grid.ColumnDefinitions>
+          <Border Grid.Column="0" Style="{StaticResource PanelCard}" Margin="0,0,12,0">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                <TextBlock Text="Buscar comisión..." Foreground="#516175" FontWeight="Bold" Margin="4,0,0,3"/>
+                <WrapPanel>
+                  <TextBox x:Name="SearchBox" Width="360" Margin="4" ToolTip="Escribe MAJESTIC, TURIBUS, SALMORAN, MERCADO, AMEX, etc. Filtra inmediatamente." TextChanged="SearchBox_TextChanged"/>
+                  <ComboBox x:Name="CategoryFilter" Width="180" Margin="4" ToolTip="Filtra por tipo de regla." SelectionChanged="CategoryFilter_SelectionChanged">
+                    <ComboBoxItem Content="Todos" IsSelected="True"/>
+                    <ComboBoxItem Content="Transportes"/>
+                    <ComboBoxItem Content="Formas de pago"/>
+                    <ComboBoxItem Content="Joyería"/>
+                    <ComboBoxItem Content="Tequila"/>
+                    <ComboBoxItem Content="Guías"/>
+                    <ComboBoxItem Content="Dejadas"/>
+                    <ComboBoxItem Content="Gastos"/>
+                  </ComboBox>
+                  <ComboBox x:Name="StatusFilter" Width="150" Margin="4" ToolTip="Filtra por estado de vigencia." SelectionChanged="StatusFilter_SelectionChanged">
+                    <ComboBoxItem Content="Activos" IsSelected="True"/>
+                    <ComboBoxItem Content="Todos"/>
+                    <ComboBoxItem Content="Inactivos"/>
+                    <ComboBoxItem Content="Vigentes"/>
+                    <ComboBoxItem Content="Por vencer"/>
+                  </ComboBox>
+                  <DatePicker x:Name="VigencyFilter" Width="150" Margin="4" ToolTip="Fecha que se usa para revisar si una regla está vigente." SelectedDateChanged="VigencyFilter_SelectedDateChanged"/>
+                  <Button x:Name="QuickCommissionButton" Content="CAMBIAR COMISIÓN" ToolTip="Abre el cambio rápido: nueva comisión, vigencia y motivo. Nada técnico." Style="{StaticResource PrimaryButton}" Click="QuickCommission_Click"/>
+                  <Button x:Name="NewRuleButton" Content="Nueva regla" ToolTip="Crea una nueva regla de comisión o una nueva vigencia." Style="{StaticResource PrimaryButton}" Click="NewRule_Click"/>
+                  <Button x:Name="EditRuleButton" Content="Editar" ToolTip="Carga la regla seleccionada en el formulario de edición." Style="{StaticResource PrimaryButton}" Click="EditSelectedRule_Click"/>
+                  <Button Content="Ver historial" ToolTip="Abre la pestaña de historial y auditoría." Style="{StaticResource ActionButton}" Click="ViewHistory_Click"/>
+                  <Button Content="Probar comisión" ToolTip="Calcula una comisión de prueba sin guardar una venta." Style="{StaticResource GoldButton}" Click="SimulateSelectedRule_Click"/>
+                  <Button Content="Exportar a Excel" ToolTip="Exporta el catálogo de reglas para revisión." Style="{StaticResource GoldButton}" Click="ExportExcel_Click"/>
+                  <Button Content="CSV técnico" ToolTip="Exportación técnica para administración o soporte." Style="{StaticResource ActionButton}" Click="Export_Click"/>
+                  <Button x:Name="RetireTestRuleButton" Content="Retirar prueba" ToolTip="Desactiva solo la regla aislada PRUEBA PREPUBLICACION y deja auditoria." Style="{StaticResource ActionButton}" Click="RetireTestRule_Click"/>
+                </WrapPanel>
+                <Border x:Name="FallbackAlert" Visibility="Collapsed" Background="#FFF8E8" BorderBrush="#E7C88A" BorderThickness="1" CornerRadius="10" Padding="10" Margin="4,8,4,0">
+                  <TextBlock Text="⚠ Esta regla está usando un valor de respaldo. Conviene configurarla antes de liquidar." Foreground="#7B5314" FontWeight="Bold" TextWrapping="Wrap"/>
+                </Border>
+              </StackPanel>
+              <DataGrid x:Name="RulesGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionChanged="RulesGrid_SelectionChanged" MouseDoubleClick="RulesGrid_MouseDoubleClick"
+                        Style="{StaticResource ResponsiveDataGrid}">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Nombre" Binding="{Binding Name}" Width="220"/>
+                  <DataGridTextColumn Header="Categoría" Binding="{Binding Category}" Width="112"/>
+                  <DataGridTextColumn Header="Comisión" Binding="{Binding CommissionDisplay}" Width="96"/>
+                  <DataGridTextColumn Header="Efectivo" Binding="{Binding CashRetentionPercent, StringFormat={}{0:0.##}%}" Width="86"/>
+                  <DataGridTextColumn Header="Tarjeta" Binding="{Binding CardRetentionPercent, StringFormat={}{0:0.##}%}" Width="86"/>
+                  <DataGridTextColumn Header="AMEX" Binding="{Binding AmexRetentionPercent, StringFormat={}{0:0.##}%}" Width="76"/>
+                  <DataGridTextColumn Header="Vigencia" Binding="{Binding EffectiveRange}" Width="128"/>
+                  <DataGridTextColumn Header="Estado" Binding="{Binding StatusText}" Width="92"/>
+                  <DataGridTemplateColumn Header="Acción" Width="330">
+                    <DataGridTemplateColumn.CellTemplate>
+                      <DataTemplate>
+                        <WrapPanel>
+                          <Button Content="Cambiar comisión" Padding="8,4" Margin="2" ToolTip="Cambio rápido con confirmación, motivo y auditoría." Click="QuickCommission_Click"/>
+                          <Button Content="Probar" Padding="8,4" Margin="2" ToolTip="Prueba esta regla en el simulador." Click="RowSimulate_Click"/>
+                          <Button Content="Historial" Padding="8,4" Margin="2" ToolTip="Ver historial de cambios." Click="ViewHistory_Click"/>
+                        </WrapPanel>
+                      </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                  </DataGridTemplateColumn>
+                </DataGrid.Columns>
+              </DataGrid>
+            </DockPanel>
+          </Border>
+
+          <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns"/>
+
+          <Border Grid.Column="2" Style="{StaticResource PanelCard}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <StackPanel>
+                <TextBlock Text="Editar regla" FontSize="18" FontWeight="Black" Foreground="#16326B" Margin="0,0,0,4"/>
+                <TextBlock x:Name="EditorHint" Text="Selecciona una fila o crea una regla nueva. Los cambios siempre piden motivo y quedan auditados." Foreground="#516175" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                <TextBlock Text="Información" FontWeight="Black" Foreground="#0F3E95" Margin="0,4,0,8"/>
+                <TextBlock Text="Categoría"/><ComboBox x:Name="EditCategory" ToolTip="Tipo de regla: transporte, forma de pago, guía, joyería, tequila, dejada o gasto." Margin="0,2,0,8">
+                  <ComboBoxItem Content="TRANSPORTE"/><ComboBoxItem Content="FORMA_PAGO"/><ComboBoxItem Content="GENERAL"/><ComboBoxItem Content="GUIA"/><ComboBoxItem Content="JOYERIA"/><ComboBoxItem Content="TEQUILA"/><ComboBoxItem Content="DEJADA"/><ComboBoxItem Content="GASTO"/>
+                </ComboBox>
+                <TextBlock Text="Clave"/><TextBox x:Name="EditCode" ToolTip="Identificador único de la regla, por ejemplo TAXI VERDE NACIONAL o MERCADO PAGO." Margin="0,2,0,8"/>
+                <TextBlock Text="Nombre"/><TextBox x:Name="EditName" ToolTip="Nombre claro que verá el usuario." Margin="0,2,0,8"/>
+                <TextBlock Text="Porcentajes" FontWeight="Black" Foreground="#0F3E95" Margin="0,8,0,8"/>
+                <UniformGrid Columns="2">
+                  <StackPanel Margin="0,0,6,8"><TextBlock Text="Comisión %"/><TextBox x:Name="EditCommission" ToolTip="Porcentaje que recibe la unidad o guía según esta regla. Escribe 10 para 10%."/></StackPanel>
+                  <StackPanel Margin="6,0,0,8"><TextBlock Text="Efectivo %"/><TextBox x:Name="EditCash" ToolTip="Retención para pago en efectivo. Normalmente 0."/></StackPanel>
+                  <StackPanel Margin="0,0,6,8"><TextBlock Text="Tarjeta %"/><TextBox x:Name="EditCard" ToolTip="Porcentaje que se descuenta al pago con tarjeta normal."/></StackPanel>
+                  <StackPanel Margin="6,0,0,8"><TextBlock Text="AMEX %"/><TextBox x:Name="EditAmex" ToolTip="Porcentaje que se descuenta en pagos AMEX."/></StackPanel>
+                </UniformGrid>
+                <TextBlock Text="Tipo de pago"/><ComboBox x:Name="EditPaymentKind" ToolTip="Clasifica la forma de pago para aplicar la retención correcta." Margin="0,2,0,8"><ComboBoxItem Content=""/><ComboBoxItem Content="EFECTIVO"/><ComboBoxItem Content="TARJETA_NORMAL"/><ComboBoxItem Content="AMEX"/><ComboBoxItem Content="DIVISA"/><ComboBoxItem Content="OTRO"/></ComboBox>
+                <TextBlock Text="Control" FontWeight="Black" Foreground="#0F3E95" Margin="0,8,0,8"/>
+                <UniformGrid Columns="2">
+                  <CheckBox x:Name="EditPayout" Content="Aplica dejada" ToolTip="Indica si la regla participa en cálculo de dejadas." IsChecked="True" Margin="0,0,6,8"/>
+                  <CheckBox x:Name="EditExpense" Content="Aplica gasto" ToolTip="Indica si se descuentan gastos asociados cuando existan." IsChecked="True" Margin="6,0,0,8"/>
+                </UniformGrid>
+                <TextBlock Text="Vigencia" FontWeight="Black" Foreground="#0F3E95" Margin="0,8,0,8"/>
+                <UniformGrid Columns="2">
+                  <StackPanel Margin="0,0,6,8"><TextBlock Text="Desde"/><DatePicker x:Name="EditFrom" ToolTip="Fecha desde la que debe utilizarse esta regla."/></StackPanel>
+                  <StackPanel Margin="6,0,0,8"><TextBlock Text="Hasta opcional"/><DatePicker x:Name="EditTo" ToolTip="Déjalo vacío si la regla queda vigente hasta nuevo aviso."/></StackPanel>
+                </UniformGrid>
+                <CheckBox x:Name="EditActive" Content="ACTIVO" ToolTip="Desmarca para desactivar sin borrar historial." IsChecked="True" Margin="0,0,0,8"/>
+                <TextBlock Text="Notas"/><TextBox x:Name="EditNotes" ToolTip="Notas internas para explicar la regla." Height="55" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,2,0,8"/>
+                <TextBlock Text="Motivo del cambio (obligatorio)"/><TextBox x:Name="EditReason" ToolTip="Explica por qué se hace el cambio. Se guarda en auditoría." Height="70" TextWrapping="Wrap" AcceptsReturn="True" Margin="0,2,0,10"/>
+                <Button x:Name="SaveRuleButton" Content="Guardar cambio" ToolTip="Muestra resumen, pide confirmación y guarda con auditoría." Style="{StaticResource PrimaryButton}" Click="SaveRule_Click"/>
+                <TextBlock x:Name="EditorMessage" TextWrapping="Wrap" Foreground="#B42318" Margin="0,10,0,0"/>
+              </StackPanel>
+            </ScrollViewer>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Probar comisión">
+        <Grid Margin="0,12,0,0">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="330" MinWidth="280" MaxWidth="420"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+          <Border Grid.Column="0" Style="{StaticResource PanelCard}" Margin="0,0,12,0">
+            <StackPanel>
+              <TextBlock Text="PROBAR COMISIÓN" FontSize="18" FontWeight="Black" Foreground="#16326B"/>
+              <TextBlock Text="1. Selecciona fecha"/><DatePicker x:Name="SimDate" ToolTip="Fecha con la que se buscará la regla vigente." Margin="0,2,0,8"/>
+              <TextBlock Text="2. Selecciona transporte/regla"/><TextBox x:Name="SimTransport" ToolTip="Escribe clave o nombre del transporte/regla." Margin="0,2,0,8"/>
+              <TextBlock Text="3. Escribe venta"/><TextBox x:Name="SimSale" ToolTip="Importe total de venta. Ejemplo: 1335." Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="Subtotal"/><TextBox x:Name="SimSubtotal" ToolTip="Si lo conoces, captura subtotal; si no, deja 0." Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="4. Selecciona forma de pago"/><TextBox x:Name="SimPayment" ToolTip="Ejemplo: Mercado Pago, MIFEL, AMEX o PESOS." Text="MERCADO PAGO" Margin="0,2,0,8"/>
+              <UniformGrid Columns="3">
+                <StackPanel Margin="0,0,4,8"><TextBlock Text="Efectivo"/><TextBox x:Name="SimCash" Text="0"/></StackPanel>
+                <StackPanel Margin="4,0,4,8"><TextBlock Text="Tarjeta"/><TextBox x:Name="SimCard" Text="0"/></StackPanel>
+                <StackPanel Margin="4,0,0,8"><TextBlock Text="AMEX"/><TextBox x:Name="SimAmex" Text="0"/></StackPanel>
+              </UniformGrid>
+              <TextBlock Text="Dejada"/><TextBox x:Name="SimPayout" Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="Gasto"/><TextBox x:Name="SimExpense" Text="0" Margin="0,2,0,8"/>
+              <WrapPanel>
+                <Button Content="5. Calcular" ToolTip="Calcula una comisión de prueba sin guardar venta." Style="{StaticResource PrimaryButton}" Click="Simulate_Click"/>
+                <Button Content="Limpiar" ToolTip="Restablece el simulador para iniciar otra prueba." Style="{StaticResource ActionButton}" Click="ClearSimulator_Click"/>
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+          <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns"/>
+          <Border Grid.Column="2" Style="{StaticResource PanelCard}">
+            <StackPanel>
+              <TextBlock Text="¿Cómo se calculó?" FontSize="18" FontWeight="Black" Foreground="#16326B" Margin="0,0,0,10"/>
+              <TextBlock x:Name="SimulationResult" TextWrapping="Wrap" FontSize="14" Foreground="#263A53"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Historial">
+        <Border Style="{StaticResource PanelCard}" Margin="0,12,0,0">
+          <DataGrid x:Name="AuditGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    Style="{StaticResource ResponsiveDataGrid}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Fecha" Binding="{Binding Date}" Width="160"/>
+              <DataGridTextColumn Header="Usuario" Binding="{Binding User}" Width="130"/>
+              <DataGridTextColumn Header="Categoría" Binding="{Binding Category}" Width="130"/>
+              <DataGridTextColumn Header="Clave" Binding="{Binding Code}" Width="160"/>
+              <DataGridTextColumn Header="Campo" Binding="{Binding FieldName}" Width="120"/>
+              <DataGridTextColumn Header="Anterior" Binding="{Binding PreviousValue}" Width="*"/>
+              <DataGridTextColumn Header="Nuevo" Binding="{Binding NewValue}" Width="*"/>
+              <DataGridTextColumn Header="Motivo" Binding="{Binding Reason}" Width="220"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Border>
+      </TabItem>
+
+      <TabItem Header="Opciones avanzadas">
+        <Border Style="{StaticResource PanelCard}" Margin="0,12,0,0">
+          <DataGrid x:Name="DiagnosticsGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    Style="{StaticResource ResponsiveDataGrid}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Fecha" Binding="{Binding Date}" Width="160"/>
+              <DataGridTextColumn Header="Severidad" Binding="{Binding Severity}" Width="100"/>
+              <DataGridTextColumn Header="Categoría" Binding="{Binding Category}" Width="130"/>
+              <DataGridTextColumn Header="Concepto" Binding="{Binding Concept}" Width="180"/>
+              <DataGridTextColumn Header="Detalle" Binding="{Binding Detail}" Width="*"/>
+              <DataGridTextColumn Header="Acción" Binding="{Binding Action}" Width="260"/>
+              <DataGridTextColumn Header="Fuente" Binding="{Binding Source}" Width="150"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Border>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</Window>

@@ -1,0 +1,106 @@
+<Window x:Class="ControlTaxiDesktop.PortalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Portal Desktop" Width="1220" Height="760" MinWidth="980" MinHeight="650"
+        WindowStartupLocation="CenterOwner" Background="{StaticResource WebBodyBrush}">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="#FFFDF9" BorderBrush="{StaticResource WebLineBrush}" BorderThickness="1" CornerRadius="24" Padding="20" Margin="0,0,0,14">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left">
+                    <TextBlock Text="PORTAL ADMINISTRATIVO LOCAL" FontSize="24" FontWeight="Black" Foreground="{StaticResource WebNavyBrush}"/>
+                    <TextBlock Text="Dashboard, operaciones, comisiones, vendedores, productos, catálogos y alta de operación sin navegador ni servidor." Foreground="{StaticResource WebMutedBrush}"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Base" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox x:Name="DatabaseBox" Width="160" SelectedIndex="0" Margin="0,0,12,0">
+                        <ComboBoxItem Content="compuadmoPlaza"/>
+                        <ComboBoxItem Content="joyeriaPlaza"/>
+                    </ComboBox>
+                    <DatePicker x:Name="WorkDatePicker" Width="145" Margin="0,0,12,0"/>
+                    <TextBox x:Name="SearchBox" Width="220" Margin="0,0,12,0" ToolTip="Buscar folio, vendedor, producto o cliente"/>
+                    <Button Content="Actualizar" Padding="14,7" Click="Refresh_Click"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <TabControl Grid.Row="1" x:Name="PortalTabs">
+            <TabItem Header="Dashboard">
+                <Grid Margin="8">
+                    <UniformGrid Columns="3" Rows="2">
+                        <Border Background="White" Margin="8" Padding="18" CornerRadius="8"><StackPanel><TextBlock Text="Operaciones" Foreground="#476275"/><TextBlock x:Name="OperationsCountText" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="White" Margin="8" Padding="18" CornerRadius="8"><StackPanel><TextBlock Text="Tickets" Foreground="#476275"/><TextBlock x:Name="TicketsCountText" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="White" Margin="8" Padding="18" CornerRadius="8"><StackPanel><TextBlock Text="Artesanías" Foreground="#476275"/><TextBlock x:Name="ArtesaniasText" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="White" Margin="8" Padding="18" CornerRadius="8"><StackPanel><TextBlock Text="Joyería" Foreground="#476275"/><TextBlock x:Name="JoyeriaText" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="White" Margin="8" Padding="18" CornerRadius="8"><StackPanel><TextBlock Text="Pagos" Foreground="#476275"/><TextBlock x:Name="PaymentsText" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+                        <Border Background="White" Margin="8" Padding="18" CornerRadius="8"><StackPanel><TextBlock Text="Gastos" Foreground="#476275"/><TextBlock x:Name="ExpensesText" FontSize="28" FontWeight="Bold"/></StackPanel></Border>
+                    </UniformGrid>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Operations">
+                <DataGrid x:Name="OperationsGrid" Margin="8" IsReadOnly="True" AutoGenerateColumns="True"/>
+            </TabItem>
+            <TabItem Header="Commissions">
+                <DataGrid x:Name="CommissionsGrid" Margin="8" IsReadOnly="True" AutoGenerateColumns="True"/>
+            </TabItem>
+            <TabItem Header="Vendors">
+                <DataGrid x:Name="VendorsGrid" Margin="8" IsReadOnly="True" AutoGenerateColumns="True"/>
+            </TabItem>
+            <TabItem Header="Products">
+                <DataGrid x:Name="ProductsGrid" Margin="8" IsReadOnly="True" AutoGenerateColumns="True"/>
+            </TabItem>
+            <TabItem Header="Catalogs">
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <GroupBox Header="Guías" Margin="0,0,8,0">
+                        <DataGrid x:Name="GuidesGrid" IsReadOnly="True" AutoGenerateColumns="True"/>
+                    </GroupBox>
+                    <GroupBox Header="Transportes" Grid.Column="1" Margin="8,0,0,0">
+                        <DataGrid x:Name="TransportsGrid" IsReadOnly="True" AutoGenerateColumns="True"/>
+                    </GroupBox>
+                </Grid>
+            </TabItem>
+            <TabItem Header="CreateOperation">
+                <ScrollViewer Margin="8">
+                    <Border Background="White" CornerRadius="8" Padding="18" MaxWidth="820" HorizontalAlignment="Left">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Vendedor" Grid.Row="0" VerticalAlignment="Center"/><TextBox x:Name="SellerBox" Grid.Row="0" Grid.Column="1" Margin="0,4"/>
+                            <TextBlock Text="Cliente / hotel" Grid.Row="1" VerticalAlignment="Center"/><TextBox x:Name="HotelBox" Grid.Row="1" Grid.Column="1" Margin="0,4"/>
+                            <TextBlock Text="Tipo operación" Grid.Row="2" VerticalAlignment="Center"/><TextBox x:Name="OperationTypeBox" Grid.Row="2" Grid.Column="1" Margin="0,4" Text="Venta"/>
+                            <TextBlock Text="Fecha" Grid.Row="3" VerticalAlignment="Center"/><DatePicker x:Name="SaleDatePicker" Grid.Row="3" Grid.Column="1" Margin="0,4"/>
+                            <TextBlock Text="Usuario" Grid.Row="4" VerticalAlignment="Center"/><TextBox x:Name="UserBox" Grid.Row="4" Grid.Column="1" Margin="0,4"/>
+                            <TextBlock Text="Guía" Grid.Row="5" VerticalAlignment="Center"/><TextBox x:Name="GuideBox" Grid.Row="5" Grid.Column="1" Margin="0,4"/>
+                            <TextBlock Text="Transporte" Grid.Row="6" VerticalAlignment="Center"/><TextBox x:Name="TransportBox" Grid.Row="6" Grid.Column="1" Margin="0,4"/>
+                            <TextBlock Text="Pasajeros" Grid.Row="7" VerticalAlignment="Center"/><TextBox x:Name="PassengerBox" Grid.Row="7" Grid.Column="1" Margin="0,4" Text="1"/>
+                            <TextBlock Text="Subtotal" Grid.Row="8" VerticalAlignment="Center"/><TextBox x:Name="SubtotalBox" Grid.Row="8" Grid.Column="1" Margin="0,4" Text="0"/>
+                            <TextBlock Text="IVA" Grid.Row="9" VerticalAlignment="Center"/><TextBox x:Name="TaxBox" Grid.Row="9" Grid.Column="1" Margin="0,4" Text="0"/>
+                            <TextBlock Text="Efectivo" Grid.Row="10" VerticalAlignment="Center"/><TextBox x:Name="CashBox" Grid.Row="10" Grid.Column="1" Margin="0,4" Text="0"/>
+                            <TextBlock Text="Tarjeta" Grid.Row="11" VerticalAlignment="Center"/><TextBox x:Name="CardBox" Grid.Row="11" Grid.Column="1" Margin="0,4" Text="0"/>
+                            <TextBlock Text="Dólares / TC" Grid.Row="12" VerticalAlignment="Center"/>
+                            <StackPanel Grid.Row="12" Grid.Column="1" Orientation="Horizontal" Margin="0,4"><TextBox x:Name="DollarsBox" Width="120" Text="0"/><TextBox x:Name="ExchangeRateBox" Width="120" Margin="8,0,0,0" Text="1"/></StackPanel>
+                            <TextBlock Text="Notas" Grid.Row="13" VerticalAlignment="Top" Margin="0,8,0,0"/><TextBox x:Name="NotesBox" Grid.Row="13" Grid.Column="1" Margin="0,4" Height="70" TextWrapping="Wrap" AcceptsReturn="True"/>
+                            <StackPanel Grid.Row="14" Grid.Column="1" Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button Content="Guardar operación local" Padding="14,8" Click="CreateOperation_Click"/>
+                                <TextBlock x:Name="CreateMessageText" Margin="14,7,0,0" Foreground="#0F8F83"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>
