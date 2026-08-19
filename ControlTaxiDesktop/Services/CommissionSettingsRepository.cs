@@ -403,8 +403,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await InsertSeedAsync(connection, "FORMA_PAGO", "MERCADO PAGO", "Mercado Pago", 0m, 0m, 19m, 0m, "TARJETA_NORMAL", "Clasificación inicial validada.");
         await InsertSeedAsync(connection, "FORMA_PAGO", "MIFEL", "MIFEL", 0m, 0m, 19m, 0m, "TARJETA_NORMAL", "Clasificación inicial validada.");
         await InsertSeedAsync(connection, "FORMA_PAGO", "TARJETA", "Tarjeta normal", 0m, 0m, 19m, 0m, "TARJETA_NORMAL", "Retención general de tarjeta.");
-        await InsertSeedAsync(connection, "FORMA_PAGO", "AMEX", "AMEX", 0m, 0m, 0m, 24m, "AMEX", "Retención especial AMEX.");
-        await InsertSeedAsync(connection, "FORMA_PAGO", "AMEXCO", "AMEXCO", 0m, 0m, 0m, 24m, "AMEX", "Retención especial AMEX.");
+        await InsertSeedAsync(connection, "FORMA_PAGO", "AMEX", "AMEX", 0m, 0m, 0m, 24m, "AMEX", "Retención especial AMEX. AMEXCO es lo mismo, no se siembra por separado (confirmado 2026-08-19).");
     }
 
     private static async Task SeedTransportsAsync(SqliteConnection connection)
@@ -419,7 +418,12 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         }
         await InsertSeedAsync(connection, "TRANSPORTE", "TURIBUS ADO", "TURIBUS ADO", 10m, 0m, 19m, 24m, "", "Semilla segura si el catálogo importado aún no existe.");
         await InsertSeedAsync(connection, "TRANSPORTE", "TURIBUS SALMORAN", "TURIBUS SALMORAN", 20m, 16m, 19m, 24m, "", "Semilla segura validada para SALMORAN.");
-        await InsertSeedAsync(connection, "TRANSPORTE", "MAJESTIC", "MAJESTIC / guía", 8m, 0m, 19m, 24m, "", "Semilla inicial para regla tipo guía.");
+        await InsertSeedAsync(connection, "TRANSPORTE", "MAJESTIC", "MAJESTIC EXPEDITIONS", 8m, 0m, 19m, 24m, "", "Semilla inicial para regla tipo guía.");
+        // Unidades de la tarifa oficial Plaza 28 sin fila propia en las tablas importadas
+        // (confirmado por Brandon 2026-08-19).
+        await InsertSeedAsync(connection, "TRANSPORTE", "TAXICAFE", "TAXI CAFE", 10m, 0m, 19m, 24m, "", "Unidad de la tarifa Plaza 28 (Puerto Morelos).");
+        await InsertSeedAsync(connection, "TRANSPORTE", "VANCAFE", "VAN CAFE", 10m, 0m, 19m, 24m, "", "Unidad de la tarifa Plaza 28 (Puerto Morelos).");
+        await InsertSeedAsync(connection, "TRANSPORTE", "TAXIAZUL", "TAXI AZUL", 10m, 0m, 19m, 24m, "", "Unidad de la tarifa Plaza 28 (Playa del Carmen).");
     }
 
     private static async Task SeedGuidesAsync(SqliteConnection connection)
@@ -449,10 +453,49 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            var code = Text(reader, 0);
+            var rawCode = Text(reader, 0);
+            if (ExcludedTransportCodes.Contains(rawCode.Trim()))
+                continue;
+            var code = CanonicalTransportCode(rawCode);
             var name = Text(reader, 1);
             await InsertSeedAsync(connection, "TRANSPORTE", string.IsNullOrWhiteSpace(code) ? name : code, name, Decimal(reader, 2), Decimal(reader, 3), Decimal(reader, 4), Decimal(reader, 5), "", "Migrado desde " + table + ".");
         }
+    }
+
+    // Las tablas importadas (mkt__dbo__transporte) traen claves cortas para algunas unidades
+    // que ya tienen una semilla fija con clave descriptiva mas abajo (ver SeedTransportsAsync).
+    // Sin este mapeo, cada arranque siembra las dos claves como si fueran unidades distintas
+    // y el catalogo se vuelve a duplicar solo. Confirmado por el usuario 2026-08-19.
+    private static readonly Dictionary<string, string> TransportCodeCanonicalMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["TURIBUS"] = "TURIBUS ADO",
+        ["SALMORAN"] = "TURIBUS SALMORAN",
+        // Taxi/Van Verde y Van Azul se unificaron (la comision no varia por nacional/extranjero
+        // ni gabacho/pocho, esa distincion solo aplica a la dejada por zona). Confirmado 2026-08-19.
+        ["TAXIV"] = "TAXIVERDE",
+        ["TAXIVG"] = "TAXIVERDE",
+        ["VANN"] = "VANVERDE",
+        ["VANE"] = "VANVERDE",
+        ["VANAG"] = "VANAZUL",
+        ["VANAP"] = "VANAZUL",
+    };
+
+    // Unidades que ya no forman parte del catalogo autorizado (confirmado por Brandon 2026-08-19
+    // contra la tarifa oficial de Plaza 28). Se excluyen de la siembra para que una instalacion
+    // nueva no las vuelva a traer desde las tablas importadas.
+    private static readonly HashSet<string> ExcludedTransportCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "MAYAN", "MKT:MAYAN",
+        "7 TOUR", "MKT:7 TOUR",
+        "TRANS", "MKT:TRANS",
+        "TAXI", "MKT:TAXI",
+        "VAN", "MKT:VAN",
+    };
+
+    private static string CanonicalTransportCode(string code)
+    {
+        var trimmed = code.Trim();
+        return TransportCodeCanonicalMap.TryGetValue(trimmed, out var canonical) ? canonical : trimmed;
     }
 
     private static async Task SeedConceptAsync(SqliteConnection connection, string category, string code, string name, decimal commission, string notes) =>

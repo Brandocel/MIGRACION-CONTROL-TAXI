@@ -134,7 +134,12 @@ public static class CascoCredentialStore
 
     private static string AppRoot()
     {
+        // Recorre hasta la raiz del disco y se queda con la coincidencia MAS ALTA (no la primera),
+        // porque el build copia SyncTaxi\sync.casco.config.json dentro de la propia carpeta
+        // bin\Release\net9.0-windows: si nos quedamos con la primera coincidencia, la busqueda se
+        // detiene ahi mismo y nunca sube hasta la carpeta real del proyecto donde vive Config\.
         var current = new DirectoryInfo(AppContext.BaseDirectory);
+        string? found = null;
         while (current is not null)
         {
             if ((string.Equals(current.Name, "Desktop", StringComparison.OrdinalIgnoreCase)
@@ -142,18 +147,21 @@ public static class CascoCredentialStore
                 && current.Parent is not null
                 && (File.Exists(Path.Combine(current.Parent.FullName, "appsettings.production.json"))
                     || File.Exists(Path.Combine(current.Parent.FullName, "SyncTaxi", "sync.casco.config.json"))))
-                return current.Parent.FullName;
-
-            if (File.Exists(Path.Combine(current.FullName, "CONTROL TAXI.sln"))
+            {
+                found = current.Parent.FullName;
+            }
+            else if (File.Exists(Path.Combine(current.FullName, "CONTROL TAXI.sln"))
                 || File.Exists(Path.Combine(current.FullName, "appsettings.production.json"))
                 || File.Exists(Path.Combine(current.FullName, "SyncTaxi", "sync.casco.config.json"))
                 || File.Exists(Path.Combine(current.FullName, "Tools", "ControlTaxiDesktop.Tools.exe"))
                 || File.Exists(Path.Combine(current.FullName, "Desktop", "ControlTaxiDesktop.exe")))
-                return current.FullName;
+            {
+                found = current.FullName;
+            }
 
             current = current.Parent;
         }
 
-        return AppContext.BaseDirectory;
+        return found ?? AppContext.BaseDirectory;
     }
 }

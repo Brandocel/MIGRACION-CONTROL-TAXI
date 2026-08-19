@@ -46,12 +46,12 @@ public static class Plaza28CredentialStore
 
         try
         {
-            var path = GetCredentialCandidatePaths()
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault(File.Exists);
+            var candidates = GetCredentialCandidatePaths().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var path = candidates.FirstOrDefault(File.Exists);
             if (path is null)
             {
-                error = "No existe una credencial guardada de Plaza 28.";
+                var detail = string.Join(" | ", candidates.Select(c => $"{c} exists={File.Exists(c)}"));
+                error = $"No existe una credencial guardada de Plaza 28. BaseDirectory={AppContext.BaseDirectory} Candidatos: {detail}";
                 return false;
             }
 
@@ -140,7 +140,12 @@ public static class Plaza28CredentialStore
 
     private static string AppRoot()
     {
+        // Recorre hasta la raiz del disco y se queda con la coincidencia MAS ALTA (no la primera),
+        // porque el build copia SyncTaxi_Plaza28\sync.plaza28.config.json dentro de la propia carpeta
+        // bin\Release\net9.0-windows: si nos quedamos con la primera coincidencia, la busqueda se
+        // detiene ahi mismo y nunca sube hasta la carpeta real del proyecto donde vive Config\.
         var current = new DirectoryInfo(AppContext.BaseDirectory);
+        string? found = null;
         while (current is not null)
         {
             if ((string.Equals(current.Name, "Desktop", StringComparison.OrdinalIgnoreCase)
@@ -150,22 +155,21 @@ public static class Plaza28CredentialStore
                     || File.Exists(Path.Combine(current.Parent.FullName, "branches.production.json"))
                     || File.Exists(Path.Combine(current.Parent.FullName, "SyncTaxi_Plaza28", "sync.plaza28.config.json"))))
             {
-                return current.Parent.FullName;
+                found = current.Parent.FullName;
             }
-
-            if (File.Exists(Path.Combine(current.FullName, "CONTROL TAXI.sln"))
+            else if (File.Exists(Path.Combine(current.FullName, "CONTROL TAXI.sln"))
                 || File.Exists(Path.Combine(current.FullName, "appsettings.production.json"))
                 || File.Exists(Path.Combine(current.FullName, "branches.production.json"))
                 || File.Exists(Path.Combine(current.FullName, "SyncTaxi_Plaza28", "sync.plaza28.config.json"))
                 || File.Exists(Path.Combine(current.FullName, "Tools", "ControlTaxiDesktop.Tools.exe"))
                 || File.Exists(Path.Combine(current.FullName, "Desktop", "ControlTaxiDesktop.exe")))
             {
-                return current.FullName;
+                found = current.FullName;
             }
 
             current = current.Parent;
         }
 
-        return AppContext.BaseDirectory;
+        return found ?? AppContext.BaseDirectory;
     }
 }

@@ -28,6 +28,46 @@ public partial class App : Application
             args.Handled = true;
         };
 
+        if (eventArgs.Args.Contains("--diag-sql", StringComparer.OrdinalIgnoreCase))
+        {
+            var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
+            Directory.CreateDirectory(logDir);
+            var logPath = Path.Combine(logDir, "diag-sql.txt");
+            var lines = new List<string>();
+            try
+            {
+                var source = LocalSqlServerSource.TryLoad();
+                if (source is null)
+                {
+                    lines.Add("TryLoad() devolvio null: no encontro appsettings.json ni coincidio con Plaza28Production.");
+                }
+                else
+                {
+                    lines.Add($"PosDatabase={source.PosDatabase} AppDatabase={source.AppDatabase} CompuadmoDatabase={source.CompuadmoDatabase} JoyeriaDatabase={source.JoyeriaDatabase}");
+                    try
+                    {
+                        await using var connection = await source.OpenPosAsync();
+                        lines.Add($"OpenPosAsync OK. DataSource={connection.DataSource} Database={connection.Database} ServerVersion={connection.ServerVersion}");
+                        await using var command = connection.CreateCommand();
+                        command.CommandText = "SELECT COUNT(*) FROM dbo.RelacionTicketTaxista WHERE FolioOperacion = '4242' OR FolioApp = '4242';";
+                        var count = await command.ExecuteScalarAsync();
+                        lines.Add($"RelacionTicketTaxista folio 4242 count={count}");
+                    }
+                    catch (Exception ex)
+                    {
+                        lines.Add($"OpenPosAsync FALLO: {ex.GetType().Name}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                lines.Add($"Excepcion general: {ex.GetType().Name}: {ex.Message}");
+            }
+            await File.WriteAllLinesAsync(logPath, lines);
+            Shutdown(0);
+            return;
+        }
+
         if (eventArgs.Args.Contains("--init-local-db", StringComparer.OrdinalIgnoreCase))
         {
             var database = new LocalDatabase();

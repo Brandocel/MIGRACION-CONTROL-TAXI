@@ -2957,9 +2957,18 @@ public partial class OperationsWindow : Window
         RefreshBadgeBulkState();
     }
 
+    private void SetRelationSearchStatus(string text, string colorHex)
+    {
+        if (RelationSearchStatusText is null || RelationSearchStatusBadge is null)
+            return;
+        RelationSearchStatusText.Text = text;
+        RelationSearchStatusBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
+    }
+
     private async Task LoadRelationsAsync()
     {
         _windowCts.Token.ThrowIfCancellationRequested();
+        SetRelationSearchStatus("Buscando...", "#F2A93B");
         var autoSelectSingleResult = _autoSelectSingleRelationSearchResult;
         _autoSelectSingleRelationSearchResult = false;
         var currentBranchCode = _currentBranch?.Code ?? _branchCode;
@@ -2973,15 +2982,23 @@ public partial class OperationsWindow : Window
         var keepPos = RelationPosFolio.Text;
         _relationDetailsCache.Clear();
         IReadOnlyList<LocalRelation> rows;
-        if (string.Equals(currentBranchCode, "CV", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            var password = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD") ?? string.Empty;
-            rows = await GetCascoRelationsDataAsync();
-            Debug.WriteLine($"[LoadRelationsAsync] branch=CV provider=CascoReadOnlyDataProvider count={rows.Count} firstFolioOriginal={rows.FirstOrDefault()?.OperationFolio ?? ""} firstFolioLocal={rows.FirstOrDefault()?.AppFolio ?? ""} firstTaxista={rows.FirstOrDefault()?.Driver ?? ""} firstSitio={rows.FirstOrDefault()?.Site ?? ""}");
+            if (string.Equals(currentBranchCode, "CV", StringComparison.OrdinalIgnoreCase))
+            {
+                var password = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD") ?? string.Empty;
+                rows = await GetCascoRelationsDataAsync();
+                Debug.WriteLine($"[LoadRelationsAsync] branch=CV provider=CascoReadOnlyDataProvider count={rows.Count} firstFolioOriginal={rows.FirstOrDefault()?.OperationFolio ?? ""} firstFolioLocal={rows.FirstOrDefault()?.AppFolio ?? ""} firstTaxista={rows.FirstOrDefault()?.Driver ?? ""} firstSitio={rows.FirstOrDefault()?.Site ?? ""}");
+            }
+            else
+            {
+                rows = await _operations.GetRelationsAsync(RelationSearch.Text, RelationStart.SelectedDate, RelationEnd.SelectedDate, includeFinancialDetails: true, siteName: GetCurrentSiteName());
+            }
         }
-        else
+        catch
         {
-            rows = await _operations.GetRelationsAsync(RelationSearch.Text, RelationStart.SelectedDate, RelationEnd.SelectedDate, includeFinancialDetails: true, siteName: GetCurrentSiteName());
+            SetRelationSearchStatus("Error al buscar", "#D9534F");
+            throw;
         }
 
         if (_isClosing || _windowCts.IsCancellationRequested)
@@ -2993,6 +3010,9 @@ public partial class OperationsWindow : Window
             Debug.WriteLine($"[OperationsWindow] LoadRelationsAsync grid row folio={row.AppFolio}/{row.OperationFolio} payoutStatus={row.PayoutStatus} payoutDate={row.PayoutDate} payoutTicket={row.PayoutTicket} payoutUser={row.PayoutUser}");
         }
         RelationsGrid.ItemsSource = rows;
+        SetRelationSearchStatus(
+            rows.Count == 0 ? "Sin resultados" : $"{rows.Count} resultado{(rows.Count == 1 ? "" : "s")}",
+            rows.Count == 0 ? "#8A93A6" : "#0F4AB6");
         var selected = rows.FirstOrDefault(x =>
             (!string.IsNullOrWhiteSpace(keepApp) && string.Equals(x.AppFolio, keepApp, StringComparison.OrdinalIgnoreCase))
             || (!string.IsNullOrWhiteSpace(keepOperation) && string.Equals(x.OperationFolio, keepOperation, StringComparison.OrdinalIgnoreCase))

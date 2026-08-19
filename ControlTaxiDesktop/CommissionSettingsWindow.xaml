@@ -178,9 +178,9 @@
                 <TextBlock Text="Buscar comisión..." Foreground="#516175" FontWeight="Bold" Margin="4,0,0,3"/>
                 <WrapPanel>
                   <TextBox x:Name="SearchBox" Width="360" Margin="4" ToolTip="Escribe MAJESTIC, TURIBUS, SALMORAN, MERCADO, AMEX, etc. Filtra inmediatamente." TextChanged="SearchBox_TextChanged"/>
-                  <ComboBox x:Name="CategoryFilter" Width="180" Margin="4" ToolTip="Filtra por tipo de regla." SelectionChanged="CategoryFilter_SelectionChanged">
-                    <ComboBoxItem Content="Todos" IsSelected="True"/>
-                    <ComboBoxItem Content="Transportes"/>
+                  <ComboBox x:Name="CategoryFilter" Width="180" Margin="4" ToolTip="Filtra por tipo de regla." SelectionChanged="CategoryFilter_SelectionChanged" Visibility="Collapsed">
+                    <ComboBoxItem Content="Todos"/>
+                    <ComboBoxItem Content="Transportes" IsSelected="True"/>
                     <ComboBoxItem Content="Formas de pago"/>
                     <ComboBoxItem Content="Joyería"/>
                     <ComboBoxItem Content="Tequila"/>
@@ -284,18 +284,15 @@
           <Border Grid.Column="0" Style="{StaticResource PanelCard}" Margin="0,0,12,0">
             <StackPanel>
               <TextBlock Text="PROBAR COMISIÓN" FontSize="18" FontWeight="Black" Foreground="#16326B"/>
-              <TextBlock Text="1. Selecciona fecha"/><DatePicker x:Name="SimDate" ToolTip="Fecha con la que se buscará la regla vigente." Margin="0,2,0,8"/>
-              <TextBlock Text="2. Selecciona transporte/regla"/><TextBox x:Name="SimTransport" ToolTip="Escribe clave o nombre del transporte/regla." Margin="0,2,0,8"/>
-              <TextBlock Text="3. Escribe venta"/><TextBox x:Name="SimSale" ToolTip="Importe total de venta. Ejemplo: 1335." Text="0" Margin="0,2,0,8"/>
-              <TextBlock Text="Subtotal"/><TextBox x:Name="SimSubtotal" ToolTip="Si lo conoces, captura subtotal; si no, deja 0." Text="0" Margin="0,2,0,8"/>
-              <TextBlock Text="4. Selecciona forma de pago"/><TextBox x:Name="SimPayment" ToolTip="Ejemplo: Mercado Pago, MIFEL, AMEX o PESOS." Text="MERCADO PAGO" Margin="0,2,0,8"/>
-              <UniformGrid Columns="3">
-                <StackPanel Margin="0,0,4,8"><TextBlock Text="Efectivo"/><TextBox x:Name="SimCash" Text="0"/></StackPanel>
-                <StackPanel Margin="4,0,4,8"><TextBlock Text="Tarjeta"/><TextBox x:Name="SimCard" Text="0"/></StackPanel>
-                <StackPanel Margin="4,0,0,8"><TextBlock Text="AMEX"/><TextBox x:Name="SimAmex" Text="0"/></StackPanel>
-              </UniformGrid>
-              <TextBlock Text="Dejada"/><TextBox x:Name="SimPayout" Text="0" Margin="0,2,0,8"/>
-              <TextBlock Text="Gasto"/><TextBox x:Name="SimExpense" Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="1. Selecciona transporte/regla"/>
+              <ComboBox x:Name="SimTransport" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" DisplayMemberPath="Name" TextSearch.TextPath="Name" ToolTip="Elige la unidad del catálogo o escribe para buscar." Margin="0,2,0,8"/>
+              <TextBlock Text="2. Escribe venta"/><TextBox x:Name="SimSale" ToolTip="Importe total de venta. Ejemplo: 1335." Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="3. Selecciona forma de pago"/>
+              <ComboBox x:Name="SimPayment" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" DisplayMemberPath="Name" TextSearch.TextPath="Name" ToolTip="Elige la forma de pago del catálogo o escribe para buscar." Margin="0,2,0,8"/>
+              <TextBlock Text="Dejada (opcional)"/><TextBox x:Name="SimPayout" Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="Gasto (opcional)"/><TextBox x:Name="SimExpense" Text="0" Margin="0,2,0,8"/>
+              <TextBlock Text="Subtotal (opcional, solo si es distinto a la venta)"/><TextBox x:Name="SimSubtotal" Text="0" Margin="0,2,0,8"/>
+              <DatePicker x:Name="SimDate" Visibility="Collapsed"/>
               <WrapPanel>
                 <Button Content="5. Calcular" ToolTip="Calcula una comisión de prueba sin guardar venta." Style="{StaticResource PrimaryButton}" Click="Simulate_Click"/>
                 <Button Content="Limpiar" ToolTip="Restablece el simulador para iniciar otra prueba." Style="{StaticResource ActionButton}" Click="ClearSimulator_Click"/>

@@ -44,6 +44,19 @@ public partial class CommissionSettingsWindow : Window
         await RefreshRulesAsync();
         await RefreshAuditAsync();
         await RefreshDiagnosticsAsync();
+        await RefreshSimulatorCatalogsAsync();
+    }
+
+    private async Task RefreshSimulatorCatalogsAsync()
+    {
+        var transportItem = SimTransport.SelectedItem;
+        var paymentItem = SimPayment.SelectedItem;
+        SimTransport.ItemsSource = (await _settings.GetRulesAsync("TRANSPORTE", active: true))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        SimPayment.ItemsSource = (await _settings.GetRulesAsync("FORMA_PAGO", active: true))
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        SimTransport.SelectedItem = transportItem;
+        SimPayment.SelectedItem = paymentItem;
     }
 
     private async Task RefreshSummaryAsync()
@@ -273,9 +286,9 @@ public partial class CommissionSettingsWindow : Window
                 Number(SimSale.Text),
                 Number(SimSubtotal.Text),
                 SimPayment.Text,
-                Number(SimCash.Text),
-                Number(SimCard.Text),
-                Number(SimAmex.Text),
+                0m,
+                0m,
+                0m,
                 Number(SimPayout.Text),
                 Number(SimExpense.Text),
                 string.Empty));
@@ -394,13 +407,12 @@ public partial class CommissionSettingsWindow : Window
     private void ClearSimulator_Click(object sender, RoutedEventArgs e)
     {
         SimDate.SelectedDate = DateTime.Today;
-        SimTransport.Clear();
+        SimTransport.SelectedIndex = -1;
+        SimTransport.Text = string.Empty;
         SimSale.Text = "0";
         SimSubtotal.Text = "0";
+        SimPayment.SelectedIndex = -1;
         SimPayment.Text = "MERCADO PAGO";
-        SimCash.Text = "0";
-        SimCard.Text = "0";
-        SimAmex.Text = "0";
         SimPayout.Text = "0";
         SimExpense.Text = "0";
         SimulationResult.Text = "Listo para una nueva prueba.";
@@ -450,9 +462,6 @@ public partial class CommissionSettingsWindow : Window
         SimPayment.Text = rule.Category == "FORMA_PAGO" ? rule.Code : "MERCADO PAGO";
         SimSale.Text = "1335";
         SimSubtotal.Text = "0";
-        SimCash.Text = "0";
-        SimCard.Text = "1335";
-        SimAmex.Text = "0";
         SimPayout.Text = "0";
         SimExpense.Text = "0";
     }

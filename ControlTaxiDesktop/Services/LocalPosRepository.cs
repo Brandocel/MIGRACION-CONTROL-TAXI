@@ -3143,7 +3143,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         if (catalog.Count == 0 || string.IsNullOrWhiteSpace(transportType))
             return ImportedTransportInfo.Empty;
 
-        var key = NormalizeTransportLookup(transportType);
+        var key = ResolveTransportAlias(NormalizeTransportLookup(transportType));
         var effectiveCatalog = catalog
             .Where(row => IsTransportRuleEffective(row, operationDate))
             .OrderByDescending(row => row.Configured)
@@ -3188,6 +3188,20 @@ public sealed class LocalPosRepository(LocalDatabase database)
             .Select(char.ToUpperInvariant)
             .ToArray());
     }
+
+    // Errores de captura conocidos en el punto de venta (confirmados por el usuario 2026-08-19):
+    // la unidad real llega mal escrita y sin este alias caeria al valor por defecto en vez de
+    // usar la comision configurada de la unidad correcta. Claves ya normalizadas (sin espacios,
+    // mayusculas) con NormalizeTransportLookup.
+    private static readonly Dictionary<string, string> TransportLookupAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["TAXOVERDE"] = "TAXIVERDENACIONAL",
+        ["VANTRANSPOTADORA"] = "VANTRANSPORTADORAS",
+        ["VANTRASNPOTADORA"] = "VANTRANSPORTADORAS",
+    };
+
+    private static string ResolveTransportAlias(string normalizedKey) =>
+        TransportLookupAliases.TryGetValue(normalizedKey, out var canonical) ? canonical : normalizedKey;
 
     private static decimal ResolveAuthoritativeDiscount(AuthoritativeCommissionRow row, PaymentKind kind)
     {

@@ -192,11 +192,15 @@ public sealed class LocalUserRepository(LocalDatabase database)
         if (branch is null || string.IsNullOrWhiteSpace(branch.SqlServer) || string.IsNullOrWhiteSpace(branch.Database))
             return AuthenticationResult.Failure(AuthenticationFailureReason.DatabaseStructureError);
 
-        Plaza28CredentialStore.TryApplyToEnvironment(out _);
+        Plaza28CredentialStore.TryApplyToEnvironment(out var credentialLoadError);
 
         var sqlPassword = Environment.GetEnvironmentVariable("PLAZA28_SQL_PASSWORD");
         if (string.IsNullOrWhiteSpace(sqlPassword))
+        {
+            await new LocalErrorLogger(database).LogAsync("Sistema", "Login", "AuthenticatePlaza28Async.TryApplyToEnvironment",
+                new InvalidOperationException(string.IsNullOrWhiteSpace(credentialLoadError) ? "Credencial vacia sin detalle." : credentialLoadError));
             return AuthenticationResult.Failure(AuthenticationFailureReason.RemoteServerUnavailable);
+        }
 
         var sqlServer = Environment.GetEnvironmentVariable("PLAZA28_SQL_SERVER");
         var sqlDatabase = Environment.GetEnvironmentVariable("PLAZA28_SQL_DATABASE");
@@ -246,12 +250,14 @@ public sealed class LocalUserRepository(LocalDatabase database)
             var session = new DesktopSession(user.Value.UserName, user.Value.Role, permissions, false, "P28");
             return AuthenticationResult.SuccessResult(session);
         }
-        catch (SqlException)
+        catch (SqlException ex)
         {
+            await new LocalErrorLogger(database).LogAsync("Sistema", "Login", "AuthenticatePlaza28Async", ex);
             return AuthenticationResult.Failure(AuthenticationFailureReason.RemoteServerUnavailable);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            await new LocalErrorLogger(database).LogAsync("Sistema", "Login", "AuthenticatePlaza28Async", ex);
             return AuthenticationResult.Failure(AuthenticationFailureReason.RemoteServerUnavailable);
         }
     }
