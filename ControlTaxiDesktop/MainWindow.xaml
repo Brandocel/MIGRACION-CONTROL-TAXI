@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Control Taxi Desktop" Width="1260" Height="820" MinWidth="980" MinHeight="660"
         ResizeMode="CanResize" SizeToContent="Manual" WindowStyle="SingleBorderWindow"
+        WindowState="Maximized"
         WindowStartupLocation="CenterScreen" Background="#12324A"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Window.Resources>

@@ -660,7 +660,8 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     Math.Max(row.CommissionAmount - row.PaidAmount, 0m),
                     ResolveCommissionStatus(row.CommissionAmount, row.PaidAmount),
                     row.Vendedor,
-                    row.Badge))
+                    row.Badge,
+                    row.PayoutStatus))
                 .ToArray();
             return FilterCommissionBrowserRows(importedAuthoritative, search, start, end).ToArray();
         }
@@ -720,7 +721,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     appRow.CommissionPaidDate,
                     breakdown ?? new TicketPaymentBreakdown(ticket.Total, 0m, 0m, "SIN PAGO"),
                     expense,
-                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date)));
+                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date))
+                {
+                    // El estatus de la dejada viaja aparte del de la comision.
+                    PayoutStatus = appRow.PayoutStatus
+                });
             }
         }
 
@@ -2341,41 +2346,68 @@ public sealed class LocalPosRepository(LocalDatabase database)
 
         var transportCatalog = await ReadTransportCatalogAsync(posConnection);
         var appRows = await ReadAuthoritativeAppRowsAsync(posConnection, search, start, end);
-        foreach (var appRow in appRows)
+
+        // Resuelve los tickets de tienda de cada registro (esto si depende de cada fila:
+        // usa folios + nombre de taxista + fecha para encontrar el ticket correcto), pero
+        // NO consulta pagos ni gastos todavia. Antes, pagos/gastos se pedian a SQL Server
+        // uno por uno dentro de este mismo ciclo (hasta 2 consultas extra por registro,
+        // ~80 idas y vueltas con 40 registros). Ahora se juntan todos los tickets aqui y
+        // se piden en un solo viaje por tipo de dato, igual que ya hace la pantalla de
+        // Relaciones. Confirmado con el usuario 2026-08-20.
+        var pending = new List<(AuthoritativeAppRow AppRow, List<StoreTicketRow> CommissionableTickets)>();
+        var allTicketNumbers = new List<string>();
+        var storeTicketsByRow = await LoadStoreTicketsForAllRowsAsync(compuConnection, joyeriaConnection, appRows);
+        for (var rowIndex = 0; rowIndex < appRows.Count; rowIndex++)
         {
-            var storeTickets = await LoadStoreTicketsForKeysAsync(
-                compuConnection,
-                joyeriaConnection,
-                appRow.Keys,
-                appRow.PosFolio,
-                appRow.DriverName,
-                appRow.Date,
-                allowObservationFallback: IsPlaza28SqlMode && !appRow.HasLinkedOperationFolio);
+            var appRow = appRows[rowIndex];
+            var storeTickets = storeTicketsByRow[rowIndex];
+            if (storeTickets is null)
+            {
+                // Sin match directo: solo aqui se usa el respaldo por observaciones, que si
+                // depende del taxista y la fecha de cada registro.
+                storeTickets = IsPlaza28SqlMode && !appRow.HasLinkedOperationFolio
+                    ? await LoadStoreTicketsForKeysAsync(
+                        compuConnection,
+                        joyeriaConnection,
+                        appRow.Keys,
+                        appRow.PosFolio,
+                        appRow.DriverName,
+                        appRow.Date,
+                        allowObservationFallback: true)
+                    : [];
+            }
             var commissionableTickets = storeTickets
                 .Where(x => IsCommissionableStoreTicket(x.Ticket))
                 .ToList();
             if (commissionableTickets.Count == 0) continue;
 
-            var ticketNumbers = commissionableTickets.Select(x => x.Ticket).ToArray();
-            Dictionary<string, TicketPaymentBreakdown> payments;
-            try
-            {
-                payments = await LoadTicketPaymentBreakdownsAsync(compuConnection, joyeriaConnection, ticketNumbers);
-            }
-            catch
-            {
-                payments = new Dictionary<string, TicketPaymentBreakdown>(StringComparer.OrdinalIgnoreCase);
-            }
+            pending.Add((appRow, commissionableTickets));
+            allTicketNumbers.AddRange(commissionableTickets.Select(x => x.Ticket));
+        }
 
-            Dictionary<string, StoreExpenseBreakdown> expenses;
-            try
-            {
-                expenses = await LoadTicketExpenseBreakdownsAsync(compuConnection, joyeriaConnection, ticketNumbers);
-            }
-            catch
-            {
-                expenses = new Dictionary<string, StoreExpenseBreakdown>(StringComparer.OrdinalIgnoreCase);
-            }
+        var distinctTicketNumbers = allTicketNumbers.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        Dictionary<string, TicketPaymentBreakdown> payments;
+        try
+        {
+            payments = await LoadTicketPaymentBreakdownsAsync(compuConnection, joyeriaConnection, distinctTicketNumbers);
+        }
+        catch
+        {
+            payments = new Dictionary<string, TicketPaymentBreakdown>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        Dictionary<string, StoreExpenseBreakdown> expenses;
+        try
+        {
+            expenses = await LoadTicketExpenseBreakdownsAsync(compuConnection, joyeriaConnection, distinctTicketNumbers);
+        }
+        catch
+        {
+            expenses = new Dictionary<string, StoreExpenseBreakdown>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        foreach (var (appRow, commissionableTickets) in pending)
+        {
             foreach (var ticket in commissionableTickets)
             {
                 payments.TryGetValue(ticket.Ticket, out var breakdown);
@@ -2402,7 +2434,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     appRow.CommissionPaidDate,
                     breakdown ?? new TicketPaymentBreakdown(ticket.Total, 0m, 0m, "SIN PAGO"),
                     expense,
-                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date)));
+                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date))
+                {
+                    // El estatus de la dejada viaja aparte del de la comision.
+                    PayoutStatus = appRow.PayoutStatus
+                });
             }
         }
 
@@ -2513,7 +2549,19 @@ public sealed class LocalPosRepository(LocalDatabase database)
                  AND LTRIM(RTRIM(COALESCE(r.FolioOperacion, ''))) <> '0'
                 THEN CAST(1 AS bit)
                 ELSE CAST(0 AS bit)
-              END AS HasLinkedOperationFolio
+              END AS HasLinkedOperationFolio,
+              -- Estatus del pago de la DEJADA (el anticipo al taxista). Es independiente del
+              -- pago de la comision. Misma regla que usa el modulo de Relaciones
+              -- (LocalOperationsRepository): cuenta como pagada si hay fecha de pago o si el
+              -- estado dice PAGADO/PAGADA, mirando los dos juegos de columnas que conviven en
+              -- AppMovilRegistro (estado_pago_dejada y el payout_status anterior).
+              CASE
+                WHEN COALESCE(a.fecha_pago_dejada, a.payout_date) IS NOT NULL
+                  OR UPPER(COALESCE(a.estado_pago_dejada, a.payout_status, '')) IN ('PAGADO', 'PAGADA')
+                THEN 'PAGADA'
+                WHEN COALESCE(a.total, 0) <= 0 THEN 'SIN DEJADA'
+                ELSE 'PENDIENTE'
+              END AS PayoutStatus
             FROM {sqlSource.PosTable("AppMovilRegistro")} a
             OUTER APPLY
             (
@@ -2564,7 +2612,8 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 reader.IsDBNull(14) ? string.Empty : Convert.ToString(reader.GetValue(14), CultureInfo.InvariantCulture) ?? string.Empty,
                 reader.IsDBNull(15) ? string.Empty : Convert.ToString(reader.GetValue(15), CultureInfo.InvariantCulture) ?? string.Empty,
                 keys,
-                !reader.IsDBNull(16) && Convert.ToBoolean(reader.GetValue(16), CultureInfo.InvariantCulture)));
+                !reader.IsDBNull(16) && Convert.ToBoolean(reader.GetValue(16), CultureInfo.InvariantCulture),
+                reader.IsDBNull(17) ? string.Empty : Convert.ToString(reader.GetValue(17), CultureInfo.InvariantCulture) ?? string.Empty));
         }
         return result;
     }
@@ -2801,6 +2850,157 @@ public sealed class LocalPosRepository(LocalDatabase database)
             return "TURIBUS";
         return string.Empty;
     }
+
+    // Version por lotes de LoadStoreTicketsForKeysAsync: en vez de 2 consultas por registro
+    // (una a compuadmo y otra a joyeria), junta los folios y tickets de TODOS los registros y
+    // hace unas pocas consultas. Con un rango de fechas amplio esto pasa de cientos de idas y
+    // vueltas a SQL Server a un puñado. El resultado se reparte de vuelta por registro usando
+    // el folio que hizo match, que ahora viene en el SELECT.
+    private static async Task<List<StoreTicketRow>?[]> LoadStoreTicketsForAllRowsAsync(
+        SqlConnection compuConnection,
+        SqlConnection joyeriaConnection,
+        IReadOnlyList<AuthoritativeAppRow> appRows)
+    {
+        var matches = new List<StoreTicketMatch>();
+        matches.AddRange(await ReadStoreTicketMatchesAsync(compuConnection, "folioregistro", "folio_remision", appRows, false));
+        matches.AddRange(await ReadStoreTicketMatchesAsync(joyeriaConnection, "folio_registro", "COALESCE(folio_pedido, folio_factura)", appRows, true));
+
+        var byFolio = new Dictionary<string, List<StoreTicketMatch>>(StringComparer.OrdinalIgnoreCase);
+        var byTicket = new Dictionary<string, List<StoreTicketMatch>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var match in matches)
+        {
+            if (!string.IsNullOrWhiteSpace(match.MatchFolio))
+            {
+                if (!byFolio.TryGetValue(match.MatchFolio, out var folioBucket))
+                    byFolio[match.MatchFolio] = folioBucket = [];
+                folioBucket.Add(match);
+            }
+            if (!byTicket.TryGetValue(match.Ticket, out var ticketBucket))
+                byTicket[match.Ticket] = ticketBucket = [];
+            ticketBucket.Add(match);
+        }
+
+        // Indexado por posicion en appRows: dos registros distintos pueden compartir
+        // FolioOperacion, asi que ese campo no sirve como llave.
+        var result = new List<StoreTicketRow>?[appRows.Count];
+        for (var i = 0; i < appRows.Count; i++)
+        {
+            var appRow = appRows[i];
+            // Una misma fila fisica de remisioM puede llegar por folio y por ticket a la vez;
+            // el Id evita sumarla dos veces (la consulta original la traia una sola vez).
+            var seen = new HashSet<long>();
+            var rows = new List<StoreTicketMatch>();
+            foreach (var key in appRow.Keys)
+            {
+                if (!byFolio.TryGetValue(key, out var bucket)) continue;
+                foreach (var match in bucket)
+                    if (seen.Add(match.Id)) rows.Add(match);
+            }
+            if (!string.IsNullOrWhiteSpace(appRow.PosFolio) && byTicket.TryGetValue(appRow.PosFolio, out var ticketBucket))
+            {
+                foreach (var match in ticketBucket)
+                    if (seen.Add(match.Id)) rows.Add(match);
+            }
+            if (rows.Count == 0) continue;
+
+            result[i] = rows
+                .GroupBy(x => x.Ticket, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new StoreTicketRow(
+                    g.Key,
+                    g.Sum(x => x.Total),
+                    g.Sum(x => x.VentaTienda),
+                    g.Sum(x => x.VentaJoyeria)))
+                .ToList();
+        }
+        return result;
+    }
+
+    private static async Task<List<StoreTicketMatch>> ReadStoreTicketMatchesAsync(
+        SqlConnection connection,
+        string folioColumn,
+        string ticketColumn,
+        IReadOnlyList<AuthoritativeAppRow> appRows,
+        bool joyeria)
+    {
+        var keys = appRows.SelectMany(x => x.Keys).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var tickets = appRows.Select(x => x.PosFolio).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        // Se consulta por folio y por ticket en viajes distintos, asi que una misma fila fisica
+        // puede volver en ambos lotes. remisioM no expone aqui una llave unica, de modo que se
+        // cuentan las filas identicas por lado y se toma el MAXIMO, no la suma: eso reproduce
+        // exactamente lo que devolvia la consulta original con un solo OR (cada fila una vez).
+        var fromKeys = new List<StoreTicketMatch>();
+        var fromTickets = new List<StoreTicketMatch>();
+
+        // SQL Server topa en 2100 parametros por comando; se parte en bloques holgados.
+        const int chunkSize = 800;
+        for (var offset = 0; offset < keys.Length; offset += chunkSize)
+        {
+            var chunk = keys.Skip(offset).Take(chunkSize).ToArray();
+            await ReadChunkAsync($"CAST({folioColumn} AS nvarchar(60))", "@key", chunk, fromKeys);
+        }
+        for (var offset = 0; offset < tickets.Length; offset += chunkSize)
+        {
+            var chunk = tickets.Skip(offset).Take(chunkSize).ToArray();
+            await ReadChunkAsync($"CAST({ticketColumn} AS nvarchar(80))", "@tk", chunk, fromTickets);
+        }
+
+        var result = new List<StoreTicketMatch>();
+        var nextId = 0L;
+        var ticketGroups = fromTickets
+            .GroupBy(BuildStoreTicketMatchKey, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+        foreach (var group in fromKeys.GroupBy(BuildStoreTicketMatchKey, StringComparer.OrdinalIgnoreCase))
+        {
+            ticketGroups.Remove(group.Key, out var alsoFromTickets);
+            var copies = Math.Max(group.Count(), alsoFromTickets?.Count ?? 0);
+            var template = group.First();
+            for (var i = 0; i < copies; i++)
+                result.Add(template with { Id = nextId++ });
+        }
+        foreach (var group in ticketGroups.Values)
+        {
+            foreach (var match in group)
+                result.Add(match with { Id = nextId++ });
+        }
+        return result;
+
+        async Task ReadChunkAsync(string matchExpression, string parameterPrefix, IReadOnlyList<string> values, List<StoreTicketMatch> sink)
+        {
+            if (values.Count == 0) return;
+            await using var command = connection.CreateCommand();
+            var parameters = new List<string>(values.Count);
+            for (var i = 0; i < values.Count; i++)
+            {
+                var parameter = parameterPrefix + i.ToString(CultureInfo.InvariantCulture);
+                command.Parameters.AddWithValue(parameter, values[i]);
+                parameters.Add(parameter);
+            }
+            command.CommandText = $"""
+                SELECT CAST({folioColumn} AS nvarchar(60)) AS MatchFolio,
+                       CAST({ticketColumn} AS nvarchar(80)) AS Ticket,
+                       CAST(total AS decimal(18,2)) AS Total
+                FROM dbo.remisioM
+                WHERE {matchExpression} IN ({string.Join(",", parameters)})
+                  AND UPPER(LTRIM(RTRIM(COALESCE(estatus, '')))) NOT IN ('C', 'CANCELADO', 'CANCELADA');
+                """;
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var total = Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+                sink.Add(new StoreTicketMatch(
+                    0,
+                    reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
+                    reader.GetString(1),
+                    total,
+                    joyeria ? 0m : total,
+                    joyeria ? total : 0m));
+            }
+        }
+    }
+
+    private static string BuildStoreTicketMatchKey(StoreTicketMatch match)
+        => string.Create(CultureInfo.InvariantCulture, $"{match.MatchFolio}|{match.Ticket}|{match.Total:0.00}");
 
     private async Task<List<StoreTicketRow>> LoadStoreTicketsForKeysAsync(
         SqlConnection compuConnection,
@@ -3794,10 +3994,17 @@ public sealed class LocalPosRepository(LocalDatabase database)
         public decimal PayoutDeduction { get; set; }
         public decimal CommissionAmount { get; set; }
         public decimal PaidAmount { get; set; }
+
+        /// <summary>
+        /// Estatus del pago de la DEJADA al taxista. No tiene nada que ver con el pago de la
+        /// comision (CommissionAmount / PaidAmount): son dos pagos distintos.
+        /// </summary>
+        public string PayoutStatus { get; set; } = string.Empty;
     }
 
-    private sealed record AuthoritativeAppRow(string OperationFolio, string PosFolio, string FolioApp, string FolioOriginal, DateTime Date, string DriverName, string DriverCode, string TransportType, decimal Payout, decimal CommissionPaidControl, string CommissionPaidDate, string Hotel, int Passengers, string UnitNumber, string Badge, string Staff, IReadOnlyList<string> Keys, bool HasLinkedOperationFolio);
+    private sealed record AuthoritativeAppRow(string OperationFolio, string PosFolio, string FolioApp, string FolioOriginal, DateTime Date, string DriverName, string DriverCode, string TransportType, decimal Payout, decimal CommissionPaidControl, string CommissionPaidDate, string Hotel, int Passengers, string UnitNumber, string Badge, string Staff, IReadOnlyList<string> Keys, bool HasLinkedOperationFolio, string PayoutStatus = "");
     private sealed record StoreTicketRow(string Ticket, decimal Total, decimal VentaTienda, decimal VentaJoyeria);
+    private sealed record StoreTicketMatch(long Id, string MatchFolio, string Ticket, decimal Total, decimal VentaTienda, decimal VentaJoyeria);
     private sealed record StoreOnlyTicketRow(string Ticket, string OperationFolio, DateTime Date, decimal Total, decimal Subtotal, string Observation, bool Joyeria);
     private sealed record TicketPaymentBreakdown(decimal NonCard, decimal Card, decimal Amex, string Description)
     {

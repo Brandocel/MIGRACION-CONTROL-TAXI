@@ -1,6 +1,7 @@
 ﻿<Window x:Class="ControlTaxiDesktop.PosWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:behaviors="clr-namespace:ControlTaxiDesktop.Behaviors"
         Title="Control Taxi Â· POS local"
         Width="1280"
         Height="760"
@@ -14,6 +15,10 @@
         SnapsToDevicePixels="True"
         Background="#DDECF7">
   <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Styles/SharedFilterStyles.xaml"/>
+      </ResourceDictionary.MergedDictionaries>
     <Style x:Key="FormPanel" TargetType="Border">
       <Setter Property="Background" Value="#F8FCFF"/>
       <Setter Property="BorderBrush" Value="#B6C8DA"/>
@@ -188,9 +193,12 @@
       </Setter>
     </Style>
     <Style x:Key="DashboardGridCell" TargetType="DataGridCell">
-      <Setter Property="Padding" Value="10,8"/>
-      <Setter Property="BorderBrush" Value="#E3ECF8"/>
-      <Setter Property="BorderThickness" Value="0,0,0,1"/>
+      <Setter Property="Padding" Value="14,10"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <!-- Borde derecho + inferior en cada celda: asi se ven las lineas de columna y de fila
+           sin usar GridLinesVisibility, que dibuja lineas dobles junto a estos bordes. -->
+      <Setter Property="BorderBrush" Value="#DCE5F2"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Foreground" Value="#16326B"/>
     </Style>
@@ -200,20 +208,27 @@
       <Setter Property="BorderBrush" Value="#E3ECF8"/>
       <Setter Property="BorderThickness" Value="0"/>
       <Style.Triggers>
+        <!-- Gris alterno visible: el #F9FBFF anterior era casi blanco y no se distinguia. -->
         <Trigger Property="AlternationIndex" Value="1">
-          <Setter Property="Background" Value="#F9FBFF"/>
+          <Setter Property="Background" Value="#EFF4FB"/>
         </Trigger>
+        <!-- Mas saturados que antes: con el gris alterno nuevo, los tonos previos
+             (#EEF5FF / #E6F0FF) quedaban casi iguales al de la fila par. -->
         <Trigger Property="IsMouseOver" Value="True">
-          <Setter Property="Background" Value="#EEF5FF"/>
+          <Setter Property="Background" Value="#DBE8FA"/>
         </Trigger>
         <Trigger Property="IsSelected" Value="True">
-          <Setter Property="Background" Value="#E6F0FF"/>
+          <Setter Property="Background" Value="#C7DCF7"/>
         </Trigger>
       </Style.Triggers>
     </Style>
+    </ResourceDictionary>
   </Window.Resources>
 
-  <Border Margin="18" Background="#E6F3FC" BorderBrush="#9DB8D3" BorderThickness="1">
+  <!-- Sin margen ni marco exterior: la ventana aprovecha todo el ancho disponible.
+       Antes habia tres marcos anidados (este + el TabControl + el Grid de cada pestaña)
+       que sumaban ~38px por lado. -->
+  <Border Background="#E6F3FC" BorderThickness="0">
     <Grid>
       <Grid.RowDefinitions>
         <RowDefinition Height="32"/>
@@ -224,7 +239,7 @@
         <TextBlock x:Name="TitleBarText" Text="VENTAS" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10" FontWeight="SemiBold" Foreground="#304A65"/>
       </Border>
 
-      <TabControl x:Name="PosTabs" Grid.Row="1" Margin="10" ItemContainerStyle="{StaticResource HiddenWebTabItem}">
+      <TabControl x:Name="PosTabs" Grid.Row="1" Margin="0" Padding="0" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource HiddenWebTabItem}">
         <TabItem Header="Ventas">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
           <Grid Margin="10" MinWidth="1120">
@@ -394,8 +409,11 @@
         </TabItem>
 
         <TabItem Header="Comisiones">
-          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-          <Grid Margin="10" MinWidth="1520">
+          <!-- Sin ScrollViewer de pagina: encabezado, filtros, totales y paginador quedan
+               fijos, y SOLO la tabla scrollea por dentro (su fila es Height="*"). Antes toda
+               la pantalla scrolleaba, lo que ademas dejaba a la tabla con alto infinito: por
+               eso el arrastre con el mouse no movia nada, no habia que scrollear ahi. -->
+          <Grid Margin="14">
             <Grid>
               <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -404,143 +422,361 @@
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
               </Grid.RowDefinitions>
-              <Border Style="{StaticResource DashboardHeroCard}">
+              <!-- Encabezado compacto: titulo a la izquierda y acciones a la derecha en la
+                   misma linea. El WrapPanel deja que los botones bajen de renglon solos si la
+                   ventana se angosta, en vez de recortarse. -->
+              <Border Style="{StaticResource SquareHeaderCard}">
                 <Grid>
-                  <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                  </Grid.RowDefinitions>
-                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
-                    <Border Width="62" Height="62" CornerRadius="15" Background="#1747A9" BorderBrush="#81B5FF" BorderThickness="1.2" Margin="0,0,14,0">
-                      <Viewbox Margin="12">
-                        <TextBlock Text="💰" Foreground="White"/>
-                      </Viewbox>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,18,0">
+                    <Border Style="{StaticResource SquareHeaderIconTile}">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconBanknote}" Stroke="White" Width="21" Height="21"/>
                     </Border>
                     <StackPanel VerticalAlignment="Center">
-                      <TextBlock Text="COMISIONES" FontSize="18" FontWeight="Black" Foreground="White"/>
-                      <TextBlock Text="Control de comisiones, pagos y selección de folios con el mismo estilo visual" FontSize="12" Foreground="#D3E2FF" Margin="0,4,0,0"/>
+                      <TextBlock Text="COMISIONES" FontSize="16" FontWeight="Black" Foreground="White"/>
+                      <TextBlock Text="Control de comisiones, pagos y selección de folios" FontSize="11" Foreground="#BBD3F8" Margin="0,3,0,0"/>
                     </StackPanel>
                   </StackPanel>
-                  <WrapPanel Grid.Row="1">
-                    <Button Content="CALCULAR" Style="{StaticResource DashboardGoldButton}" Click="RecalculateCommissions_Click"/>
-                    <Button Content="PAGAR" Style="{StaticResource DashboardSuccessButton}" Click="PaySelectedCommissions_Click"/>
-                    <Button Content="BUSCAR" Style="{StaticResource DashboardPrimaryButton}" Click="SearchCommissions_Click"/>
-                    <Button Content="CSV" Style="{StaticResource DashboardActionButtonBase}" Click="ExportCommissionsCsv_Click"/>
-                    <Button Content="PDF" Style="{StaticResource DashboardActionButtonBase}" Click="ExportCommissionsPdf_Click"/>
-                    <Button Content="IMPRIMIR" Style="{StaticResource DashboardActionButtonBase}" Click="PrintCommissions_Click"/>
-                    <Button Content="MENU" Style="{StaticResource DashboardActionButtonBase}" Click="CloseWindow_Click"/>
-                    <Button Content="SALIR" Style="{StaticResource DashboardDangerButton}" Click="CloseWindow_Click"/>
+                  <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Content="CALCULAR" Style="{StaticResource SquareToolbarGoldButton}" Click="RecalculateCommissions_Click"/>
+                    <Button Content="PAGAR" Style="{StaticResource SquareToolbarSuccessButton}" Click="PaySelectedCommissions_Click"/>
+                    <!-- Aqui habia un boton BUSCAR que llamaba al mismo handler que el boton
+                         APLICAR del panel de filtros. Se quito el duplicado: la busqueda vive
+                         junto a los campos que la controlan. -->
+                    <Button Content="CSV" Style="{StaticResource SquareToolbarGhostButton}" Click="ExportCommissionsCsv_Click"/>
+                    <Button Content="PDF" Style="{StaticResource SquareToolbarGhostButton}" Click="ExportCommissionsPdf_Click"/>
+                    <Button Content="IMPRIMIR" Style="{StaticResource SquareToolbarGhostButton}" Click="PrintCommissions_Click"/>
+                    <Button Content="MENU" Style="{StaticResource SquareToolbarGhostButton}" Click="CloseWindow_Click"/>
+                    <Button Content="SALIR" Style="{StaticResource SquareToolbarDangerButton}" Click="CloseWindow_Click"/>
                   </WrapPanel>
                 </Grid>
               </Border>
-              <Border Grid.Row="1" Style="{StaticResource DashboardPanelCard}">
-                <WrapPanel>
-                  <StackPanel Width="260" Margin="0,0,18,0">
-                    <TextBlock Text="Folio comision" FontSize="12" FontWeight="Bold" Foreground="#16326B" Margin="0,0,0,8"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="CommissionFolio" Width="160" ToolTip="Folio comision" Background="Transparent" BorderThickness="0" Padding="14,12"/>
-                    </Border>
+              <Border Grid.Row="1" Style="{StaticResource SquareFilterCard}">
+                <StackPanel>
+                  <DockPanel Margin="0,0,0,14">
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconFilter}" Stroke="#0F3E95" Margin="0,0,9,0"/>
+                      <TextBlock Text="FILTROS DE BÚSQUEDA" FontSize="12" FontWeight="Black" Foreground="#16326B" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button x:Name="CommissionFiltersToggleButton" DockPanel.Dock="Right" Content="Ocultar ▲" HorizontalAlignment="Right" Style="{StaticResource SquareLinkButton}" Click="ToggleCommissionFilters_Click"/>
+                  </DockPanel>
+                  <StackPanel x:Name="CommissionFiltersFieldsPanel">
+                    <!-- Campos y botones en un solo renglon: los botones se alinean abajo para
+                         quedar a la altura de las cajas, no de las etiquetas. Antes el boton
+                         colgaba en un renglon aparte y dejaba un hueco grande. -->
+                    <Grid>
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="18"/>
+                        <ColumnDefinition Width="Auto"/>
+                      </Grid.ColumnDefinitions>
+                      <StackPanel Grid.Column="0">
+                        <TextBlock Text="FOLIO COMISIÓN" Style="{StaticResource SquareFieldLabel}"/>
+                        <Border Style="{StaticResource SquareFieldBorder}">
+                          <TextBox x:Name="CommissionFolio" ToolTip="Buscar por folio, vendedor, hotel o gafete" Style="{StaticResource DashboardTextInput}" KeyDown="CommissionFilter_KeyDown"/>
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2">
+                        <TextBlock Text="FECHA INICIO" Style="{StaticResource SquareFieldLabel}"/>
+                        <Border Style="{StaticResource SquareFieldBorder}">
+                          <DatePicker x:Name="CommissionStartDate" Style="{StaticResource DashboardDateInput}"/>
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Grid.Column="4">
+                        <TextBlock Text="FECHA FIN" Style="{StaticResource SquareFieldLabel}"/>
+                        <Border Style="{StaticResource SquareFieldBorder}">
+                          <DatePicker x:Name="CommissionEndDate" Style="{StaticResource DashboardDateInput}"/>
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Bottom">
+                        <Button Style="{StaticResource SquarePrimaryButton}" Click="SearchCommissions_Click">
+                          <StackPanel Orientation="Horizontal">
+                            <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconSearch}" Stroke="White" Margin="0,0,9,0"/>
+                            <TextBlock Text="APLICAR" VerticalAlignment="Center"/>
+                          </StackPanel>
+                        </Button>
+                        <Button Content="LIMPIAR" Style="{StaticResource SquareSecondaryButton}" Margin="8,0,0,0" Click="ClearCommissionFilters_Click"/>
+                      </StackPanel>
+                    </Grid>
+                    <!-- Atajos de rango: evitan teclear fechas y empujan a rangos cortos,
+                         que es donde la consulta responde rapido. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                      <TextBlock Text="RANGO RÁPIDO" Style="{StaticResource SquareFieldLabel}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                      <Button Content="HOY" Tag="today" Style="{StaticResource SquareChipButton}" Click="CommissionQuickRange_Click"/>
+                      <Button Content="AYER" Tag="yesterday" Style="{StaticResource SquareChipButton}" Click="CommissionQuickRange_Click"/>
+                      <Button Content="7 DÍAS" Tag="week" Style="{StaticResource SquareChipButton}" Click="CommissionQuickRange_Click"/>
+                      <Button Content="ESTE MES" Tag="month" Style="{StaticResource SquareChipButton}" Click="CommissionQuickRange_Click"/>
+                    </StackPanel>
                   </StackPanel>
-                  <StackPanel Width="220" Margin="0,0,18,0">
-                    <TextBlock Text="Fecha inicio" FontSize="12" FontWeight="Bold" Foreground="#16326B" Margin="0,0,0,8"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <DatePicker x:Name="CommissionStartDate" Width="140" BorderThickness="0" Padding="12,10"/>
-                    </Border>
-                  </StackPanel>
-                  <StackPanel Width="220">
-                    <TextBlock Text="Fecha fin" FontSize="12" FontWeight="Bold" Foreground="#16326B" Margin="0,0,0,8"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <DatePicker x:Name="CommissionEndDate" Width="140" BorderThickness="0" Padding="12,10"/>
-                    </Border>
-                  </StackPanel>
-                </WrapPanel>
+                </StackPanel>
               </Border>
-              <Border Grid.Row="2" Style="{StaticResource DashboardPanelCard}">
+              <!-- Totales: tarjeta cuadrada con separadores verticales entre metricas y una
+                   franja de color arriba de cada una para distinguirlas de un vistazo. -->
+              <Border Grid.Row="2" Style="{StaticResource SquareStatCard}">
                 <UniformGrid Columns="7">
-                  <StackPanel Margin="8"><TextBlock Text="VENTA" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalSaleText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
-                  <StackPanel Margin="8"><TextBlock Text="BASE" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalBaseText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
-                  <StackPanel Margin="8"><TextBlock Text="COMISION" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalAmountText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#0F8F83"/></StackPanel>
-                  <StackPanel Margin="8"><TextBlock Text="PAGADO" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionTotalPaidText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
-                  <StackPanel Margin="8"><TextBlock Text="PENDIENTES" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionPendingCountText" Text="0" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
-                  <StackPanel Margin="8"><TextBlock Text="PAGADAS" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionPaidCountText" Text="0" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
-                  <StackPanel Margin="8"><TextBlock Text="SELECCIONADO" FontSize="10" FontWeight="Black" Foreground="#526A83"/><TextBlock x:Name="CommissionSelectedTotalText" Text="$0.00" FontSize="18" FontWeight="Black" Foreground="#123E6E"/></StackPanel>
+                  <Border Style="{StaticResource SquareStatCell}" BorderThickness="0">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#1E5FD0"/>
+                      <TextBlock Text="VENTA" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionTotalSaleText" Text="$0.00" Style="{StaticResource SquareStatValue}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource SquareStatCell}">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#1E5FD0"/>
+                      <TextBlock Text="BASE" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionTotalBaseText" Text="$0.00" Style="{StaticResource SquareStatValue}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource SquareStatCell}">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#0F8F83"/>
+                      <TextBlock Text="COMISIÓN" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionTotalAmountText" Text="$0.00" Style="{StaticResource SquareStatValue}" Foreground="#0F8F83"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource SquareStatCell}">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#17A65A"/>
+                      <TextBlock Text="PAGADO" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionTotalPaidText" Text="$0.00" Style="{StaticResource SquareStatValue}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource SquareStatCell}">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#E0A106"/>
+                      <TextBlock Text="PENDIENTES" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionPendingCountText" Text="0" Style="{StaticResource SquareStatValue}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource SquareStatCell}">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#17A65A"/>
+                      <TextBlock Text="PAGADAS" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionPaidCountText" Text="0" Style="{StaticResource SquareStatValue}"/>
+                    </StackPanel>
+                  </Border>
+                  <Border Style="{StaticResource SquareStatCell}">
+                    <StackPanel>
+                      <Border Style="{StaticResource SquareStatAccent}" Background="#6B7FA6"/>
+                      <TextBlock Text="SELECCIONADO" Style="{StaticResource SquareStatLabel}"/>
+                      <TextBlock x:Name="CommissionSelectedTotalText" Text="$0.00" Style="{StaticResource SquareStatValue}"/>
+                    </StackPanel>
+                  </Border>
                 </UniformGrid>
               </Border>
-              <Border Grid.Row="3" Style="{StaticResource DashboardPanelCard}" Padding="0">
+              <Grid Grid.Row="3">
+              <!-- La tabla ya no cede ancho al detalle: el panel flota encima (ver mas abajo). -->
+              <Border Style="{StaticResource SquareStatCard}" Padding="0" Margin="0">
                 <Grid>
                   <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                   </Grid.RowDefinitions>
-                  <DockPanel Margin="16,12">
+                  <!-- El indicador de pagina se movio al paginador de abajo, que es donde se
+                       espera encontrarlo; aqui queda solo el conteo de registros. -->
+                  <DockPanel Margin="16,12" LastChildFill="False">
                     <TextBlock x:Name="CommissionRowsText" DockPanel.Dock="Left" Text="REGISTROS 0-0 DE 0" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
-                    <TextBlock x:Name="CommissionPageText" DockPanel.Dock="Right" Text="PAGINA 1 DE 1" FontSize="10" FontWeight="Black" Foreground="#425A73"/>
                   </DockPanel>
-                  <DataGrid x:Name="CommissionsGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="None" SelectionMode="Single" SelectionUnit="FullRow" MouseDoubleClick="CommissionsGrid_MouseDoubleClick"
+                  <!-- behaviors:DataGridDragScroll.Enabled: se puede recorrer la tabla
+                       manteniendo presionado el boton izquierdo y arrastrando, hacia abajo o
+                       hacia los lados. El clic simple y el doble clic siguen igual. -->
+                  <DataGrid x:Name="CommissionsGrid" Grid.Row="1" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column" GridLinesVisibility="None" SelectionMode="Single" SelectionUnit="FullRow" MouseDoubleClick="CommissionsGrid_MouseDoubleClick" SelectionChanged="CommissionsGrid_SelectionChanged"
+                            behaviors:DataGridDragScroll.Enabled="True"
+                            RowHeight="46" ColumnHeaderHeight="46"
                             BorderThickness="0" Background="Transparent" Margin="14,0,14,14"
                             ColumnHeaderStyle="{StaticResource DashboardGridHeader}" CellStyle="{StaticResource DashboardGridCell}" RowStyle="{StaticResource DashboardGridRow}" AlternationCount="2">
                     <DataGrid.Columns>
-                      <DataGridTemplateColumn Header="Sel." Width="64">
+                      <DataGridTemplateColumn Header="Sel." Width="58">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate>
                             <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{Binding Source.PuedePagar}" Click="CommissionCheckBox_Click" HorizontalAlignment="Center" VerticalAlignment="Center" Width="18" Height="18"/>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                       </DataGridTemplateColumn>
-                      <DataGridTemplateColumn Header="Ticket" Width="58">
+                      <!-- Acciones por fila. Cada boton se oculta cuando no aplica: PAGAR solo
+                           en comisiones pendientes (PuedePagar) y REIMPRIMIR solo en las ya
+                           pagadas (PuedeImprimirTicket), asi la columna nunca ofrece algo que
+                           vaya a fallar. Reemplaza a la antigua columna "Ticket". -->
+                      <DataGridTemplateColumn Header="Acciones" Width="260">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate>
-                            <Button Content="Ticket" ToolTip="Ver ticket de comision pagada" Click="PrintSingleCommissionTicket_Click" Padding="6,2" HorizontalAlignment="Center" IsEnabled="{Binding Source.PuedeImprimirTicket}">
-                              <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource WebMiniActionButton}">
-                                  <Setter Property="Visibility" Value="Visible"/>
-                                  <Style.Triggers>
-                                    <Trigger Property="IsEnabled" Value="False">
-                                      <Setter Property="Visibility" Value="Collapsed"/>
-                                    </Trigger>
-                                  </Style.Triggers>
-                                </Style>
-                              </Button.Style>
-                            </Button>
+                            <!-- Grid con columnas fijas, no StackPanel: cada accion tiene su
+                                 propio carril, asi que al ocultarse PAGAR o REIMPRIMIR las
+                                 demas NO se recorren y todas las filas quedan alineadas. -->
+                            <Grid HorizontalAlignment="Center">
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="76"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="100"/>
+                              </Grid.ColumnDefinitions>
+                              <!-- DETALLE siempre disponible: abre el panel lateral de esta fila. -->
+                              <Button Grid.Column="0" Content="DETALLE" ToolTip="Ver el detalle de esta comision" Click="ShowCommissionDetail_Click" Style="{StaticResource SquareChipButton}" Margin="0,0,6,0" HorizontalAlignment="Stretch"/>
+                              <Button Grid.Column="1" Content="PAGAR" ToolTip="Pagar esta comision" Click="PaySingleCommission_Click" IsEnabled="{Binding Source.PuedePagar}" HorizontalAlignment="Stretch">
+                                <Button.Style>
+                                  <Style TargetType="Button" BasedOn="{StaticResource SquareChipButton}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Setter Property="Margin" Value="0,0,6,0"/>
+                                    <Setter Property="Background" Value="#17A65A"/>
+                                    <Setter Property="BorderBrush" Value="#17A65A"/>
+                                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                                    <Style.Triggers>
+                                      <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                      </Trigger>
+                                    </Style.Triggers>
+                                  </Style>
+                                </Button.Style>
+                              </Button>
+                              <Button Grid.Column="2" Content="REIMPRIMIR" ToolTip="Reimprimir el ticket de esta comision pagada" Click="PrintSingleCommissionTicket_Click" IsEnabled="{Binding Source.PuedeImprimirTicket}" HorizontalAlignment="Stretch">
+                                <Button.Style>
+                                  <Style TargetType="Button" BasedOn="{StaticResource SquareChipButton}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                    <Style.Triggers>
+                                      <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                      </Trigger>
+                                    </Style.Triggers>
+                                  </Style>
+                                </Button.Style>
+                              </Button>
+                            </Grid>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                       </DataGridTemplateColumn>
-                      <DataGridTextColumn Header="Folios" Binding="{Binding Source.Folio}" Width="150"/>
-                      <DataGridTextColumn Header="Unidad" Binding="{Binding Source.Unidad}" Width="140"/>
-                      <DataGridTextColumn Header="Num. unidad" Binding="{Binding Source.NumeroUnidad}" Width="95"/>
-                      <DataGridTextColumn Header="Nombre" Binding="{Binding Source.Nombre}" Width="170"/>
-                      <DataGridTextColumn Header="Pax" Binding="{Binding Source.Pax}" Width="55"/>
-                      <DataGridTextColumn Header="Hotel" Binding="{Binding Source.Hotel}" Width="160"/>
-                      <DataGridTextColumn Header="V.A" Binding="{Binding Source.VentaArtesania, StringFormat=C2}" Width="90"/>
-                      <DataGridTextColumn Header="V.F" Binding="{Binding Source.VentaFarmacia, StringFormat=C2}" Width="90"/>
-                      <DataGridTextColumn Header="V.T" Binding="{Binding Source.VentaTienda, StringFormat=C2}" Width="90"/>
-                      <DataGridTextColumn Header="V.J" Binding="{Binding Source.VentaJoyeria, StringFormat=C2}" Width="90"/>
-                      <DataGridTextColumn Header="Vnt total" Binding="{Binding Source.VentaTotal, StringFormat=C2}" Width="100"/>
-                      <DataGridTextColumn Header="Ticket" Binding="{Binding Source.Ticket}" Width="110"/>
-                      <DataGridTextColumn Header="F.P" Binding="{Binding Source.FormaPago}" Width="150"/>
-                      <DataGridTextColumn Header="% descuento" Binding="{Binding Source.DescuentoPorcentaje, StringFormat=P0}" Width="90"/>
-                      <DataGridTextColumn Header="Dejada" Binding="{Binding Source.Dejada, StringFormat=C2}" Width="90"/>
-                      <DataGridTextColumn Header="Bebidas y cajas regalo" Binding="{Binding Source.BebidasCajasRegalo, StringFormat=C2}" Width="140"/>
-                      <DataGridTextColumn Header="Rep" Binding="{Binding Source.Reparacion, StringFormat=C2}" Width="90"/>
-                      <DataGridTextColumn Header="Degustacion" Binding="{Binding Source.Degustacion, StringFormat=C2}" Width="100"/>
-                      <DataGridTextColumn Header="% comision" Binding="{Binding Source.PorcentajeComision, StringFormat=P0}" Width="90"/>
-                      <DataGridTextColumn Header="Pago comision" Binding="{Binding Source.PagoComision, StringFormat=C2}" Width="110"/>
-                      <DataGridTextColumn Header="Estatus" Binding="{Binding Source.Estatus}" Width="95"/>
-                      <DataGridTextColumn Header="Vendedor" Binding="{Binding Source.Vendedor}" Width="160"/>
+                      <!-- Todas proporcionales (star) con un MinWidth de respaldo: asi la tabla
+                           ocupa exactamente el ancho disponible sin hueco muerto a la derecha y
+                           se reajusta al cambiar el tamaño de la ventana. Mezclar una sola
+                           columna "*" con columnas de pixeles fijos hacia que el DataGrid le
+                           diera todo el espacio a esa y encogiera las demas hasta 20px. -->
+                      <DataGridTextColumn Header="Folios" Binding="{Binding Source.Folio}" Width="150*" MinWidth="110"/>
+                      <DataGridTextColumn Header="Unidad" Binding="{Binding Source.Unidad}" Width="140*" MinWidth="90"/>
+                      <DataGridTextColumn Header="Nombre" Binding="{Binding Source.Nombre}" Width="170*" MinWidth="120"/>
+                      <DataGridTextColumn Header="Hotel" Binding="{Binding Source.Hotel}" Width="160*" MinWidth="110"/>
+                      <DataGridTextColumn Header="Vnt total" Binding="{Binding Source.VentaTotal, StringFormat=C2}" Width="100*" MinWidth="80"/>
+                      <DataGridTextColumn Header="F.P" Binding="{Binding Source.FormaPago}" Width="150*" MinWidth="100"/>
+                      <DataGridTextColumn Header="Dejada" Binding="{Binding Source.Dejada, StringFormat=C2}" Width="90*" MinWidth="70"/>
+                      <DataGridTextColumn Header="% comision" Binding="{Binding Source.PorcentajeComision, StringFormat=P0}" Width="90*" MinWidth="70"/>
+                      <DataGridTextColumn Header="Pago comision" Binding="{Binding Source.PagoComision, StringFormat=C2}" Width="110*" MinWidth="90"/>
+                      <!-- Dos estatus distintos: el de la DEJADA (anticipo al taxista) y el de
+                           la COMISIÓN. Antes solo se veia uno y se prestaba a confusion. -->
+                      <DataGridTextColumn Header="Est. dejada" Binding="{Binding Source.EstatusDejada}" Width="105*" MinWidth="85"/>
+                      <DataGridTextColumn Header="Est. comisión" Binding="{Binding Source.Estatus}" Width="105*" MinWidth="85"/>
+                      <DataGridTextColumn Header="Vendedor" Binding="{Binding Source.Vendedor}" Width="160*" MinWidth="120"/>
                     </DataGrid.Columns>
                   </DataGrid>
+                  <!-- Esqueleto de carga: se muestra mientras BUSCAR esta corriendo, encima
+                       de la tabla, respetando los encabezados y anchos reales de columna
+                       (ver CommissionsSkeleton en el code-behind). -->
+                  <Border x:Name="CommissionsSkeleton" Grid.Row="1" Background="#FFFFFF" Visibility="Collapsed">
+                    <DockPanel>
+                      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="16,10">
+                        <TextBlock Text="Buscando información..." FontSize="12" FontWeight="Bold" Foreground="#425A73" VerticalAlignment="Center"/>
+                      </StackPanel>
+                      <Grid DockPanel.Dock="Top" Height="46" Background="#F1F5FC">
+                        <Grid.ColumnDefinitions>
+                          <!-- Proporcionales (no pixeles fijos) para que el esqueleto se
+                               adapte al ancho de la ventana igual que la tabla real. Las dos
+                               primeras replican las columnas fijas Sel. y Ticket del DataGrid. -->
+                          <ColumnDefinition Width="58"/><ColumnDefinition Width="180"/>
+                          <ColumnDefinition Width="150*"/><ColumnDefinition Width="140*"/><ColumnDefinition Width="170*"/>
+                          <ColumnDefinition Width="160*"/><ColumnDefinition Width="100*"/><ColumnDefinition Width="150*"/>
+                          <ColumnDefinition Width="90*"/><ColumnDefinition Width="90*"/><ColumnDefinition Width="110*"/>
+                          <ColumnDefinition Width="105*"/><ColumnDefinition Width="105*"/><ColumnDefinition Width="160*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="2" Text="FOLIOS" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="3" Text="UNIDAD" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="4" Text="NOMBRE" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="5" Text="HOTEL" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="6" Text="VNT TOTAL" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="7" Text="F.P" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="8" Text="DEJADA" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="9" Text="% COMISION" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="10" Text="PAGO COMISION" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="11" Text="EST. DEJADA" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="12" Text="EST. COMISIÓN" Style="{StaticResource SkeletonHeaderText}"/>
+                        <TextBlock Grid.Column="13" Text="VENDEDOR" Style="{StaticResource SkeletonHeaderText}"/>
+                      </Grid>
+                      <ItemsControl x:Name="CommissionsSkeletonRows" Margin="0,4,0,0">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Grid Height="46">
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="58"/><ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="150*"/><ColumnDefinition Width="140*"/><ColumnDefinition Width="170*"/>
+                                <ColumnDefinition Width="160*"/><ColumnDefinition Width="100*"/><ColumnDefinition Width="150*"/>
+                                <ColumnDefinition Width="90*"/><ColumnDefinition Width="90*"/><ColumnDefinition Width="110*"/>
+                                <ColumnDefinition Width="105*"/><ColumnDefinition Width="105*"/><ColumnDefinition Width="160*"/>
+                              </Grid.ColumnDefinitions>
+                              <Border Grid.Column="2" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="3" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="4" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="5" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="6" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="7" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="8" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="9" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="10" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="11" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="12" Style="{StaticResource SkeletonBar}"/>
+                              <Border Grid.Column="13" Style="{StaticResource SkeletonBar}"/>
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </DockPanel>
+                  </Border>
+                  <!-- Estado vacio: se muestra cuando la busqueda ya termino y no hay
+                       resultados para el filtro/rango de fechas actual, para no dejar la
+                       tabla en blanco sin explicacion (ver ApplyCommissionPage). -->
+                  <Border x:Name="CommissionsEmptyState" Grid.Row="1" Background="#FFFFFF" Visibility="Collapsed">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconSearch}" Stroke="#9DB2D4" StrokeThickness="1.4" Width="38" Height="38" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                      <TextBlock Text="Sin resultados" FontSize="15" FontWeight="Black" Foreground="#16326B" HorizontalAlignment="Center"/>
+                      <TextBlock x:Name="CommissionsEmptyStateDetail" Text="No hay comisiones para el folio o rango de fechas seleccionado." FontSize="12" Foreground="#6880A6" TextWrapping="Wrap" TextAlignment="Center" Margin="0,6,0,0"/>
+                    </StackPanel>
+                  </Border>
                 </Grid>
               </Border>
-              <DockPanel Grid.Row="4" Margin="0,10,0,0">
-                <TextBlock x:Name="CommissionSelectionFooterText" DockPanel.Dock="Left" Text="Seleccionado $0.00" FontSize="10" FontWeight="Black" Foreground="#425A73" VerticalAlignment="Center"/>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                  <Button x:Name="CommissionPrevPageButton" Content="ANTERIOR" Style="{StaticResource DashboardActionButtonBase}" MinWidth="96" MinHeight="32" Padding="10,5" Margin="0,0,8,0" Click="CommissionPrevPage_Click"/>
-                  <Button x:Name="CommissionNextPageButton" Content="SIGUIENTE" Style="{StaticResource DashboardActionButtonBase}" MinWidth="96" MinHeight="32" Padding="10,5" Click="CommissionNextPage_Click"/>
-                </StackPanel>
-              </DockPanel>
+              </Grid>
+              <!-- Paginador: resumen a la izquierda, controles de pagina a la derecha. Los
+                   botones se deshabilitan solos en la primera y ultima pagina (ver
+                   ApplyCommissionPage) y en ese estado se ven atenuados. -->
+              <Border Grid.Row="4" Style="{StaticResource SquarePagerBar}">
+                <DockPanel LastChildFill="False">
+                  <TextBlock x:Name="CommissionSelectionFooterText" DockPanel.Dock="Left" Text="Seleccionado $0.00" Style="{StaticResource SquarePagerSummary}"/>
+                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="CommissionPrevPageButton" Style="{StaticResource SquarePagerButton}" Click="CommissionPrevPage_Click">
+                      <StackPanel Orientation="Horizontal">
+                        <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconChevronLeft}" Stroke="#41567C" Width="11" Height="11" Margin="0,0,7,0"/>
+                        <TextBlock Text="ANTERIOR" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Button>
+                    <Border Style="{StaticResource SquarePagerIndicator}">
+                      <TextBlock x:Name="CommissionPageText" Text="PAGINA 1 DE 1" Style="{StaticResource SquarePagerIndicatorText}"/>
+                    </Border>
+                    <Button x:Name="CommissionNextPageButton" Style="{StaticResource SquarePagerButton}" Click="CommissionNextPage_Click">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="SIGUIENTE" VerticalAlignment="Center"/>
+                        <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconChevronRight}" Stroke="#41567C" Width="11" Height="11" Margin="7,0,0,0"/>
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                </DockPanel>
+              </Border>
             </Grid>
           </Grid>
-          </ScrollViewer>
         </TabItem>
 
         <TabItem Header="Cortes">
@@ -870,6 +1106,164 @@
           </ScrollViewer>
         </TabItem>
       </TabControl>
+
+      <!-- ===== Cajon lateral de DETALLE (flotante) =====
+           Vive aqui, como hijo directo del Grid raiz y con RowSpan="2", para cubrir TAMBIEN la
+           barra de titulo de arriba. Antes estaba dentro de la pestaña de Comisiones y por eso
+           se cortaba en la parte superior. Va al final del XAML para dibujarse encima de todo.
+           Solo se abre con el boton DETALLE de cada fila. -->
+      <Border x:Name="CommissionDetailScrim" Grid.RowSpan="2" Background="#33000B1F" Visibility="Collapsed" MouseLeftButtonDown="CommissionDetailScrim_MouseLeftButtonDown"/>
+
+      <!-- Panel del TICKET: se abre AL LADO del cajon de detalle, no debajo de sus campos.
+           El Margin derecho de 420 lo recorre justo el ancho del cajon, de modo que los dos
+           quedan uno junto al otro como en el admin web. -->
+      <Border x:Name="CommissionTicketPanel" Grid.RowSpan="2"
+              HorizontalAlignment="Right" VerticalAlignment="Stretch"
+              Width="380" Margin="0,0,420,0"
+              Background="#F7F9FC" BorderBrush="#D7E2F2" BorderThickness="1,0,1,0"
+              Visibility="Collapsed">
+        <Border.Effect>
+          <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.16" Color="#0B1F3F"/>
+        </Border.Effect>
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E3EAF5" BorderThickness="0,0,0,1" Padding="18,14">
+            <DockPanel LastChildFill="False">
+              <TextBlock DockPanel.Dock="Left" Text="TICKET DE COMISIÓN" FontSize="13" FontWeight="Black" Foreground="#16326B" VerticalAlignment="Center"/>
+              <Button DockPanel.Dock="Right" Content="Cerrar" Style="{StaticResource SquareLinkButton}" Click="CloseCommissionTicketPanel_Click"/>
+            </DockPanel>
+          </Border>
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="18,16">
+            <Border Background="#FFFFFF" BorderBrush="#DCE5F2" BorderThickness="1" Padding="14">
+              <TextBlock x:Name="CommissionTicketText" FontFamily="Consolas" FontSize="11" Foreground="#16326B" TextWrapping="Wrap"/>
+            </Border>
+          </ScrollViewer>
+          <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#E3EAF5" BorderThickness="0,1,0,0" Padding="18,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+              <Button Content="GUARDAR TXT" Style="{StaticResource SquareChipButton}" Click="SaveCommissionTicketFromPanel_Click"/>
+              <Button Content="IMPRIMIR" Style="{StaticResource SquarePrimaryButton}" Padding="14,8" FontSize="11" Click="PrintCommissionTicketFromPanel_Click"/>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
+      <Border x:Name="CommissionDetailPanel" Grid.RowSpan="2"
+              HorizontalAlignment="Right" VerticalAlignment="Stretch"
+              Width="420" MaxWidth="520"
+              Background="#F7F9FC" BorderBrush="#D7E2F2" BorderThickness="1,0,0,0"
+              Visibility="Collapsed">
+        <Border.Effect>
+          <DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.22" Color="#0B1F3F"/>
+        </Border.Effect>
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+
+          <!-- Encabezado fijo del cajon: titulo, folio, estatus y acciones. -->
+          <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E3EAF5" BorderThickness="0,0,0,0" Padding="18,14">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                <TextBlock Text="DETALLE DE COMISIÓN" FontSize="14" FontWeight="Black" Foreground="#16326B"/>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                  <TextBlock x:Name="CommissionDetailFolio" FontSize="12" FontWeight="Bold" Foreground="#5A7096" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                  <Border x:Name="CommissionDetailStatusBadge" Background="#E4F6EC" CornerRadius="2" Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="CommissionDetailStatusText" Text="PAGADA" FontSize="9" FontWeight="Black" Foreground="#0F7A44"/>
+                  </Border>
+                </StackPanel>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button x:Name="CommissionShowTicketButton" Content="TICKET" ToolTip="Ver el ticket de esta comision"
+                        Style="{StaticResource SquareChipButton}" Margin="0,0,8,0" Click="ShowCommissionTicket_Click"/>
+                <Button Content="✕" ToolTip="Cerrar" Width="28" Height="28" Padding="0"
+                        Style="{StaticResource SquareChipButton}" Margin="0" FontSize="12"
+                        Click="CloseCommissionDetail_Click"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <!-- Pestañas: la venta completa ya no es un boton que apila contenido abajo, sino su
+               propia pestaña, como en el admin web. Son RadioButton del mismo GroupName, asi
+               que la exclusividad la resuelve WPF sin codigo extra. -->
+          <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E3EAF5" BorderThickness="0,0,0,1" Padding="18,0">
+            <StackPanel Orientation="Horizontal">
+              <RadioButton x:Name="CommissionTabGeneralButton" Content="GENERAL" GroupName="CommissionDetailTabs" IsChecked="True"
+                           Style="{StaticResource SquareTabRadio}" Checked="CommissionDetailTab_Changed"/>
+              <RadioButton x:Name="CommissionTabSaleButton" Content="VENTA COMPLETA" GroupName="CommissionDetailTabs"
+                           Style="{StaticResource SquareTabRadio}" Checked="CommissionDetailTab_Changed"/>
+            </StackPanel>
+          </Border>
+
+          <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="18,16">
+            <StackPanel>
+              <!-- Los campos ya no van sueltos: se agrupan en una tarjeta, como el panel de
+                   referencia. El ancho es fluido (sin Width fijo) para que el cajon sea
+                   responsivo si cambia su tamaño. -->
+              <Border x:Name="CommissionTabGeneralContent" Background="#FFFFFF" BorderBrush="#E3EAF5" BorderThickness="1" Padding="14">
+                <StackPanel>
+                  <TextBlock Text="INFORMACIÓN DE LA VENTA" FontSize="10" FontWeight="Black" Foreground="#6B7FA6" Margin="0,0,0,8"/>
+                  <ItemsControl x:Name="CommissionDetailFields">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border BorderBrush="#EFF3F9" BorderThickness="0,0,0,1" Padding="0,7">
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*"/>
+                              <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="11" FontWeight="Bold" Foreground="#6880A6" TextWrapping="Wrap"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" FontWeight="SemiBold" Foreground="#16326B" TextAlignment="Right" TextWrapping="Wrap" Margin="10,0,0,0"/>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+
+              <Border x:Name="CommissionSaleLinesPanel" Visibility="Collapsed" Background="#FFFFFF" BorderBrush="#E3EAF5" BorderThickness="1" Padding="14">
+                <StackPanel>
+                  <TextBlock Text="RENGLONES DE LA VENTA" FontSize="10" FontWeight="Black" Foreground="#6B7FA6" Margin="0,0,0,8"/>
+                  <TextBlock x:Name="CommissionSaleLinesLoading" Text="Cargando venta…" Visibility="Collapsed" FontSize="11" Foreground="#6880A6" TextWrapping="Wrap"/>
+                  <TextBlock x:Name="CommissionSaleLinesEmpty" Text="Sin renglones de venta para este ticket." Visibility="Collapsed" FontSize="11" Foreground="#6880A6" TextWrapping="Wrap"/>
+                  <ItemsControl x:Name="CommissionSaleLines">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border BorderBrush="#EFF3F9" BorderThickness="0,0,0,1" Padding="0,7">
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition Width="*"/>
+                              <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                              <TextBlock Text="{Binding Producto}" FontSize="11" FontWeight="SemiBold" Foreground="#16326B" TextWrapping="Wrap"/>
+                              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <TextBlock Text="{Binding Cantidad}" FontSize="10" Foreground="#6880A6"/>
+                                <TextBlock Text=" × " FontSize="10" Foreground="#6880A6"/>
+                                <TextBlock Text="{Binding Precio, StringFormat=C2}" FontSize="10" Foreground="#6880A6"/>
+                              </StackPanel>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding Importe, StringFormat=C2}" FontSize="11" FontWeight="Bold" Foreground="#16326B" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+      </Border>
     </Grid>
   </Border>
 </Window>

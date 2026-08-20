@@ -238,22 +238,46 @@ public partial class MainWindow : Window
         var userName = _session.UserName;
         var branchCode = _session.BranchCode;
         if (module.Name is "Usuarios")
-            new UserAdminWindow(_database, branchCode) { Owner = this }.ShowDialog();
+            ShowModule(new UserAdminWindow(_database, branchCode));
         else if (module.Name is "Navieras")
         {
             var authService = new NavierasModuleBootstrapper().CreateAuthService();
             var login = new NavierasLoginWindow(authService) { Owner = this };
             if (login.ShowDialog() == true && login.AuthenticatedUser is not null)
-                new NavierasWindow { Owner = this }.ShowDialog();
+                ShowModule(new NavierasWindow());
         }
         else if (module.Name is "Portal")
-            new PortalWindow(_database, userName) { Owner = this }.ShowDialog();
+            ShowModule(new PortalWindow(_database, userName));
         else if (module.Name is "Configuracion de comisiones")
-            new CommissionSettingsWindow(_database, userName, _session.Permissions.Contains("ConfiguracionComisiones")) { Owner = this }.ShowDialog();
+            ShowModule(new CommissionSettingsWindow(_database, userName, _session.Permissions.Contains("ConfiguracionComisiones")));
         else if (module.Name is "Ventas" or "Comisiones" or "Cortes" or "Reportes")
-            new PosWindow(_database, userName, branchCode, module.Name) { Owner = this }.ShowDialog();
+            ShowModule(new PosWindow(_database, userName, branchCode, module.Name));
         else
-            new OperationsWindow(_database, userName, branchCode, module.Name) { Owner = this }.ShowDialog();
+            ShowModule(new OperationsWindow(_database, userName, branchCode, module.Name));
+    }
+
+    /// <summary>
+    /// Abre un modulo ocupando toda la pantalla y escondiendo el menu mientras dura.
+    /// Se siente como si el menu se transformara en el modulo y regresara al cerrarlo, en vez
+    /// de apilar una segunda ventana chica encima de la primera.
+    /// </summary>
+    private void ShowModule(Window window)
+    {
+        window.Owner = this;
+        window.WindowState = WindowState.Maximized;
+        Hide();
+        try
+        {
+            window.ShowDialog();
+        }
+        finally
+        {
+            // El finally garantiza que el menu vuelva aunque el modulo truene al abrir;
+            // si no, la app se quedaria sin ninguna ventana visible.
+            Show();
+            WindowState = WindowState.Maximized;
+            Activate();
+        }
     }
 
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject

@@ -34,7 +34,7 @@ public partial class PosWindow : Window
     private List<CommissionSelectionRow> _commissionFilteredRows = [];
     private int _commissionPage = 1;
     private int _reportLoadSequence;
-    private const int CommissionPageSize = 100;
+    private const int CommissionPageSize = 20;
     private string? _lastCommissionAutoRefreshKey;
     private DateTime _lastCommissionAutoRefreshAtUtc;
     private bool _windowReady;
@@ -165,6 +165,13 @@ public partial class PosWindow : Window
         if (!_windowReady || !IsLoaded)
             return;
 
+        // SelectionChanged burbujea, y los DataGrid de cada pestaña tambien son Selector: al
+        // seleccionar una FILA el evento subia hasta aca y recargaba toda la pantalla, lo que
+        // ademas limpiaba la seleccion y cerraba el panel de detalle. Solo interesa el cambio
+        // de pestaña, es decir el que nace en el propio TabControl.
+        if (!ReferenceEquals(e.OriginalSource, PosTabs))
+            return;
+
         await RunAsync(RefreshAsync);
     }
 
@@ -258,7 +265,63 @@ public partial class PosWindow : Window
         await RefreshCommissionBrowserAsync(resetPage: true);
     });
 
-    private async void PaySelectedCommissions_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    // Enter dentro del campo de folio dispara la busqueda, sin tener que ir al boton.
+    private async void CommissionFilter_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        e.Handled = true;
+        await RunAsync(async () => await RefreshCommissionBrowserAsync(resetPage: true));
+    }
+
+    private async void ClearCommissionFilters_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        CommissionFolio.Text = string.Empty;
+        CommissionStartDate.SelectedDate = DateTime.Today;
+        CommissionEndDate.SelectedDate = DateTime.Today;
+        await RefreshCommissionBrowserAsync(resetPage: true);
+    });
+
+    // Atajos de rango de fechas. Ademas de ahorrar tecleo, empujan al usuario a rangos
+    // cortos, que es donde la consulta de comisiones responde rapido.
+    private async void CommissionQuickRange_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (sender is not Button button || button.Tag is not string tag) return;
+        var today = DateTime.Today;
+        var (start, end) = tag switch
+        {
+            "yesterday" => (today.AddDays(-1), today.AddDays(-1)),
+            "week" => (today.AddDays(-6), today),
+            "month" => (new DateTime(today.Year, today.Month, 1), today),
+            _ => (today, today),
+        };
+        CommissionFolio.Text = string.Empty;
+        CommissionStartDate.SelectedDate = start;
+        CommissionEndDate.SelectedDate = end;
+        await RefreshCommissionBrowserAsync(resetPage: true);
+    });
+
+    private void ToggleCommissionFilters_Click(object sender, RoutedEventArgs e)
+    {
+        var collapse = CommissionFiltersFieldsPanel.Visibility == Visibility.Visible;
+        CommissionFiltersFieldsPanel.Visibility = collapse ? Visibility.Collapsed : Visibility.Visible;
+        CommissionFiltersToggleButton.Content = collapse ? "Mostrar ▼" : "Ocultar ▲";
+    }
+
+    // Boton PAGAR de la columna de acciones: paga solo esa fila. Marca la fila como la unica
+    // seleccionada y reusa el mismo flujo de pago del boton PAGAR de arriba, para no tener dos
+    // caminos distintos que puedan quedar desalineados.
+    private async void PaySingleCommission_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (sender is not FrameworkElement { DataContext: CommissionSelectionRow row }) return;
+        foreach (var candidate in _commissionFilteredRows) candidate.IsSelected = false;
+        row.IsSelected = true;
+        CommissionsGrid.SelectedItem = row;
+        await PayCommissionsCoreAsync();
+    });
+
+    private async void PaySelectedCommissions_Click(object sender, RoutedEventArgs e) => await RunAsync(PayCommissionsCoreAsync);
+
+    private async Task PayCommissionsCoreAsync()
     {
         if (IsCascoBranch)
         {
@@ -303,7 +366,7 @@ public partial class PosWindow : Window
             ticketRows.Select(BuildCommissionPreviewTicket))) { Owner = this };
         preview.ShowDialog();
         WebDialogWindow.Show(this, $"Se pagaron {selected.Count:N0} comisiones exitosamente. Estado: PAGADA.", "Control Taxi", "OK");
-    });
+    }
 
     private async Task PaySelectedCascoCommissionsAsync()
     {
@@ -427,8 +490,60 @@ public partial class PosWindow : Window
             return;
         }
 
-        var preview = new TicketPreviewWindow(BuildCommissionPreviewTicket(row.Source)) { Owner = this };
-        preview.ShowDialog();
+        // REIMPRIMIR va directo al printer: solo abre el dialogo de impresion de Windows.
+        // Para revisar el ticket antes esta VER TICKET, dentro del panel de detalle.
+        TicketPrinting.Print(BuildCommissionPreviewTicket(row.Source), "Ticket comision");
+    }
+
+    // VER TICKET (panel de detalle): muestra el ticket sin mandarlo a imprimir.
+    private void ShowCommissionTicket_Click(object sender, RoutedEventArgs e)
+    {
+        if (CommissionsGrid.SelectedItem is not CommissionSelectionRow row) return;
+        if (!row.Source.PuedeImprimirTicket)
+        {
+            WebDialogWindow.Show(this, "El ticket de comision solo esta disponible cuando la comision ya esta pagada.", "Control Taxi", "!");
+            return;
+        }
+
+        _commissionTicketContent = BuildCommissionPreviewTicket(row.Source);
+        CommissionTicketText.Text = _commissionTicketContent;
+        CommissionTicketPanel.Visibility = Visibility.Visible;
+    }
+
+    private string _commissionTicketContent = string.Empty;
+
+    private void PrintCommissionTicketFromPanel_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_commissionTicketContent)) return;
+        TicketPrinting.Print(_commissionTicketContent, "Ticket comision");
+    }
+
+    private async void SaveCommissionTicketFromPanel_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (string.IsNullOrWhiteSpace(_commissionTicketContent)) return;
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Ticket texto (*.txt)|*.txt",
+            FileName = $"ticket_comision_{DateTime.Now:yyyyMMddHHmmss}.txt"
+        };
+        if (dialog.ShowDialog() == true)
+            await new DesktopOutputService().ExportTextAsync(_commissionTicketContent, dialog.FileName);
+    });
+
+    private void CloseCommissionTicketPanel_Click(object sender, RoutedEventArgs e) => ResetCommissionTicketPanel();
+
+    private void ResetCommissionTicketPanel()
+    {
+        _commissionTicketContent = string.Empty;
+        CommissionTicketText.Text = string.Empty;
+        CommissionTicketPanel.Visibility = Visibility.Collapsed;
+    }
+
+    // Boton DETALLE de la columna de acciones: la unica via para abrir el cajon lateral.
+    private void ShowCommissionDetail_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not CommissionSelectionRow row) return;
+        OpenCommissionDetail(row);
     }
 
     private static string BuildCommissionPreviewTicket(LocalCommissionBrowserRow row)
@@ -487,7 +602,32 @@ public partial class PosWindow : Window
     private void CommissionCheckBox_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is CommissionSelectionRow row)
-            CommissionsGrid.SelectedItem = row;
+        {
+            // Solo se pueden marcar comisiones del MISMO taxista: el pago en bloque emite un
+            // ticket por taxista, asi que mezclar dos descuadraria el comprobante.
+            if (row.IsSelected)
+            {
+                var otherDriver = _commissionFilteredRows.FirstOrDefault(x =>
+                    x.IsSelected
+                    && !ReferenceEquals(x, row)
+                    && !string.Equals(x.Source.Nombre?.Trim(), row.Source.Nombre?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                if (otherDriver is not null)
+                {
+                    row.IsSelected = false;
+                    UpdateCommissionSelectionTotal();
+                    WebDialogWindow.Show(
+                        this,
+                        $"Solo puedes seleccionar comisiones del mismo taxista.{Environment.NewLine}Ya tienes seleccionadas de {otherDriver.Source.Nombre}.",
+                        "Control Taxi",
+                        "!");
+                    return;
+                }
+            }
+            // Marcar la casilla ya NO selecciona la fila: hacerlo abria el panel de detalle
+            // encima y tapaba la tabla justo cuando se estaban marcando varias comisiones.
+            // El detalle se abre unicamente con el boton DETALLE.
+        }
 
         UpdateCommissionSelectionTotal();
     }
@@ -506,12 +646,162 @@ public partial class PosWindow : Window
         ApplyCommissionPage();
         await Task.CompletedTask;
     });
-    private async void CommissionsGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => await RunAsync(async () =>
+    // Doble clic en una fila: abre el cajon directamente en la pestaña de la venta completa.
+    private void CommissionsGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (CommissionsGrid.SelectedItem is not CommissionSelectionRow row) return;
-        new PosWindow(_database, _user, _branchCode, "Ventas", string.IsNullOrWhiteSpace(row.Source.Ticket) ? row.Source.SaleFolio : row.Source.Ticket) { Owner = this }.ShowDialog();
-        await Task.CompletedTask;
+        OpenCommissionDetail(row);
+        CommissionTabSaleButton.IsChecked = true;
+    }
+
+    private async void OpenCommissionSaleDetail_Click(object sender, RoutedEventArgs e) => await RunAsync(ShowCommissionSaleLinesAsync);
+
+    // Cambio de pestaña del cajon de detalle. La venta completa se carga la primera vez que se
+    // entra a su pestaña (no al abrir el detalle), para no pegarle a la base sin necesidad.
+    private async void CommissionDetailTab_Changed(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (!IsLoaded || CommissionTabGeneralContent is null) return;
+
+        var showSale = CommissionTabSaleButton.IsChecked == true;
+        CommissionTabGeneralContent.Visibility = showSale ? Visibility.Collapsed : Visibility.Visible;
+        CommissionSaleLinesPanel.Visibility = showSale ? Visibility.Visible : Visibility.Collapsed;
+
+        if (showSale && !_commissionSaleLinesLoaded)
+            await ShowCommissionSaleLinesAsync();
     });
+
+    private bool _commissionSaleLinesLoaded;
+
+    // La venta completa se muestra dentro del panel lateral de esta misma pantalla.
+    // Antes se abria una segunda PosWindow como dialogo, que sacaba al usuario del contexto
+    // de comisiones y lo obligaba a cerrarla para volver.
+    private async Task ShowCommissionSaleLinesAsync()
+    {
+        if (CommissionsGrid.SelectedItem is not CommissionSelectionRow row) return;
+        var lookup = string.IsNullOrWhiteSpace(row.Source.Ticket) ? row.Source.SaleFolio : row.Source.Ticket;
+        if (string.IsNullOrWhiteSpace(lookup)) return;
+
+        CommissionSaleLinesLoading.Visibility = Visibility.Visible;
+        try
+        {
+            var sale = (await _pos.GetSalesBrowserRowsAsync(lookup)).FirstOrDefault();
+            var lines = sale is null
+                ? Array.Empty<LocalSalesTicketRow>()
+                : (await GetSalesTicketRowsAsync(sale)).ToArray();
+            CommissionSaleLines.ItemsSource = lines;
+            CommissionSaleLinesEmpty.Visibility = lines.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+            _commissionSaleLinesLoaded = true;
+        }
+        finally
+        {
+            CommissionSaleLinesLoading.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ResetCommissionSaleLines()
+    {
+        CommissionSaleLines.ItemsSource = null;
+        CommissionSaleLinesEmpty.Visibility = Visibility.Collapsed;
+        CommissionSaleLinesLoading.Visibility = Visibility.Collapsed;
+        _commissionSaleLinesLoaded = false;
+
+        // Al cambiar de comision se regresa a la pestaña GENERAL: la venta de la fila anterior
+        // ya no aplica y dejar abierta esa pestaña mostraria datos que no corresponden.
+        if (CommissionTabGeneralButton is not null) CommissionTabGeneralButton.IsChecked = true;
+        if (CommissionTabGeneralContent is not null) CommissionTabGeneralContent.Visibility = Visibility.Visible;
+        CommissionSaleLinesPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private sealed record CommissionDetailField(string Label, string Value);
+
+    // Cambiar de fila ya NO abre el panel: solo refresca su contenido si el panel ya estaba
+    // abierto. Abrirlo con cada seleccion tapaba la tabla al marcar casillas o al arrastrar
+    // para hacer scroll. El detalle se abre unicamente con el boton DETALLE de la fila.
+    private void CommissionsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CommissionDetailPanel.Visibility != Visibility.Visible) return;
+
+        if (CommissionsGrid.SelectedItem is not CommissionSelectionRow row)
+        {
+            HideCommissionDetail();
+            return;
+        }
+
+        LoadCommissionDetail(row);
+    }
+
+    private void LoadCommissionDetail(CommissionSelectionRow row)
+    {
+        // Al cambiar de fila se cierra la venta completa y el ticket de la fila anterior.
+        ResetCommissionSaleLines();
+        ResetCommissionTicketPanel();
+
+        var s = row.Source;
+        CommissionDetailFolio.Text = s.Folio;
+        CommissionDetailFields.ItemsSource = new[]
+        {
+            new CommissionDetailField("Número unidad", s.NumeroUnidad),
+            new CommissionDetailField("Pax", s.Pax.ToString(CultureInfo.InvariantCulture)),
+            new CommissionDetailField("Ticket", s.Ticket),
+            new CommissionDetailField("Venta artesanía", s.VentaArtesania.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Venta farmacia", s.VentaFarmacia.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Venta tienda", s.VentaTienda.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Venta joyería", s.VentaJoyeria.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("% descuento", s.DescuentoPorcentaje.ToString("P0", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Bebidas y cajas regalo", s.BebidasCajasRegalo.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Rep", s.Reparacion.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Degustación", s.Degustacion.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Pagado", s.Pagado.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Saldo", s.Saldo.ToString("C2", CultureInfo.CurrentCulture)),
+            // Los dos estatus juntos, para que se vea claro que son pagos distintos.
+            new CommissionDetailField("Dejada", s.Dejada.ToString("C2", CultureInfo.CurrentCulture)),
+            new CommissionDetailField("Estatus dejada", string.IsNullOrWhiteSpace(s.EstatusDejada) ? "—" : s.EstatusDejada),
+            new CommissionDetailField("Estatus comisión", s.Estatus),
+        };
+        // Ver el ticket solo aplica a comisiones ya pagadas.
+        CommissionShowTicketButton.Visibility = s.PuedeImprimirTicket ? Visibility.Visible : Visibility.Collapsed;
+
+        // Badge de estatus: verde si esta pagada, ambar si sigue pendiente.
+        var pagada = string.Equals(s.Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
+        CommissionDetailStatusText.Text = string.IsNullOrWhiteSpace(s.Estatus) ? "SIN ESTATUS" : s.Estatus.ToUpperInvariant();
+        CommissionDetailStatusText.Foreground = new System.Windows.Media.SolidColorBrush(
+            pagada
+                ? System.Windows.Media.Color.FromRgb(0x0F, 0x7A, 0x44)
+                : System.Windows.Media.Color.FromRgb(0x8A, 0x56, 0x00));
+        CommissionDetailStatusBadge.Background = new System.Windows.Media.SolidColorBrush(
+            pagada
+                ? System.Windows.Media.Color.FromRgb(0xE4, 0xF6, 0xEC)
+                : System.Windows.Media.Color.FromRgb(0xFD, 0xF2, 0xDA));
+    }
+
+    // Abre el cajon lateral con el detalle de una fila (boton DETALLE).
+    private void OpenCommissionDetail(CommissionSelectionRow row)
+    {
+        CommissionsGrid.SelectedItem = row;
+        LoadCommissionDetail(row);
+        CommissionDetailScrim.Visibility = Visibility.Visible;
+        CommissionDetailPanel.Visibility = Visibility.Visible;
+    }
+
+    private void HideCommissionDetail()
+    {
+        CommissionDetailScrim.Visibility = Visibility.Collapsed;
+        CommissionDetailPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private void CloseCommissionDetail_Click(object sender, RoutedEventArgs e) => CloseCommissionDetail();
+
+    // Clic en el velo oscuro de atras: cierra el panel, como en el admin web.
+    // Handler aparte porque MouseLeftButtonDown exige MouseButtonEventArgs.
+    private void CommissionDetailScrim_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e) => CloseCommissionDetail();
+
+    private void CloseCommissionDetail()
+    {
+        ResetCommissionSaleLines();
+        ResetCommissionTicketPanel();
+        CommissionsGrid.SelectedItem = null;
+        HideCommissionDetail();
+    }
 
     private async void RefreshAudit_Click(object sender, RoutedEventArgs e) => await RunAsync(RefreshAsync);
     private void OpenCuts_Click(object sender, RoutedEventArgs e) => ApplySelectedModule("Cortes");
@@ -828,6 +1118,38 @@ public partial class PosWindow : Window
 
     private async Task RefreshCommissionBrowserAsync(bool resetPage)
     {
+        ShowCommissionsSkeleton();
+        try
+        {
+            await RefreshCommissionBrowserCoreAsync(resetPage);
+        }
+        finally
+        {
+            HideCommissionsSkeleton();
+        }
+    }
+
+    private void ShowCommissionsSkeleton()
+    {
+        if (CommissionsSkeletonRows.Items.Count == 0)
+        {
+            for (var i = 0; i < 8; i++)
+                CommissionsSkeletonRows.Items.Add(new object());
+        }
+        CommissionsSkeleton.Visibility = Visibility.Visible;
+        CommissionsGrid.Visibility = Visibility.Collapsed;
+        CommissionsEmptyState.Visibility = Visibility.Collapsed;
+    }
+
+    private void HideCommissionsSkeleton()
+    {
+        // No toca CommissionsGrid.Visibility aqui: ApplyCommissionPage ya decidio si se
+        // muestra la tabla o el estado vacio, y esto corre despues en el finally.
+        CommissionsSkeleton.Visibility = Visibility.Collapsed;
+    }
+
+    private async Task RefreshCommissionBrowserCoreAsync(bool resetPage)
+    {
         if (IsCascoBranch)
         {
             var cascoSelectedByFolio = _commissionFilteredRows
@@ -959,6 +1281,25 @@ public partial class PosWindow : Window
         CommissionPrevPageButton.IsEnabled = _commissionPage > 1;
         CommissionNextPageButton.IsEnabled = _commissionPage < totalPages;
         UpdateCommissionSelectionTotal();
+
+        if (totalRows == 0)
+        {
+            var folio = CommissionFolio.Text?.Trim();
+            var start2 = CommissionStartDate.SelectedDate;
+            var end2 = CommissionEndDate.SelectedDate;
+            CommissionsEmptyStateDetail.Text = !string.IsNullOrWhiteSpace(folio)
+                ? $"No se encontró ninguna comisión con el folio \"{folio}\"."
+                : start2.HasValue && end2.HasValue
+                    ? $"No hay comisiones registradas entre el {start2:dd/MM/yyyy} y el {end2:dd/MM/yyyy}."
+                    : "No hay comisiones para este filtro.";
+            CommissionsEmptyState.Visibility = Visibility.Visible;
+            CommissionsGrid.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            CommissionsEmptyState.Visibility = Visibility.Collapsed;
+            CommissionsGrid.Visibility = Visibility.Visible;
+        }
     }
 
     private async Task<IReadOnlyList<LocalRelation>> LoadCascoRelationsAsync(DateTime? start, DateTime? end)

@@ -29,7 +29,10 @@ public sealed record LocalCommissionBrowserRow(
     decimal Saldo,
     string Estatus,
     string Vendedor,
-    string Gafete)
+    string Gafete,
+    // Estatus del pago de la DEJADA al taxista. Es un pago distinto al de la comision, por eso
+    // va en su propia columna: una comision puede estar pagada y la dejada no, o al reves.
+    string EstatusDejada = "")
 {
     public bool PuedePagar => PagoComision > 0m && Saldo > 0m && !string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
     public bool PuedeImprimirTicket => PagoComision > 0m && string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
