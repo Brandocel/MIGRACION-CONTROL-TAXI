@@ -799,7 +799,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
               COALESCE(NULLIF(r.TransporteTipo, ''), NULLIF(a.tipo_operacion, ''), '') AS TransportType,
               COALESCE(a.total, 0) AS Payout,
               COALESCE(a.pago_comision, 0) AS CommissionPaid,
-              COALESCE(a.fecha_pago_comision, '') AS CommissionPaidDate,
+              -- CONVERT ANTES del COALESCE, a proposito: COALESCE devuelve el tipo de mayor
+              -- precedencia, asi que COALESCE(datetime2, '') convertia el '' a fecha y
+              -- regresaba 1900-01-01 en vez de cadena vacia. El C# leia eso como "si hay
+              -- fecha de pago" y daba TODA comision por pagada.
+              COALESCE(CONVERT(nvarchar(30), a.fecha_pago_comision, 120), '') AS CommissionPaidDate,
               COALESCE(a.hotel, d.hotel, '') AS Hotel,
               COALESCE(a.pax, d.pax, 0) AS Passengers,
               COALESCE(a.unidad, d.unidad, '') AS UnitNumber,
@@ -1858,6 +1862,46 @@ public sealed class LocalPosRepository(LocalDatabase database)
         return value.StartsWith("C-", StringComparison.OrdinalIgnoreCase) ? value : "C-" + value;
     }
 
+    /// <summary>
+    /// Registra el pago de la COMISION en SQL Server (AppMovilRegistro.pago_comision /
+    /// fecha_pago_comision), que es la fuente que lee la pantalla de Comisiones.
+    ///
+    /// Sin esto, PayCommissionAsync solo escribia el snapshot local de SQLite y la comision
+    /// se quedaba en PENDIENTE para siempre: se cobraba, pero la fuente autoritativa nunca se
+    /// enteraba. Es el equivalente, del lado de comision, a lo que PayPayoutAsync hace del
+    /// lado de la dejada. No toca ninguna columna de dejada.
+    /// </summary>
+    public async Task MarkCommissionPaidInPosAsync(string operationFolio, decimal paidAmount, string user)
+    {
+        if (_sqlSource is null) return;
+        var folio = operationFolio?.Trim();
+        if (string.IsNullOrWhiteSpace(folio)) return;
+
+        await using var connection = await _sqlSource.OpenPosAsync();
+
+        // Si la instalacion todavia no tiene estas columnas, no se puede registrar el pago:
+        // se avisa en vez de fallar en silencio y dejar la comision cobrada sin rastro.
+        if (!await HasSqlColumnAsync(connection, "AppMovilRegistro", "pago_comision")
+            || !await HasSqlColumnAsync(connection, "AppMovilRegistro", "fecha_pago_comision"))
+        {
+            throw new InvalidOperationException(
+                "La tabla AppMovilRegistro no tiene las columnas pago_comision / fecha_pago_comision, "
+                + "asi que el pago de la comision no se puede registrar en SQL Server.");
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            UPDATE {_sqlSource.PosTable("AppMovilRegistro")}
+            SET pago_comision = @paid,
+                fecha_pago_comision = SYSDATETIME()
+            WHERE folio_app = @folio OR folio_app_original = @folio;
+            """;
+        command.Parameters.AddWithValue("@paid", paidAmount);
+        command.Parameters.AddWithValue("@folio", folio);
+        await command.ExecuteNonQueryAsync();
+        _ = user;
+    }
+
     public async Task PayCommissionAsync(string folio, decimal amount, string user)
     {
         if (amount < 0) throw new ArgumentException("El abono no puede ser negativo.");
@@ -2491,10 +2535,73 @@ public sealed class LocalPosRepository(LocalDatabase database)
         return result;
     }
 
+    /// <summary>
+    /// Indica si una columna existe en la tabla. Se usa para no romper la consulta principal en
+    /// instalaciones donde AppMovilRegistro todavia no tiene los campos del pago de dejada:
+    /// si la columna no existe, SQL Server tira "Invalid column name" y toda la pantalla de
+    /// Comisiones se quedaba vacia por caer al respaldo.
+    /// </summary>
+    private static async Task<bool> HasSqlColumnAsync(SqlConnection connection, string table, string column)
+    {
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandTimeout = 10;
+            command.CommandText = """
+                SELECT TOP 1 1
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = @table AND COLUMN_NAME = @column;
+                """;
+            command.Parameters.AddWithValue("@table", table);
+            command.Parameters.AddWithValue("@column", column);
+            return await command.ExecuteScalarAsync() is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private async Task<List<AuthoritativeAppRow>> ReadAuthoritativeAppRowsAsync(SqlConnection connection, string? search, DateTime? start, DateTime? end)
     {
         if (_sqlSource is null) return [];
         var sqlSource = _sqlSource;
+
+        // El estatus de la dejada solo se puede calcular si existen sus columnas.
+        var hasEstadoPagoDejada = await HasSqlColumnAsync(connection, "AppMovilRegistro", "estado_pago_dejada");
+        var hasPayoutStatus = await HasSqlColumnAsync(connection, "AppMovilRegistro", "payout_status");
+        var hasFechaPagoDejada = await HasSqlColumnAsync(connection, "AppMovilRegistro", "fecha_pago_dejada");
+        var hasPayoutDate = await HasSqlColumnAsync(connection, "AppMovilRegistro", "payout_date");
+
+        var payoutDateParts = new List<string>();
+        if (hasFechaPagoDejada) payoutDateParts.Add("a.fecha_pago_dejada");
+        if (hasPayoutDate) payoutDateParts.Add("a.payout_date");
+        var payoutStatusParts = new List<string>();
+        if (hasEstadoPagoDejada) payoutStatusParts.Add("a.estado_pago_dejada");
+        if (hasPayoutStatus) payoutStatusParts.Add("a.payout_status");
+
+        string payoutStatusExpression;
+        if (payoutDateParts.Count == 0 && payoutStatusParts.Count == 0)
+        {
+            payoutStatusExpression = "'SIN DEJADA'";
+        }
+        else
+        {
+            var conditions = new List<string>();
+            if (payoutDateParts.Count > 0)
+                conditions.Add($"COALESCE({string.Join(", ", payoutDateParts)}) IS NOT NULL");
+            if (payoutStatusParts.Count > 0)
+                conditions.Add($"UPPER(COALESCE({string.Join(", ", payoutStatusParts)}, '')) IN ('PAGADO', 'PAGADA')");
+
+            payoutStatusExpression = $"""
+                CASE
+                  WHEN {string.Join(" OR ", conditions)} THEN 'PAGADA'
+                  WHEN COALESCE(a.total, 0) <= 0 THEN 'SIN DEJADA'
+                  ELSE 'PENDIENTE'
+                END
+                """;
+        }
+
         await using var command = connection.CreateCommand();
         var filters = new List<string> { "COALESCE(a.folio_app, '') <> ''" };
         if (start.HasValue)
@@ -2538,7 +2645,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
               COALESCE(NULLIF(r.TransporteTipo, ''), NULLIF(a.tipo_operacion, ''), '') AS TransportType,
               COALESCE(a.total, 0) AS Payout,
               COALESCE(a.pago_comision, 0) AS CommissionPaid,
-              COALESCE(a.fecha_pago_comision, '') AS CommissionPaidDate,
+              -- CONVERT ANTES del COALESCE, a proposito: COALESCE devuelve el tipo de mayor
+              -- precedencia, asi que COALESCE(datetime2, '') convertia el '' a fecha y
+              -- regresaba 1900-01-01 en vez de cadena vacia. El C# leia eso como "si hay
+              -- fecha de pago" y daba TODA comision por pagada.
+              COALESCE(CONVERT(nvarchar(30), a.fecha_pago_comision, 120), '') AS CommissionPaidDate,
               COALESCE(a.hotel, d.hotel, '') AS Hotel,
               COALESCE(a.pax, d.pax, 0) AS Passengers,
               COALESCE(a.unidad, d.unidad, '') AS UnitNumber,
@@ -2553,15 +2664,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
               -- Estatus del pago de la DEJADA (el anticipo al taxista). Es independiente del
               -- pago de la comision. Misma regla que usa el modulo de Relaciones
               -- (LocalOperationsRepository): cuenta como pagada si hay fecha de pago o si el
-              -- estado dice PAGADO/PAGADA, mirando los dos juegos de columnas que conviven en
-              -- AppMovilRegistro (estado_pago_dejada y el payout_status anterior).
-              CASE
-                WHEN COALESCE(a.fecha_pago_dejada, a.payout_date) IS NOT NULL
-                  OR UPPER(COALESCE(a.estado_pago_dejada, a.payout_status, '')) IN ('PAGADO', 'PAGADA')
-                THEN 'PAGADA'
-                WHEN COALESCE(a.total, 0) <= 0 THEN 'SIN DEJADA'
-                ELSE 'PENDIENTE'
-              END AS PayoutStatus
+              -- estado dice PAGADO/PAGADA. La expresion se arma arriba segun que columnas
+              -- existan realmente, para no romper la consulta donde aun no estan.
+              {payoutStatusExpression} AS PayoutStatus
             FROM {sqlSource.PosTable("AppMovilRegistro")} a
             OUTER APPLY
             (
@@ -3700,7 +3805,12 @@ public sealed class LocalPosRepository(LocalDatabase database)
             Math.Max(row.CommissionAmount - row.PaidAmount, 0m),
             ResolveCommissionStatus(row.CommissionAmount, row.PaidAmount),
             vendor,
-            row.Badge);
+            row.Badge,
+            // Este es el mapeo que usa la ruta principal (SQL Server). Faltaba propagar el
+            // estatus de la dejada y por eso la columna salia vacia aunque el dato si venia
+            // en la consulta. Las comisiones que no nacen de un registro de la app movil no
+            // tienen dejada asociada: se marcan como SIN DEJADA en vez de dejarse en blanco.
+            string.IsNullOrWhiteSpace(row.PayoutStatus) ? "SIN DEJADA" : row.PayoutStatus);
     }
 
     private static LocalCommissionBrowserRow MapRelationCommissionRow(LocalRelation relation)

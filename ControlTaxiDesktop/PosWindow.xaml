@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:behaviors="clr-namespace:ControlTaxiDesktop.Behaviors"
+        xmlns:conv="clr-namespace:ControlTaxiDesktop.Converters"
         Title="Control Taxi Â· POS local"
         Width="1280"
         Height="760"
@@ -19,6 +20,12 @@
       <ResourceDictionary.MergedDictionaries>
         <ResourceDictionary Source="Styles/SharedFilterStyles.xaml"/>
       </ResourceDictionary.MergedDictionaries>
+      <!-- Mismos converters de color de estatus que usa Relacion Ticket-Taxista, para que un
+           "PAGADA" se vea igual en las dos pantallas. -->
+      <conv:UpperCaseConverter x:Key="UpperCaseConverter"/>
+      <conv:StatusBackgroundConverter x:Key="StatusBackgroundConverter"/>
+      <conv:StatusForegroundConverter x:Key="StatusForegroundConverter"/>
+      <conv:StatusBorderConverter x:Key="StatusBorderConverter"/>
     <Style x:Key="FormPanel" TargetType="Border">
       <Setter Property="Background" Value="#F8FCFF"/>
       <Setter Property="BorderBrush" Value="#B6C8DA"/>
@@ -666,10 +673,36 @@
                       <DataGridTextColumn Header="Dejada" Binding="{Binding Source.Dejada, StringFormat=C2}" Width="90*" MinWidth="70"/>
                       <DataGridTextColumn Header="% comision" Binding="{Binding Source.PorcentajeComision, StringFormat=P0}" Width="90*" MinWidth="70"/>
                       <DataGridTextColumn Header="Pago comision" Binding="{Binding Source.PagoComision, StringFormat=C2}" Width="110*" MinWidth="90"/>
-                      <!-- Dos estatus distintos: el de la DEJADA (anticipo al taxista) y el de
-                           la COMISIÓN. Antes solo se veia uno y se prestaba a confusion. -->
-                      <DataGridTextColumn Header="Est. dejada" Binding="{Binding Source.EstatusDejada}" Width="105*" MinWidth="85"/>
-                      <DataGridTextColumn Header="Est. comisión" Binding="{Binding Source.Estatus}" Width="105*" MinWidth="85"/>
+                      <!-- Dos estados de pago distintos y con el mismo lenguaje visual:
+                           el de la DEJADA (anticipo al taxista, se paga en Relación
+                           Ticket-Taxista) y el de la COMISIÓN (se paga aqui). Verde = pagado,
+                           ambar = pendiente, gris = no aplica. -->
+                      <DataGridTemplateColumn Header="Est. dejada" Width="110*" MinWidth="95">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <Border Style="{StaticResource SquareStatusBadge}" HorizontalAlignment="Center"
+                                    Background="{Binding Source.EstatusDejada, Converter={StaticResource StatusBackgroundConverter}}"
+                                    BorderBrush="{Binding Source.EstatusDejada, Converter={StaticResource StatusBorderConverter}}">
+                              <TextBlock Style="{StaticResource SquareStatusBadgeText}"
+                                         Text="{Binding Source.EstatusDejada, Converter={StaticResource UpperCaseConverter}}"
+                                         Foreground="{Binding Source.EstatusDejada, Converter={StaticResource StatusForegroundConverter}}"/>
+                            </Border>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      <DataGridTemplateColumn Header="Est. comisión" Width="110*" MinWidth="95">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate>
+                            <Border Style="{StaticResource SquareStatusBadge}" HorizontalAlignment="Center"
+                                    Background="{Binding Source.Estatus, Converter={StaticResource StatusBackgroundConverter}}"
+                                    BorderBrush="{Binding Source.Estatus, Converter={StaticResource StatusBorderConverter}}">
+                              <TextBlock Style="{StaticResource SquareStatusBadgeText}"
+                                         Text="{Binding Source.Estatus, Converter={StaticResource UpperCaseConverter}}"
+                                         Foreground="{Binding Source.Estatus, Converter={StaticResource StatusForegroundConverter}}"/>
+                            </Border>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
                       <DataGridTextColumn Header="Vendedor" Binding="{Binding Source.Vendedor}" Width="160*" MinWidth="120"/>
                     </DataGrid.Columns>
                   </DataGrid>

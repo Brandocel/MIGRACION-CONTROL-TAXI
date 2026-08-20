@@ -1238,6 +1238,8 @@ public partial class OperationsWindow : Window
     }
     private void ClearRelation_Click(object sender, RoutedEventArgs e)
     {
+        // NUEVO limpia el formulario y abre el cajon listo para capturar.
+        OpenRelationEdit(string.Empty, string.Empty);
         _loadedRelationForm = null;
         RelationAssignedTicket.Clear();
         RelationAppFolio.Clear();
@@ -1276,16 +1278,41 @@ public partial class OperationsWindow : Window
         ClearRelation_Click(sender, e);
         await RunAsync(RefreshAsync);
     }
-    private void OpenCommissions_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new PosWindow(_database, _user, _branchCode, "Comisiones") { Owner = this };
-        window.ShowDialog();
-    }
     private async void LoadRelation_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not LocalRelation relation) return;
         var detailed = await GetRelationDetailsAsync(relation);
         LoadRelationIntoForm(detailed);
+        OpenRelationEdit(FirstFilled(detailed.AppFolio, detailed.OperationFolio, detailed.PosFolio), detailed.Driver);
+    }
+
+    // ===== Cajon lateral de edicion =====
+    // El formulario de taxista/pasajeros dejo de estar incrustado en la pagina y ahora se abre
+    // en un panel lateral, para que la tabla no quede empujada hacia abajo cuando no se esta
+    // editando nada.
+    private void OpenRelationEdit(string folio, string driver)
+    {
+        // El titulo distingue alta de edicion: con NUEVO decia "EDITAR RELACION", que confundia
+        // porque no se estaba editando nada.
+        var isNew = string.IsNullOrWhiteSpace(folio);
+        RelationEditTitle.Text = isNew ? "NUEVA RELACIÓN" : "EDITAR RELACIÓN";
+
+        var subtitle = isNew ? "Captura de una relación nueva" : $"Folio {folio}";
+        if (!isNew && !string.IsNullOrWhiteSpace(driver)) subtitle += $" · {driver}";
+        RelationEditSubtitle.Text = subtitle;
+        RelationEditScrim.Visibility = Visibility.Visible;
+        RelationEditPanel.Visibility = Visibility.Visible;
+    }
+
+    private void CloseRelationEdit_Click(object sender, RoutedEventArgs e) => CloseRelationEdit();
+
+    // Handler aparte porque MouseLeftButtonDown exige MouseButtonEventArgs.
+    private void RelationEditScrim_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e) => CloseRelationEdit();
+
+    private void CloseRelationEdit()
+    {
+        RelationEditScrim.Visibility = Visibility.Collapsed;
+        RelationEditPanel.Visibility = Visibility.Collapsed;
     }
     private void RelationSale_Click(object sender, RoutedEventArgs e)
     {
@@ -2965,10 +2992,56 @@ public partial class OperationsWindow : Window
         RelationSearchStatusBadge.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
     }
 
+    private void ShowRelationsSkeleton()
+    {
+        if (RelationsSkeleton is null) return;
+        RelationsSkeletonRows.ItemsSource = Enumerable.Range(0, 6).ToArray();
+        RelationsEmptyState.Visibility = Visibility.Collapsed;
+        RelationsSkeleton.Visibility = Visibility.Visible;
+    }
+
+    private void HideRelationsSkeleton()
+    {
+        if (RelationsSkeleton is null) return;
+        RelationsSkeleton.Visibility = Visibility.Collapsed;
+        RelationsSkeletonRows.ItemsSource = null;
+    }
+
+    // Nunca dejar la tabla en blanco sin explicacion: el texto dice si el vacio viene del
+    // buscador o del rango de fechas.
+    private void ApplyRelationsEmptyState(int rowCount)
+    {
+        if (RelationsEmptyState is null) return;
+        if (rowCount > 0)
+        {
+            RelationsEmptyState.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var search = RelationSearch.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            RelationsEmptyStateDetail.Text = $"No hay viajes que coincidan con \"{search}\".";
+        }
+        else if (RelationStart.SelectedDate is { } from && RelationEnd.SelectedDate is { } to)
+        {
+            RelationsEmptyStateDetail.Text = from.Date == to.Date
+                ? $"No hay viajes registrados el {from:dd/MM/yyyy}."
+                : $"No hay viajes registrados entre el {from:dd/MM/yyyy} y el {to:dd/MM/yyyy}.";
+        }
+        else
+        {
+            RelationsEmptyStateDetail.Text = "No hay viajes para el filtro o rango de fechas seleccionado.";
+        }
+
+        RelationsEmptyState.Visibility = Visibility.Visible;
+    }
+
     private async Task LoadRelationsAsync()
     {
         _windowCts.Token.ThrowIfCancellationRequested();
         SetRelationSearchStatus("Buscando...", "#F2A93B");
+        ShowRelationsSkeleton();
         var autoSelectSingleResult = _autoSelectSingleRelationSearchResult;
         _autoSelectSingleRelationSearchResult = false;
         var currentBranchCode = _currentBranch?.Code ?? _branchCode;
@@ -2998,9 +3071,11 @@ public partial class OperationsWindow : Window
         catch
         {
             SetRelationSearchStatus("Error al buscar", "#D9534F");
+            HideRelationsSkeleton();
             throw;
         }
 
+        HideRelationsSkeleton();
         if (_isClosing || _windowCts.IsCancellationRequested)
             return;
 
@@ -3010,6 +3085,7 @@ public partial class OperationsWindow : Window
             Debug.WriteLine($"[OperationsWindow] LoadRelationsAsync grid row folio={row.AppFolio}/{row.OperationFolio} payoutStatus={row.PayoutStatus} payoutDate={row.PayoutDate} payoutTicket={row.PayoutTicket} payoutUser={row.PayoutUser}");
         }
         RelationsGrid.ItemsSource = rows;
+        ApplyRelationsEmptyState(rows.Count);
         SetRelationSearchStatus(
             rows.Count == 0 ? "Sin resultados" : $"{rows.Count} resultado{(rows.Count == 1 ? "" : "s")}",
             rows.Count == 0 ? "#8A93A6" : "#0F4AB6");

@@ -355,6 +355,23 @@ public partial class PosWindow : Window
         {
             await _pos.EnsureCommissionSnapshotAsync(row, _user);
             await _pos.PayCommissionAsync(row.Folio, row.Saldo, _user);
+
+            // Y ademas se registra en SQL Server, que es de donde lee esta pantalla. Sin este
+            // paso el cobro quedaba solo en el snapshot local y la comision seguia saliendo
+            // PENDIENTE aunque ya se hubiera pagado.
+            //
+            // Se manda la comision TOTAL del folio, no la de este renglon: un mismo folio de
+            // operacion puede tener varios tickets, y AppMovilRegistro.pago_comision guarda el
+            // acumulado de la operacion completa.
+            var operationFolio = string.IsNullOrWhiteSpace(row.SaleFolio) ? row.Folio : row.SaleFolio;
+            var folioCommissionTotal = _commissionFilteredRows
+                .Select(x => x.Source)
+                .Where(x => string.Equals(
+                    string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio,
+                    operationFolio,
+                    StringComparison.OrdinalIgnoreCase))
+                .Sum(x => x.PagoComision);
+            await _pos.MarkCommissionPaidInPosAsync(operationFolio, folioCommissionTotal, _user);
         }
 
         var ticketRows = selected
@@ -653,8 +670,6 @@ public partial class PosWindow : Window
         OpenCommissionDetail(row);
         CommissionTabSaleButton.IsChecked = true;
     }
-
-    private async void OpenCommissionSaleDetail_Click(object sender, RoutedEventArgs e) => await RunAsync(ShowCommissionSaleLinesAsync);
 
     // Cambio de pestaña del cajon de detalle. La venta completa se carga la primera vez que se
     // entra a su pestaña (no al abrir el detalle), para no pegarle a la base sin necesidad.
