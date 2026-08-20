@@ -45,6 +45,62 @@ public partial class CommissionSettingsWindow : Window
         await RefreshAuditAsync();
         await RefreshDiagnosticsAsync();
         await RefreshSimulatorCatalogsAsync();
+        await RefreshGlobalRulesAsync();
+    }
+
+    // ===== Reglas globales =====
+
+    private async Task RefreshGlobalRulesAsync()
+    {
+        var umbral = await _settings.GetGlobalSettingAsync(
+            CommissionSettingsRepository.PayoutDeductionMinSaleKey,
+            CommissionGlobalRules.DefaultPayoutDeductionMinSale);
+
+        PayoutThresholdBox.Text = umbral.ToString("0.##", CultureInfo.InvariantCulture);
+        PayoutThresholdBox.IsEnabled = _canEdit;
+        UpdatePayoutThresholdExample(umbral);
+    }
+
+    private void UpdatePayoutThresholdExample(decimal umbral)
+    {
+        var arriba = umbral + 1m;
+        PayoutThresholdExample.Text =
+            $"Con una dejada de $200.00 y 10% de comisión:{Environment.NewLine}"
+            + $"  • Venta de {arriba:C2}  →  sí se descuenta la dejada  →  comisión sobre {(arriba - 200m):C2}{Environment.NewLine}"
+            + $"  • Venta de {umbral:C2}  →  NO se descuenta la dejada  →  comisión sobre {umbral:C2}";
+    }
+
+    private async void SavePayoutThreshold_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_canEdit)
+        {
+            PayoutThresholdStatus.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC0, 0x39, 0x2B));
+            PayoutThresholdStatus.Text = "Tu usuario no tiene permiso para cambiar esta regla.";
+            return;
+        }
+
+        var texto = (PayoutThresholdBox.Text ?? string.Empty).Trim().Replace("$", string.Empty).Replace(",", string.Empty);
+        if (!decimal.TryParse(texto, NumberStyles.Number, CultureInfo.InvariantCulture, out var umbral) || umbral < 0m)
+        {
+            PayoutThresholdStatus.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC0, 0x39, 0x2B));
+            PayoutThresholdStatus.Text = "Escribe un monto válido (por ejemplo 400). No se guardó nada.";
+            return;
+        }
+
+        await _settings.SetGlobalSettingAsync(
+            CommissionSettingsRepository.PayoutDeductionMinSaleKey,
+            umbral,
+            _user,
+            "Venta maxima en la que NO se descuenta la dejada de la base de comision.");
+
+        // Se aplica de inmediato, sin reiniciar: el calculo lee de aqui.
+        CommissionGlobalRules.ConfigurePayoutDeductionMinSale(umbral);
+        UpdatePayoutThresholdExample(umbral);
+
+        PayoutThresholdStatus.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x0F, 0x98, 0x8F));
+        PayoutThresholdStatus.Text =
+            $"Guardado. En ventas de hasta {umbral:C2} ya no se descuenta la dejada. "
+            + "Vuelve a buscar en Comisiones para ver el cálculo actualizado.";
     }
 
     private async Task RefreshSimulatorCatalogsAsync()

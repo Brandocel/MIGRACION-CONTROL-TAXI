@@ -3285,13 +3285,31 @@ public sealed class LocalPosRepository(LocalDatabase database)
         if (percentage <= 0m)
             return 0m;
 
-        var deductions = row.PayoutDeduction + CalculateExpenseDeductions(row.TransportType, row.Expenses);
         var saleTotal = row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal;
+        var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses);
         var payments = row.Payments;
         var netAfterDiscount = CalculateAuthoritativeNetAfterDiscount(row, saleTotal, payments);
 
         return Math.Max(0m, decimal.Truncate(Math.Max(0m, netAfterDiscount - deductions) * (percentage / 100m)));
     }
+
+    /// <summary>
+    /// Dejada que se resta de la base de comision, ya con la regla global aplicada.
+    ///
+    /// En ventas chicas la dejada no se descuenta: quitarle $200 de dejada a una venta de $300
+    /// dejaria al taxista practicamente sin comision. El umbral es configurable
+    /// (CommissionGlobalRules.PayoutDeductionMinSale, por omision $400) y aplica a todos los
+    /// transportes por igual.
+    ///
+    /// Se compara contra row.SaleTotal a proposito: es el mismo importe que la pantalla muestra
+    /// en la columna "Vnt total", para que el operador pueda verificar la regla a simple vista.
+    ///
+    /// Vive en un solo metodo porque la resta de la dejada ocurre en tres calculos distintos
+    /// (comision por renglon, comision agrupada de tienda y el diagnostico) y tienen que
+    /// coincidir siempre.
+    /// </summary>
+    private static decimal ResolvePayoutDeduction(AuthoritativeCommissionRow row)
+        => CommissionGlobalRules.ShouldDeductPayout(row.SaleTotal) ? row.PayoutDeduction : 0m;
 
     private static void ApplyStoreOnlyOperationGroupCommissions(List<AuthoritativeCommissionRow> rows)
     {
@@ -3307,7 +3325,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             var baseTotal = items.Sum(row =>
             {
                 var saleTotal = row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal;
-                var deductions = row.PayoutDeduction + CalculateExpenseDeductions(row.TransportType, row.Expenses);
+                var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses);
                 return Math.Max(0m, CalculateAuthoritativeNetAfterDiscount(row, saleTotal, row.Payments) - deductions);
             });
             var groupCommission = Math.Max(0m, decimal.Truncate(baseTotal * (percentage / 100m)));
@@ -3328,7 +3346,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 var amexRetentionPercent = ResolveAuthoritativeDiscount(row, PaymentKind.Amex);
                 var cardRetention = row.Payments.Card * (CommissionPaymentRules.NormalizePercent(cardRetentionPercent) / 100m);
                 var amexRetention = row.Payments.Amex * (CommissionPaymentRules.NormalizePercent(amexRetentionPercent) / 100m);
-                var deductions = row.PayoutDeduction + CalculateExpenseDeductions(row.TransportType, row.Expenses);
+                var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses);
                 var saleTotal = row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal;
                 var baseCommission = Math.Max(0m, CalculateAuthoritativeNetAfterDiscount(row, saleTotal, row.Payments) - deductions);
                 return new LocalCommissionDiagnosticRow(

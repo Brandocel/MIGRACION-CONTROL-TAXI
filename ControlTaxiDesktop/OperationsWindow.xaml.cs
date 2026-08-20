@@ -1325,11 +1325,22 @@ public partial class OperationsWindow : Window
         var currentBranchCode = _currentBranch?.Code ?? _branchCode;
         new PosWindow(_database, _user, currentBranchCode, "Ventas", saleLookup, startEmpty: !hasSaleLookup, cascoOperationFolioForSaleLink: relation.OperationFolio) { Owner = this }.ShowDialog();
     }
+    /// <summary>
+    /// Candado contra doble cobro de dejada: el boton sigue habilitado mientras corre el
+    /// dialogo de confirmacion y los awaits, asi que dos clics seguidos arrancarian dos pagos
+    /// del mismo viaje.
+    /// </summary>
+    private bool _payoutPaymentInProgress;
+
     private void RelationPay_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not LocalRelation relation) return;
+        if (_payoutPaymentInProgress) return;
+        _payoutPaymentInProgress = true;
         _ = RunAsync(async () =>
         {
+            try
+            {
             var currentBranchCode = _currentBranch?.Code ?? _branchCode;
             LocalRelation workingRelation;
             if (string.Equals(currentBranchCode, "CV", StringComparison.OrdinalIgnoreCase))
@@ -1424,6 +1435,11 @@ public partial class OperationsWindow : Window
                 if (ex is OperationCanceledException)
                     return;
                 WebDialogWindow.Show(this, ex.ToString(), "No se pudo completar el pago", "!");
+            }
+            }
+            finally
+            {
+                _payoutPaymentInProgress = false;
             }
         });
     }

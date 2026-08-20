@@ -321,7 +321,28 @@ public partial class PosWindow : Window
 
     private async void PaySelectedCommissions_Click(object sender, RoutedEventArgs e) => await RunAsync(PayCommissionsCoreAsync);
 
+    /// <summary>
+    /// Candado contra doble cobro. Los handlers son async void y el boton sigue habilitado
+    /// mientras corre el dialogo de confirmacion y los awaits: sin esto, dos clics seguidos
+    /// arrancan dos flujos de pago sobre la misma comision.
+    /// </summary>
+    private bool _commissionPaymentInProgress;
+
     private async Task PayCommissionsCoreAsync()
+    {
+        if (_commissionPaymentInProgress) return;
+        _commissionPaymentInProgress = true;
+        try
+        {
+            await PayCommissionsCoreInnerAsync();
+        }
+        finally
+        {
+            _commissionPaymentInProgress = false;
+        }
+    }
+
+    private async Task PayCommissionsCoreInnerAsync()
     {
         if (IsCascoBranch)
         {
@@ -337,44 +358,64 @@ public partial class PosWindow : Window
         if (selected.Count == 0 && CommissionsGrid.SelectedItem is CommissionSelectionRow selectedRow && selectedRow.Source.PuedePagar)
             selected.Add(selectedRow.Source);
 
-        selected = selected
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio, StringComparer.OrdinalIgnoreCase)
-            .Select(x => x.First())
+        // Un mismo folio de operacion puede traer VARIOS tickets (varias llegadas del mismo
+        // taxista). El pago se hace por folio completo, no por renglon, porque la dejada y el
+        // acumulado pago_comision viven a nivel de operacion.
+        //
+        // Antes aqui se hacia GroupBy(...).First(), que se quedaba con UN solo ticket por
+        // folio: el importe del dialogo y el ticket impreso mostraban la comision de un ticket
+        // cuando en realidad se marcaban como pagados todos los del folio. Con 3 llegadas de
+        // $504 + $415 + $604 el sistema decia "$504" y cobraba $1,523.
+        var folioGroups = selected
+            .Select(x => string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(folio => new
+            {
+                Folio = folio,
+                Rows = _commissionRows
+                    .Where(x => string.Equals(
+                        string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio,
+                        folio,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList(),
+            })
+            .Where(g => g.Rows.Count > 0)
             .ToList();
 
-        if (selected.Count == 0) throw new InvalidOperationException("Selecciona al menos una comision pendiente.");
+        // Solo los tickets que realmente tienen saldo pendiente entran al cobro.
+        var rowsToPay = folioGroups.SelectMany(g => g.Rows).Where(x => x.PuedePagar).ToList();
+        if (rowsToPay.Count == 0) throw new InvalidOperationException("Selecciona al menos una comision pendiente.");
 
-        var total = selected.Sum(x => x.Saldo);
-        var message = selected.Count == 1
-            ? $"Deseas pagar la comision del folio {selected[0].Folio}?{Environment.NewLine}Importe: {total:C2}"
-            : $"Deseas pagar {selected.Count:N0} comisiones seleccionadas?{Environment.NewLine}Importe total: {total:C2}";
+        var total = rowsToPay.Sum(x => x.Saldo);
+        var message = folioGroups.Count == 1
+            ? $"Deseas pagar la comision del folio {folioGroups[0].Folio}?{Environment.NewLine}"
+              + $"Tickets: {rowsToPay.Count:N0}{Environment.NewLine}Importe: {total:C2}"
+            : $"Deseas pagar {folioGroups.Count:N0} folios ({rowsToPay.Count:N0} tickets)?{Environment.NewLine}"
+              + $"Importe total: {total:C2}";
         if (!WebDialogWindow.Confirm(this, message, "PAGAR COMISION", "?", "PAGAR", "CANCELAR"))
             return;
 
-        foreach (var row in selected)
+        foreach (var group in folioGroups)
         {
-            await _pos.EnsureCommissionSnapshotAsync(row, _user);
-            await _pos.PayCommissionAsync(row.Folio, row.Saldo, _user);
-
-            // Y ademas se registra en SQL Server, que es de donde lee esta pantalla. Sin este
-            // paso el cobro quedaba solo en el snapshot local y la comision seguia saliendo
-            // PENDIENTE aunque ya se hubiera pagado.
+            // ORDEN IMPORTANTE: primero SQL Server (la fuente que lee esta pantalla) y despues
+            // el snapshot local. Al reves, si fallaba SQL Server quedaba el peor estado
+            // posible: el local decia "pagada" y la pantalla seguia mostrando PENDIENTE, y al
+            // reintentar el pago respondia "La comision ya esta pagada" sin dejar corregirlo.
             //
-            // Se manda la comision TOTAL del folio, no la de este renglon: un mismo folio de
-            // operacion puede tener varios tickets, y AppMovilRegistro.pago_comision guarda el
-            // acumulado de la operacion completa.
-            var operationFolio = string.IsNullOrWhiteSpace(row.SaleFolio) ? row.Folio : row.SaleFolio;
-            var folioCommissionTotal = _commissionFilteredRows
-                .Select(x => x.Source)
-                .Where(x => string.Equals(
-                    string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio,
-                    operationFolio,
-                    StringComparison.OrdinalIgnoreCase))
-                .Sum(x => x.PagoComision);
-            await _pos.MarkCommissionPaidInPosAsync(operationFolio, folioCommissionTotal, _user);
+            // Se manda la comision TOTAL del folio (suma de sus tickets), que es lo que
+            // AppMovilRegistro.pago_comision guarda a nivel de operacion.
+            var folioCommissionTotal = group.Rows.Sum(x => x.PagoComision);
+            await _pos.MarkCommissionPaidInPosAsync(group.Folio, folioCommissionTotal, _user);
+
+            // Y el snapshot local se guarda por CADA ticket del folio, no solo por el primero.
+            foreach (var row in group.Rows.Where(x => x.PuedePagar))
+            {
+                await _pos.EnsureCommissionSnapshotAsync(row, _user);
+                await _pos.PayCommissionAsync(row.Folio, row.Saldo, _user);
+            }
         }
 
-        var ticketRows = selected
+        var ticketRows = rowsToPay
             .Select(row => row with { Pagado = row.PagoComision, Saldo = 0m, Estatus = "PAGADA" })
             .ToArray();
         await RefreshCommissionBrowserAsync(resetPage: true);
@@ -382,7 +423,11 @@ public partial class PosWindow : Window
             Environment.NewLine + Environment.NewLine,
             ticketRows.Select(BuildCommissionPreviewTicket))) { Owner = this };
         preview.ShowDialog();
-        WebDialogWindow.Show(this, $"Se pagaron {selected.Count:N0} comisiones exitosamente. Estado: PAGADA.", "Control Taxi", "OK");
+        WebDialogWindow.Show(
+            this,
+            $"Se pagaron {rowsToPay.Count:N0} comisiones de {folioGroups.Count:N0} folio(s) por {total:C2}. Estado: PAGADA.",
+            "Control Taxi",
+            "OK");
     }
 
     private async Task PaySelectedCascoCommissionsAsync()

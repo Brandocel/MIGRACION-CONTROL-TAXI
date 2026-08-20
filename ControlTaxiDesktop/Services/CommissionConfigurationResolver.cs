@@ -8,6 +8,12 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
     {
         await settings.InitializeAsync();
         CommissionPaymentRules.ConfigurePayments(await settings.GetActivePaymentConfigurationsAsync(DateTime.Today));
+
+        // Reglas globales (aplican a todos los transportes): venta minima para descontar la dejada.
+        CommissionGlobalRules.ConfigurePayoutDeductionMinSale(
+            await settings.GetGlobalSettingAsync(
+                CommissionSettingsRepository.PayoutDeductionMinSaleKey,
+                CommissionGlobalRules.DefaultPayoutDeductionMinSale));
     }
 
     public async Task<CommissionResolvedRule> ResolveTransportAsync(string? transport, DateTime operationDate, decimal catalogCommission = 0m, decimal catalogCash = 0m, decimal catalogCard = 0m, decimal catalogAmex = 0m)

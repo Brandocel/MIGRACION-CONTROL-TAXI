@@ -35,6 +35,15 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               Notes TEXT NOT NULL DEFAULT '',
               UNIQUE(Category, Code, EffectiveFrom)
             );
+            -- Reglas globales de comision (aplican a todos los transportes por igual), a
+            -- diferencia de CommissionSettingsRules que va por transporte/forma de pago.
+            CREATE TABLE IF NOT EXISTS CommissionGlobalSettings (
+              Clave TEXT PRIMARY KEY,
+              Valor REAL NOT NULL,
+              ActualizadoEn TEXT NOT NULL,
+              ActualizadoPor TEXT NOT NULL DEFAULT '',
+              Notas TEXT NOT NULL DEFAULT ''
+            );
             CREATE TABLE IF NOT EXISTS CommissionSettingsAudit (
               Id INTEGER PRIMARY KEY AUTOINCREMENT,
               Date TEXT NOT NULL,
@@ -123,6 +132,49 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         return rules
             .Select(x => new CommissionPaymentConfiguration(x.Code, x.Name, x.PaymentKind, ResolveRetentionPercent(x), x.Active))
             .ToArray();
+    }
+
+    /// <summary>
+    /// Clave de la regla global "venta minima para descontar la dejada".
+    /// </summary>
+    public const string PayoutDeductionMinSaleKey = "UMBRAL_DESCUENTO_DEJADA";
+
+    /// <summary>
+    /// Lee una regla global. Si no esta configurada, devuelve el valor por omision recibido
+    /// (no se inserta nada: la fila se crea solo cuando alguien la configura de verdad).
+    /// </summary>
+    public async Task<decimal> GetGlobalSettingAsync(string clave, decimal valorPorOmision)
+    {
+        await InitializeAsync();
+        await using var connection = database.Open();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Valor FROM CommissionGlobalSettings WHERE Clave=$clave;";
+        command.Parameters.AddWithValue("$clave", clave);
+        var result = await command.ExecuteScalarAsync();
+        if (result is null || result is DBNull) return valorPorOmision;
+        return Convert.ToDecimal(result, CultureInfo.InvariantCulture);
+    }
+
+    public async Task SetGlobalSettingAsync(string clave, decimal valor, string usuario, string notas = "")
+    {
+        await InitializeAsync();
+        await using var connection = database.Open();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO CommissionGlobalSettings (Clave, Valor, ActualizadoEn, ActualizadoPor, Notas)
+            VALUES ($clave, $valor, $fecha, $usuario, $notas)
+            ON CONFLICT(Clave) DO UPDATE SET
+              Valor = excluded.Valor,
+              ActualizadoEn = excluded.ActualizadoEn,
+              ActualizadoPor = excluded.ActualizadoPor,
+              Notas = excluded.Notas;
+            """;
+        command.Parameters.AddWithValue("$clave", clave);
+        command.Parameters.AddWithValue("$valor", (double)valor);
+        command.Parameters.AddWithValue("$fecha", DateTime.Now.ToString("O", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$usuario", usuario ?? string.Empty);
+        command.Parameters.AddWithValue("$notas", notas ?? string.Empty);
+        await command.ExecuteNonQueryAsync();
     }
 
     public async Task<CommissionSettingsSummary> GetSummaryAsync()
