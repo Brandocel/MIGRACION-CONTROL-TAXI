@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -26,7 +26,15 @@ public partial class UserAdminWindow : Window
             _users = new LocalUserRepository(database);
             _errors = new LocalErrorLogger(database);
             InitializeComponent();
-            PermissionsList.ItemsSource = LocalUserRepository.AllModules.Select(x => new CheckBox { Content = x, IsChecked = true, Style = (Style)FindResource("PermissionCheck") }).ToArray();
+            // AutorizarPagoComision NO se marca por defecto: es una facultad restringida (solo
+            // Ester, por ejemplo), y marcarla en automatico en cada usuario nuevo anularia el
+            // control de "el pago dejo de ser libre" que se acaba de construir.
+            PermissionsList.ItemsSource = LocalUserRepository.AllModules.Select(x => new CheckBox
+            {
+                Content = x,
+                IsChecked = !string.Equals(x, "AutorizarPagoComision", StringComparison.OrdinalIgnoreCase),
+                Style = (Style)FindResource("PermissionCheck")
+            }).ToArray();
             InitializeBranchOptions();
             UserRole.SelectedIndex = 0;
             UserStatus.SelectedIndex = 0;
@@ -144,7 +152,7 @@ public partial class UserAdminWindow : Window
         SelectComboByValue(UserBranchCode, "P28");
         UpdateBranchOptions();
         foreach (var check in PermissionsList.Items.OfType<CheckBox>())
-            check.IsChecked = true;
+            check.IsChecked = !string.Equals(Convert.ToString(check.Content), "AutorizarPagoComision", StringComparison.OrdinalIgnoreCase);
         UserName.Focus();
     }
 

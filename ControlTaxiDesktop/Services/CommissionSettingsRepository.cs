@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text;
 using ControlTaxiDesktop.Models;
@@ -26,6 +26,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               AmexRetentionPercent REAL NOT NULL DEFAULT 0,
               PaymentKind TEXT NOT NULL DEFAULT '',
               AppliesPayout INTEGER NOT NULL DEFAULT 1,
+              PayoutAmount REAL NOT NULL DEFAULT 0,
+              PaxKind TEXT NOT NULL DEFAULT '',
+              MonedaId INTEGER NOT NULL DEFAULT -1,
               AppliesExpense INTEGER NOT NULL DEFAULT 1,
               Active INTEGER NOT NULL DEFAULT 1,
               EffectiveFrom TEXT NOT NULL,
@@ -78,12 +81,57 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               ON CommissionSettingsDiagnostics(Date);
             """;
         await command.ExecuteNonQueryAsync();
+        // Tabulador de dejada por transporte. Va como migracion porque las maquinas que ya
+        // tienen catalogo no vuelven a ejecutar el CREATE TABLE.
+        await EnsureColumnAsync(connection, "CommissionSettingsRules", "PayoutAmount", "REAL NOT NULL DEFAULT 0");
+        await EnsureColumnAsync(connection, "CommissionSettingsRules", "PaxKind", "TEXT NOT NULL DEFAULT ''");
+        await EnsureColumnAsync(connection, "CommissionSettingsRules", "MonedaId", "INTEGER NOT NULL DEFAULT -1");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "Module", "TEXT NOT NULL DEFAULT 'ConfiguracionComisiones'");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "EffectiveFrom", "TEXT NOT NULL DEFAULT ''");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "EffectiveTo", "TEXT NOT NULL DEFAULT ''");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "Machine", "TEXT NOT NULL DEFAULT ''");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "Branch", "TEXT NOT NULL DEFAULT ''");
         await SeedDefaultsAsync(connection);
+        await SeedPayoutTariffsAsync(connection);
+        await FixKnownWrongRatesAsync(connection);
+    }
+
+    /// <summary>
+    /// Autocorrige, en cada arranque y en cada maquina, catalogo local que quedo mal desde una
+    /// siembra vieja: duplicados de TRANSPORTE (misma unidad con dos filas y distinta tasa) y la
+    /// tasa de VAN TRANSPORTADORAS que se sembro en 20% cuando debia ser 10%. Antes esto se
+    /// arreglaba a mano por maquina con sqlite3; con esto ya no hace falta repetirlo al pasar el
+    /// paquete a otro equipo.
+    ///
+    /// Solo toca filas con UpdatedBy='MIGRACION' (nunca editadas por una persona desde la
+    /// pantalla de Configuracion de Comisiones): si alguien ya corrigio la tasa a mano, esta
+    /// correccion no la vuelve a tocar. Confirmado con el usuario 2026-08-26.
+    /// </summary>
+    private static async Task FixKnownWrongRatesAsync(SqliteConnection connection)
+    {
+        await using var dedupe = connection.CreateCommand();
+        dedupe.CommandText = """
+            DELETE FROM CommissionSettingsRules
+            WHERE Category='TRANSPORTE'
+              AND Id NOT IN (
+                SELECT MIN(Id) FROM CommissionSettingsRules
+                WHERE Category='TRANSPORTE'
+                GROUP BY UPPER(TRIM(Name)), EffectiveFrom
+              );
+            """;
+        await dedupe.ExecuteNonQueryAsync();
+
+        await using var fix = connection.CreateCommand();
+        fix.CommandText = """
+            UPDATE CommissionSettingsRules
+            SET CommissionPercent = 10, UpdatedAt = $updatedAt
+            WHERE Category='TRANSPORTE'
+              AND UPPER(TRIM(Name)) = 'VAN TRANSPORTADORAS'
+              AND CommissionPercent = 20
+              AND UpdatedBy = 'MIGRACION';
+            """;
+        fix.Parameters.AddWithValue("$updatedAt", DateTime.Now.ToString("O", CultureInfo.InvariantCulture));
+        await fix.ExecuteNonQueryAsync();
     }
 
     public async Task<IReadOnlyList<CommissionSettingsRule>> GetRulesAsync(string? category = null, string? search = null, bool? active = null, DateTime? date = null)
@@ -119,7 +167,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
         return await ReadRulesAsync($"""
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId
             FROM CommissionSettingsRules
             {where}
             ORDER BY Category, Name, EffectiveFrom DESC;
@@ -130,7 +178,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
     {
         var rules = await GetRulesAsync("FORMA_PAGO", active: true, date: date ?? DateTime.Today);
         return rules
-            .Select(x => new CommissionPaymentConfiguration(x.Code, x.Name, x.PaymentKind, ResolveRetentionPercent(x), x.Active))
+            .Select(x => new CommissionPaymentConfiguration(x.Code, x.Name, x.PaymentKind, ResolveRetentionPercent(x), x.Active, x.MonedaId))
             .ToArray();
     }
 
@@ -440,13 +488,180 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         insert.CommandText = """
             INSERT INTO CommissionSettingsRules
             (Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes)
+             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId)
             VALUES
-            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes);
+            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId);
             """;
         AddRuleParameters(insert, rule, user);
         await insert.ExecuteNonQueryAsync();
     }
+
+
+    /// <summary>
+    /// Siembra el tabulador de dejada de Plaza 28 ("TARIFA PLAZA 28") sobre el catalogo.
+    ///
+    /// Antes la dejada no salia de ninguna tarifa: era el importe que el operador tecleaba en la
+    /// app movil, y por eso la misma combinacion aparecia con tres importes distintos (VAN VERDE
+    /// con extranjeros salio $350, $450 y $250). Con el tabulador en el catalogo el calculo deja
+    /// de depender de la captura.
+    ///
+    /// Es idempotente y NO pisa lo capturado a mano: si la regla ya tiene un importe distinto de
+    /// cero se respeta. Corre en cada arranque para que las maquinas nuevas queden completas.
+    /// </summary>
+
+    /// <summary>
+    /// Da de alta en el catalogo las monedas del punto de venta (dbo.Monedas) que todavia no
+    /// estan, con una retencion sugerida. NO pisa lo que ya se configuro a mano.
+    ///
+    /// La forma de pago real del ticket es el NUMERO de moneda, no un texto: por eso la regla se
+    /// amarra a MonedaId. Antes se adivinaba buscando "TARJ"/"BBVA" dentro de la descripcion y
+    /// "T.CREDITO DLS" caia como efectivo, perdonandole la retencion del 19%.
+    /// </summary>
+    public async Task<int> SyncMonedasAsync(IReadOnlyList<(int Id, string Nombre)> monedas)
+    {
+        if (monedas.Count == 0) return 0;
+        await InitializeAsync();
+
+        await using var connection = database.Open();
+        await connection.OpenAsync();
+
+        var existentes = new HashSet<int>();
+        await using (var lectura = connection.CreateCommand())
+        {
+            lectura.CommandText = "SELECT MonedaId FROM CommissionSettingsRules WHERE MonedaId >= 0;";
+            await using var reader = await lectura.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) existentes.Add(reader.GetInt32(0));
+        }
+
+        var altas = 0;
+        foreach (var moneda in monedas)
+        {
+            if (moneda.Id < 0 || existentes.Contains(moneda.Id)) continue;
+
+            var retencion = SugerirRetencion(moneda.Nombre);
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT INTO CommissionSettingsRules
+                (Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
+                 PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId)
+                VALUES ($code,$code,$name,0,$efectivo,$tarjeta,$amex,$kind,1,1,1,$from,NULL,$updatedAt,'MONEDAS',
+                        'Alta automatica desde dbo.Monedas del punto de venta.',0,'',$id);
+                """;
+            insert.Parameters.AddWithValue("$code", "MONEDA " + moneda.Id.ToString(CultureInfo.InvariantCulture));
+            insert.Parameters.AddWithValue("$name", string.IsNullOrWhiteSpace(moneda.Nombre) ? "MONEDA " + moneda.Id : moneda.Nombre.Trim());
+            insert.Parameters.AddWithValue("$efectivo", retencion.Kind == "EFECTIVO" ? retencion.Percent : 0m);
+            insert.Parameters.AddWithValue("$tarjeta", retencion.Kind == "TARJETA_NORMAL" ? retencion.Percent : 0m);
+            insert.Parameters.AddWithValue("$amex", retencion.Kind == "AMEX" ? retencion.Percent : 0m);
+            insert.Parameters.AddWithValue("$kind", retencion.Kind);
+            insert.Parameters.AddWithValue("$from", DefaultStart);
+            insert.Parameters.AddWithValue("$updatedAt", DateTime.Now.ToString("O", CultureInfo.InvariantCulture));
+            insert.Parameters.AddWithValue("$id", moneda.Id);
+            await insert.ExecuteNonQueryAsync();
+            altas++;
+        }
+
+        return altas;
+    }
+
+    /// <summary>
+    /// Retencion sugerida al dar de alta una moneda nueva. Es solo un punto de partida: quien
+    /// opera la ajusta en la pantalla de reglas. Criterio confirmado con el usuario el
+    /// 2026-08-21: divisas y vales sin retencion, tarjetas y transferencia 19%, AMEX 24%.
+    /// </summary>
+    private static (string Kind, decimal Percent) SugerirRetencion(string? nombre)
+    {
+        var texto = new string((nombre ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
+        if (texto.Contains("AMEX", StringComparison.Ordinal)) return ("AMEX", 24m);
+        if (texto.Contains("TARJETA", StringComparison.Ordinal)
+            || texto.Contains("CREDITO", StringComparison.Ordinal)
+            || texto.Contains("DEBITO", StringComparison.Ordinal)
+            || texto.Contains("TRANSFERENCIA", StringComparison.Ordinal)
+            || texto.Contains("TC", StringComparison.Ordinal)
+            || texto.Contains("MIFEL", StringComparison.Ordinal)
+            || texto.Contains("MERCADOPAGO", StringComparison.Ordinal))
+            return ("TARJETA_NORMAL", 19m);
+        return ("EFECTIVO", 0m);
+    }
+
+    private static async Task SeedPayoutTariffsAsync(SqliteConnection connection)
+    {
+        // Nombre para dar de alta, tipo de pax, importe, y los nombres con los que puede estar
+        // ya guardada la regla en esta maquina.
+        (string Nombre, string PaxKind, decimal Dejada, string[] Alias)[] tarifas =
+        [
+            ("VAN ROJO", "", 300m, ["VANROJO"]),
+            ("TAXI ROJO", "", 300m, ["TAXIROJO"]),
+            ("TAXI AZUL", "", 250m, ["TAXIAZUL"]),
+            ("VAN AZUL", "", 350m, ["VANAZUL"]),
+            ("TAXI CAFE", "", 250m, ["TAXICAFE"]),
+            ("VAN CAFE", "", 350m, ["VANCAFE"]),
+            // Las unicas dos unidades cuyo tabulador cambia segun quien llegue.
+            ("TAXI VERDE EXTRANJERO", "EXTRANJEROS", 350m, ["TAXIVERDEEXTRANJERO", "TAXIVERDEEXTRANJEROS", "TAXIVERDEGABACHO", "TAXIVERDEGABACHOS"]),
+            ("TAXI VERDE NACIONAL", "NACIONALES", 250m, ["TAXIVERDENACIONAL", "TAXIVERDENACIONALES"]),
+            ("VAN VERDE EXTRANJERO", "EXTRANJEROS", 450m, ["VANVERDEEXTRANJERO", "VANVERDEEXTRANJEROS", "VANVERDEGABACHO", "VANVERDEGABACHOS"]),
+            ("VAN VERDE NACIONAL", "NACIONALES", 350m, ["VANVERDENACIONAL", "VANVERDENACIONALES"]),
+            ("TURIBUS SALMORAN", "", 200m, ["TURIBUSSALMORAN", "SALMORAN"]),
+            ("TURIBUS ADO", "", 100m, ["TURIBUSADO"]),
+            ("TRANSPORTADORAS", "", 200m, ["TRANSPORTADORAS", "TRANSPORTADORA"]),
+            ("TRAVEL EXPERIENCE", "", 200m, ["TRAVELEXPERIENCE"]),
+            ("TULAKA", "", 200m, ["TULAKA"]),
+            ("UBER", "", 200m, ["UBER"]),
+            ("UBER ALIANZA", "", 250m, ["UBERALIANZA", "ALIANZA"]),
+            ("GUIAS CALLE", "", 50m, ["GUIASCALLE", "GUIACALLE", "GUIAS"]),
+            // MAJESTIC va con $0 en el tabulador. Se deja SIN sembrar a proposito: en este
+            // catalogo un importe en cero significa "no capturado, usa lo de la operacion", y la
+            // operacion ya registra 0 para Majestic. Sembrarlo no cambiaria nada.
+        ];
+
+        var existentes = new List<(long Id, string Nombre, decimal Dejada)>();
+        await using (var lectura = connection.CreateCommand())
+        {
+            lectura.CommandText = "SELECT Id, Name, PayoutAmount FROM CommissionSettingsRules WHERE Category = 'TRANSPORTE';";
+            await using var reader = await lectura.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                existentes.Add((reader.GetInt64(0), Text(reader, 1), Decimal(reader, 2)));
+        }
+
+        foreach (var tarifa in tarifas)
+        {
+            var existente = existentes.FirstOrDefault(x => tarifa.Alias.Contains(SoloLetrasYNumeros(x.Nombre), StringComparer.Ordinal));
+            if (existente.Id > 0)
+            {
+                // Ya capturada a mano: mandan las manos, no la siembra.
+                if (existente.Dejada > 0m) continue;
+
+                await using var update = connection.CreateCommand();
+                update.CommandText = "UPDATE CommissionSettingsRules SET PayoutAmount = $dejada, PaxKind = $pax WHERE Id = $id;";
+                update.Parameters.AddWithValue("$dejada", tarifa.Dejada);
+                update.Parameters.AddWithValue("$pax", tarifa.PaxKind);
+                update.Parameters.AddWithValue("$id", existente.Id);
+                await update.ExecuteNonQueryAsync();
+                continue;
+            }
+
+            // Unidad que no estaba en el catalogo. Los porcentajes van con los valores por
+            // omision del sistema (10% de comision, 19% tarjeta, 24% AMEX); lo que aporta la
+            // siembra es la tarifa de dejada, no las tasas.
+            await using var insert = connection.CreateCommand();
+            insert.CommandText = """
+                INSERT OR IGNORE INTO CommissionSettingsRules
+                (Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
+                 PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId)
+                VALUES ($code,$code,$name,10,0,19,24,'',1,1,1,$from,NULL,$updatedAt,'TABULADOR',
+                        'Sembrado del tabulador TARIFA PLAZA 28.',$dejada,$pax,-1);
+                """;
+            insert.Parameters.AddWithValue("$code", NormalizeCode(tarifa.Nombre));
+            insert.Parameters.AddWithValue("$name", tarifa.Nombre);
+            insert.Parameters.AddWithValue("$from", DefaultStart);
+            insert.Parameters.AddWithValue("$updatedAt", DateTime.Now.ToString("O", CultureInfo.InvariantCulture));
+            insert.Parameters.AddWithValue("$dejada", tarifa.Dejada);
+            insert.Parameters.AddWithValue("$pax", tarifa.PaxKind);
+            await insert.ExecuteNonQueryAsync();
+        }
+    }
+
+    private static string SoloLetrasYNumeros(string? value) =>
+        new(( value ?? string.Empty).Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
 
     private static async Task SeedPaymentsAsync(SqliteConnection connection)
     {
@@ -468,14 +683,21 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         {
             await SeedTransportsFromTableAsync(connection, "mkt__dbo__transporte", "tipo", "nombre", "comision", "efectivo", "tarjeta", "amexco");
         }
-        await InsertSeedAsync(connection, "TRANSPORTE", "TURIBUS ADO", "TURIBUS ADO", 10m, 0m, 19m, 24m, "", "Semilla segura si el catálogo importado aún no existe.");
-        await InsertSeedAsync(connection, "TRANSPORTE", "TURIBUS SALMORAN", "TURIBUS SALMORAN", 20m, 16m, 19m, 24m, "", "Semilla segura validada para SALMORAN.");
-        await InsertSeedAsync(connection, "TRANSPORTE", "MAJESTIC", "MAJESTIC EXPEDITIONS", 8m, 0m, 19m, 24m, "", "Semilla inicial para regla tipo guía.");
+        // Estas semillas existen para cubrir unidades que podrian no venir en las tablas
+        // importadas. Van con guarda por NOMBRE: si el transporte ya se sembro desde una tabla
+        // (aunque sea con otra clave), no se vuelve a insertar.
+        //
+        // Sin la guarda, cada arranque agregaba una segunda fila del mismo transporte con
+        // clave distinta, y al resolver la comision se tomaba la primera coincidencia: podia
+        // aplicarse una retencion que no correspondia.
+        await InsertTransportSeedIfNameFreeAsync(connection, "TURIBUS ADO", "TURIBUS ADO", 10m, 0m, 19m, 24m, "Semilla segura si el catálogo importado aún no existe.");
+        await InsertTransportSeedIfNameFreeAsync(connection, "TURIBUS SALMORAN", "TURIBUS SALMORAN", 20m, 16m, 19m, 24m, "Semilla segura validada para SALMORAN.");
+        await InsertTransportSeedIfNameFreeAsync(connection, "MAJESTIC", "MAJESTIC EXPEDITIONS", 8m, 0m, 19m, 24m, "Semilla inicial para regla tipo guía.");
         // Unidades de la tarifa oficial Plaza 28 sin fila propia en las tablas importadas
         // (confirmado por Brandon 2026-08-19).
-        await InsertSeedAsync(connection, "TRANSPORTE", "TAXICAFE", "TAXI CAFE", 10m, 0m, 19m, 24m, "", "Unidad de la tarifa Plaza 28 (Puerto Morelos).");
-        await InsertSeedAsync(connection, "TRANSPORTE", "VANCAFE", "VAN CAFE", 10m, 0m, 19m, 24m, "", "Unidad de la tarifa Plaza 28 (Puerto Morelos).");
-        await InsertSeedAsync(connection, "TRANSPORTE", "TAXIAZUL", "TAXI AZUL", 10m, 0m, 19m, 24m, "", "Unidad de la tarifa Plaza 28 (Playa del Carmen).");
+        await InsertTransportSeedIfNameFreeAsync(connection, "TAXICAFE", "TAXI CAFE", 10m, 0m, 19m, 24m, "Unidad de la tarifa Plaza 28 (Puerto Morelos).");
+        await InsertTransportSeedIfNameFreeAsync(connection, "VANCAFE", "VAN CAFE", 10m, 0m, 19m, 24m, "Unidad de la tarifa Plaza 28 (Puerto Morelos).");
+        await InsertTransportSeedIfNameFreeAsync(connection, "TAXIAZUL", "TAXI AZUL", 10m, 0m, 19m, 24m, "Unidad de la tarifa Plaza 28 (Playa del Carmen).");
     }
 
     private static async Task SeedGuidesAsync(SqliteConnection connection)
@@ -510,6 +732,18 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
                 continue;
             var code = CanonicalTransportCode(rawCode);
             var name = Text(reader, 1);
+
+            // El INSERT OR IGNORE de InsertSeedAsync deduplica por la restriccion
+            // UNIQUE(Category, Code, EffectiveFrom), es decir por CLAVE. Cuando las tablas
+            // importadas traen el mismo transporte con dos claves distintas (por ejemplo
+            // "GUIAS" o "TAXI PLAYA GABACHO"), pasaban las dos filas y el catalogo mostraba
+            // el transporte duplicado, a veces con retenciones distintas.
+            // Aqui se corta por NOMBRE: la primera fila de ese transporte gana y las demas
+            // se ignoran. Las semillas fijas de mas abajo no pasan por este filtro, para no
+            // perder los casos historicos que si deben convivir (MAJESTIC 8% y 20%).
+            if (await TransportNameAlreadySeededAsync(connection, name))
+                continue;
+
             await InsertSeedAsync(connection, "TRANSPORTE", string.IsNullOrWhiteSpace(code) ? name : code, name, Decimal(reader, 2), Decimal(reader, 3), Decimal(reader, 4), Decimal(reader, 5), "", "Migrado desde " + table + ".");
         }
     }
@@ -552,6 +786,89 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
 
     private static async Task SeedConceptAsync(SqliteConnection connection, string category, string code, string name, decimal commission, string notes) =>
         await InsertSeedAsync(connection, category, code, name, commission, 0m, 19m, 24m, "", notes);
+
+    /// <summary>
+    /// Quita del catalogo los transportes repetidos: deja UNA fila por nombre y vigencia, la
+    /// mas antigua, y borra las demas.
+    ///
+    /// Hace falta porque el anti-duplicados original se apoya en UNIQUE(Category, Code,
+    /// EffectiveFrom), o sea que deduplica por CLAVE. Si las tablas importadas traen el mismo
+    /// transporte con dos claves distintas, entraban las dos filas. Al resolver la comision se
+    /// toma la PRIMERA coincidencia, asi que un duplicado con retenciones distintas puede
+    /// hacer que se aplique la tasa equivocada.
+    ///
+    /// Respeta las versiones historicas: dos filas del mismo transporte con vigencias
+    /// diferentes (por ejemplo MAJESTIC 8% y 20%) NO se tocan.
+    /// </summary>
+    /// <summary>
+    /// Nombres de transporte que aparecen mas de una vez con la misma vigencia.
+    /// Sirve para verificar la limpieza sin depender de herramientas externas.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> GetDuplicateTransportNamesAsync()
+    {
+        await using var connection = database.Open();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT UPPER(TRIM(Name)) || '  (x' || COUNT(*) || ')'
+            FROM CommissionSettingsRules
+            WHERE Category='TRANSPORTE'
+            GROUP BY UPPER(TRIM(Name)), EffectiveFrom
+            HAVING COUNT(*) > 1
+            ORDER BY 1;
+            """;
+        var result = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) result.Add(reader.GetString(0));
+        return result;
+    }
+
+    /// <returns>Cuantas filas se eliminaron.</returns>
+    public async Task<int> RemoveDuplicateTransportsAsync()
+    {
+        await InitializeAsync();
+        await using var connection = database.Open();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM CommissionSettingsRules
+            WHERE Category='TRANSPORTE'
+              AND Id NOT IN (
+                SELECT MIN(Id) FROM CommissionSettingsRules
+                WHERE Category='TRANSPORTE'
+                GROUP BY UPPER(TRIM(Name)), EffectiveFrom
+              );
+            """;
+        return await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Indica si ya existe una regla de TRANSPORTE con ese nombre (ignorando mayusculas y
+    /// espacios). Se usa para que las tablas importadas no siembren el mismo transporte dos
+    /// veces cuando viene con claves distintas.
+    /// </summary>
+    private static async Task<bool> TransportNameAlreadySeededAsync(SqliteConnection connection, string name)
+    {
+        var normalized = (name ?? string.Empty).Trim();
+        if (normalized.Length == 0) return false;
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT 1 FROM CommissionSettingsRules
+            WHERE Category='TRANSPORTE' AND UPPER(TRIM(Name))=UPPER($name)
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$name", normalized);
+        return await command.ExecuteScalarAsync() is not null;
+    }
+
+    /// <summary>
+    /// Siembra un transporte solo si su nombre no esta ya en el catalogo. Es la version con
+    /// guarda de InsertSeedAsync para las semillas fijas.
+    /// </summary>
+    private static async Task InsertTransportSeedIfNameFreeAsync(SqliteConnection connection, string code, string name, decimal commission, decimal cash, decimal card, decimal amex, string notes)
+    {
+        if (await TransportNameAlreadySeededAsync(connection, name)) return;
+        await InsertSeedAsync(connection, "TRANSPORTE", code, name, commission, cash, card, amex, "", notes);
+    }
 
     private static async Task InsertSeedAsync(SqliteConnection connection, string category, string code, string name, decimal commission, decimal cash, decimal card, decimal amex, string paymentKind, string notes)
     {
@@ -608,7 +925,10 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         string.IsNullOrWhiteSpace(Text(reader, 13)) ? null : DateTime.TryParse(Text(reader, 13), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var to) ? to : null,
         Text(reader, 14),
         Text(reader, 15),
-        Text(reader, 16));
+        Text(reader, 16),
+        reader.FieldCount > 17 ? Decimal(reader, 17) : 0m,
+        reader.FieldCount > 18 ? Text(reader, 18) : string.Empty,
+        reader.FieldCount > 19 && !reader.IsDBNull(19) ? Convert.ToInt32(reader.GetValue(19), CultureInfo.InvariantCulture) : -1);
 
     private static void ValidateRule(CommissionSettingsRule rule, string reason)
     {
@@ -656,7 +976,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Transaction = transaction;
         command.CommandText = """
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId
             FROM CommissionSettingsRules
             WHERE Id=$id;
             """;
@@ -704,7 +1024,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
     }
 
     private static string Snapshot(CommissionSettingsRule rule) =>
-        $"{rule.Category}|{rule.Code}|{rule.Name}|C={rule.CommissionPercent:0.####}|E={rule.CashRetentionPercent:0.####}|T={rule.CardRetentionPercent:0.####}|A={rule.AmexRetentionPercent:0.####}|Pago={rule.PaymentKind}|Vig={rule.EffectiveRange}|Activo={rule.Active}";
+        $"{rule.Category}|{rule.Code}|{rule.Name}|C={rule.CommissionPercent:0.####}|E={rule.CashRetentionPercent:0.####}|T={rule.CardRetentionPercent:0.####}|A={rule.AmexRetentionPercent:0.####}|Pago={rule.PaymentKind}|Vig={rule.EffectiveRange}|Activo={rule.Active}|Dejada={rule.PayoutAmount:0.##}|Pax={rule.PaxKind}";
 
     private static bool IsPrepublicationTestRule(CommissionSettingsRule rule) =>
         string.Equals(NormalizeCode(rule.Code), "PRUEBA PREPUBLICACION", StringComparison.OrdinalIgnoreCase)
@@ -721,6 +1041,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Parameters.AddWithValue("$amex", NormalizePercent(rule.AmexRetentionPercent));
         command.Parameters.AddWithValue("$paymentKind", rule.PaymentKind.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$payout", rule.AppliesPayout ? 1 : 0);
+        command.Parameters.AddWithValue("$payoutAmount", Math.Max(0m, rule.PayoutAmount));
+        command.Parameters.AddWithValue("$paxKind", rule.PaxKind.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("$monedaId", rule.MonedaId);
         command.Parameters.AddWithValue("$expense", rule.AppliesExpense ? 1 : 0);
         command.Parameters.AddWithValue("$active", rule.Active ? 1 : 0);
         command.Parameters.AddWithValue("$from", rule.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));

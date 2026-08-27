@@ -3035,7 +3035,17 @@ public partial class OperationsWindow : Window
         }
 
         var search = RelationSearch.Text?.Trim();
-        if (!string.IsNullOrWhiteSpace(search))
+        if (!string.IsNullOrWhiteSpace(search) && RelationStart.SelectedDate is { } fromSearch && RelationEnd.SelectedDate is { } toSearch)
+        {
+            // El filtro compara contra la fecha del VIAJE, no la fecha en que se capturo en el
+            // sistema. Un viaje capturado tarde (ej. registrado hoy pero ocurrido ayer) no
+            // aparece si se busca solo por hoy, y sin esta aclaracion parece que el folio no
+            // existe. Detectado el 2026-08-24 con el folio 4622.
+            RelationsEmptyStateDetail.Text = fromSearch.Date == toSearch.Date
+                ? $"No hay viajes de \"{search}\" con fecha de viaje el {fromSearch:dd/MM/yyyy}. Si se capturo tarde, prueba con un rango de fechas mas amplio: el filtro usa la fecha del viaje, no la fecha de captura."
+                : $"No hay viajes de \"{search}\" con fecha de viaje entre el {fromSearch:dd/MM/yyyy} y el {toSearch:dd/MM/yyyy}.";
+        }
+        else if (!string.IsNullOrWhiteSpace(search))
         {
             RelationsEmptyStateDetail.Text = $"No hay viajes que coincidan con \"{search}\".";
         }
@@ -3393,7 +3403,8 @@ public partial class OperationsWindow : Window
             end,
             await GetReportWorkbookRelationsAsync(),
             await _pos.GetCamionesResumenAsync(ReportStart.SelectedDate, ReportEnd.SelectedDate),
-            dialog.FileName);
+            dialog.FileName,
+            await _pos.GetCommissionBrowserRowsAsync(null, start, end));
     });
     private async void ExportCuadreExcel_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
@@ -3415,16 +3426,18 @@ public partial class OperationsWindow : Window
             return;
         }
 
+        var authoritativeCommissionRows = await _pos.GetCommissionBrowserRowsAsync(null, start, end);
         await _output.ExportCuadreWorkbookAsync(
             start,
             end,
             await GetReportWorkbookRelationsAsync(),
-            await _pos.GetCommissionsAsync(),
+            MapReportWorkbookCommissions(authoritativeCommissionRows),
             (await _pos.GetCutsAsync())
                 .Where(x => x.Date.Date >= start.Date && x.Date.Date <= end.Date)
                 .ToArray(),
             await _pos.GetCamionesResumenAsync(ReportStart.SelectedDate, ReportEnd.SelectedDate),
-            dialog.FileName);
+            dialog.FileName,
+            authoritativeCommissionRows);
     });
     private async void ExportBadgesCsv_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
@@ -3724,6 +3737,28 @@ public partial class OperationsWindow : Window
             ChildPassengers: row.Nino)).ToArray();
     }
 
+    // La pestana "comisiones" del Excel de Cuadre traia GetCommissionsAsync() (tabla local
+    // LocalComisiones), que solo se llena cuando alguien le da PAGAR. Cualquier folio pendiente
+    // -la mayoria, un dia normal- nunca aparecia ahi, aunque la pantalla de Comisiones en vivo
+    // si lo mostrara. Ahora usa la misma fuente autoritativa que la pantalla, ya filtrada por
+    // fecha. Confirmado 2026-08-27: el 27/08 tenia 5 comisiones pendientes en pantalla y 0 en
+    // este reporte antes del cambio.
+    private static IReadOnlyList<LocalCommission> MapReportWorkbookCommissions(IEnumerable<LocalCommissionBrowserRow> rows)
+    {
+        return rows.Select((row, index) => new LocalCommission(
+            index + 1,
+            row.Folio,
+            row.SaleFolio,
+            row.Gafete,
+            row.Nombre,
+            row.Fecha,
+            row.VentaTotal,
+            row.PagoComision,
+            row.Pagado,
+            row.Saldo,
+            string.IsNullOrWhiteSpace(row.Estatus) ? "PENDIENTE" : row.Estatus)).ToArray();
+    }
+
     private static IReadOnlyList<LocalCommission> MapReportWorkbookCommissions(IEnumerable<LocalCommissionPaymentPreviewRow> rows)
     {
         return rows.Select((row, index) => new LocalCommission(
@@ -3838,7 +3873,7 @@ public partial class OperationsWindow : Window
 
         ReportMovementsLabelText.Text = isPayments ? "PAGOS" : "MOVIMIENTOS";
         ReportMovementsText.Text = (isPayments ? paymentRows.Count : operationRows.Count).ToString("N0", CultureInfo.InvariantCulture);
-        ReportPaxLabelText.Text = isPayments ? "PAGADO" : "PAX";
+        ReportPaxLabelText.Text = isPayments ? "PAGADO" : "PAX ADULTOS";
         ReportPaxText.Text = isPayments
             ? paymentRows.Sum(x => x.Pago).ToString("C2", CultureInfo.CurrentCulture)
             : operationRows.Sum(x => x.Pax).ToString("N0", CultureInfo.InvariantCulture);

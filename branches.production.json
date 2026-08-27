@@ -3,7 +3,7 @@
     {
       "Code": "P28",
       "Name": "Plaza 28",
-      "SqlServer": "26.38.252.71\\SQLEXPRESS",
+      "SqlServer": "SERVPLAZA28\\SQLEXPRESS",
       "Database": "mkt",
       "CompuadmoDatabase": "compuadmo",
       "JoyeriaDatabase": "joyeria",

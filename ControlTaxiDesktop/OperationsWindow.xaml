@@ -1215,7 +1215,7 @@
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                             ScrollViewer.CanContentScroll="True">
                   <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="App / asignado" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="170*" MinWidth="150">
+                    <DataGridTemplateColumn Header="App / asignado" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="170*" MinWidth="120">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <Border Style="{StaticResource SquareStatusBadge}" Margin="0,0,0,5" Background="#EAF6FE" BorderBrush="#B9D3EF">
@@ -1237,8 +1237,8 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Fecha" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding DateText}" Width="110*" MinWidth="95"/>
-                    <DataGridTemplateColumn Header="Viaje" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="180*" MinWidth="150">
+                    <DataGridTextColumn Header="Fecha" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding DateText}" Width="110*" MinWidth="78"/>
+                    <DataGridTemplateColumn Header="Viaje" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="180*" MinWidth="120">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock Text="{Binding Hotel}" FontWeight="Bold" TextWrapping="Wrap" Foreground="#16326B"/>
@@ -1248,7 +1248,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Taxista" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="175*" MinWidth="150">
+                    <DataGridTemplateColumn Header="Taxista" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="175*" MinWidth="120">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock Text="{Binding Driver}" FontWeight="Bold" Foreground="#1F5784" TextWrapping="Wrap"/>
@@ -1258,8 +1258,8 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nationality}" Width="105*" MinWidth="90"/>
-                    <DataGridTemplateColumn Header="Unidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="100*" MinWidth="85">
+                    <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nationality}" Width="105*" MinWidth="74"/>
+                    <DataGridTemplateColumn Header="Unidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="100*" MinWidth="70">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock Text="{Binding TransportType}" FontWeight="Bold" TextWrapping="Wrap" Foreground="#16326B"/>
@@ -1267,7 +1267,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Importes" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="120*" MinWidth="105">
+                    <DataGridTemplateColumn Header="Importes" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="120*" MinWidth="88">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock FontSize="10" FontWeight="Bold" Foreground="#16326B"><Run Text="Venta: "/><Run Text="{Binding SaleDisplay, Mode=OneWay}"/></TextBlock>
@@ -1277,7 +1277,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Pago dejada" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="185*" MinWidth="160">
+                    <DataGridTemplateColumn Header="Pago dejada" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="185*" MinWidth="130">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <Border Style="{StaticResource SquareStatusBadge}" Margin="0,0,0,5"
@@ -1296,7 +1296,7 @@
                     </DataGridTemplateColumn>
                     <!-- Forma de pago y Moneda se fusionaron: eran dos columnas con una sola
                          palabra cada una ("Efectivo" / "MXN") ocupando 260px entre ambas. -->
-                    <DataGridTemplateColumn Header="Forma de pago" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="130*" MinWidth="110">
+                    <DataGridTemplateColumn Header="Forma de pago" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="130*" MinWidth="88">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock TextWrapping="Wrap" Text="{Binding PaymentMethod}" Foreground="#16326B"/>
@@ -1304,7 +1304,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Comision" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="110*" MinWidth="95">
+                    <DataGridTemplateColumn Header="Comision" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="110*" MinWidth="80">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <Border Style="{StaticResource SquareStatusBadge}" Margin="0,0,0,4"
@@ -1322,7 +1322,7 @@
                          estaba suelta como enlace en la primera columna. Grid de carriles
                          fijos (no WrapPanel) para que al ocultarse PAGAR o IMPRIMIR las demas
                          no se recorran y las filas queden alineadas. -->
-                    <DataGridTemplateColumn Header="Accion" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="220*" MinWidth="200">
+                    <DataGridTemplateColumn Header="Accion" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="180*" MinWidth="150">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <Grid VerticalAlignment="Center">
                           <Grid.ColumnDefinitions>
@@ -1538,7 +1538,7 @@
                           <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" MinWidth="140" Width="140"/>
                           <DataGridTextColumn Header="Taxista" Binding="{Binding Taxista}" MinWidth="180" Width="220"/>
                           <DataGridTextColumn Header="Gafete" Binding="{Binding Gafete}" MinWidth="90" Width="90"/>
-                          <DataGridTextColumn Header="PAX" Binding="{Binding Pax, StringFormat={}{0:0}}" MinWidth="70" Width="70"/>
+                          <DataGridTextColumn Header="PAX ADULTOS" Binding="{Binding Pax, StringFormat={}{0:0}}" MinWidth="70" Width="70"/>
                           <DataGridTextColumn Header="Hotel" Binding="{Binding Hotel}" MinWidth="180" Width="220"/>
                           <DataGridTextColumn Header="Origen" Binding="{Binding Origen}" MinWidth="180" Width="220"/>
                           <DataGridTextColumn Header="Destino" Binding="{Binding Destino}" MinWidth="180" Width="220"/>

@@ -1,4 +1,4 @@
-namespace ControlTaxiDesktop.Models;
+﻿namespace ControlTaxiDesktop.Models;
 
 public sealed record LocalTaxiReportRow(string DriverName, string Code, string Type, DateTime Date, int AdultPassengers, int ChildPassengers, int InfantPassengers, string Hotel, decimal GrossSale, decimal Cash, decimal Card, decimal Amex, decimal Payout, decimal Expenses, decimal NetSale, decimal Commission, string PaymentDate, string Status);
 public sealed record LocalSpecialReportRow(string Date, string FolioControl, string AppFolio, string OperationFolio, string PosFolio, string Driver, string Badge, string TransportType, string Hotel, int Passengers, decimal Sale, decimal Payout, decimal PayoutPaid, decimal Commission, decimal Paid, string Status);
@@ -32,9 +32,23 @@ public sealed record LocalCommissionBrowserRow(
     string Gafete,
     // Estatus del pago de la DEJADA al taxista. Es un pago distinto al de la comision, por eso
     // va en su propia columna: una comision puede estar pagada y la dejada no, o al reves.
-    string EstatusDejada = "")
+    string EstatusDejada = "",
+    // Gastos varios ya descontados de la base. Va aparte de Degustacion/Reparacion porque son
+    // conceptos distintos y, si no se muestra, la comision no cuadra con los importes visibles.
+    decimal GastosVarios = 0m,
+    // Ticket del folio al que se le cargo la dejada completa. En los demas tickets del folio la
+    // dejada va en cero, y este campo es el que permite decir en pantalla donde quedo.
+    string PayoutTicket = "",
+    // Autorizacion de pago de comision (confirmado con el usuario 2026-08-24: el pago dejo de
+    // ser libre). Vacio = no autorizado. Cualquier usuario con el permiso puede pagar una vez
+    // autorizado, incluida la misma persona que autorizo.
+    string AutorizadoEn = "",
+    string AutorizadoPor = "",
+    string PagadoPor = "")
 {
-    public bool PuedePagar => PagoComision > 0m && Saldo > 0m && !string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
+    public bool EstaAutorizada => !string.IsNullOrWhiteSpace(AutorizadoEn);
+    public bool PuedeAutorizar => PagoComision > 0m && !EstaAutorizada && !string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
+    public bool PuedePagar => PagoComision > 0m && Saldo > 0m && EstaAutorizada && !string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
     public bool PuedeImprimirTicket => PagoComision > 0m && string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
 }
 public sealed record LocalCommissionDiagnosticRow(

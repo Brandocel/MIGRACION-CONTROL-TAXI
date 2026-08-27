@@ -14,6 +14,8 @@ public partial class PosWindow : Window
     private readonly LocalDatabase _database;
     private readonly LocalPosRepository _pos;
     private readonly LocalOperationsRepository _operations;
+    private readonly LocalUserRepository _users;
+    private bool _canAuthorizeCommissions;
     private readonly DesktopOutputService _output = new();
     private readonly LocalErrorLogger _errors;
     private readonly string _user;
@@ -48,6 +50,7 @@ public partial class PosWindow : Window
         _database = database;
         _pos = new LocalPosRepository(database);
         _operations = new LocalOperationsRepository(database);
+        _users = new LocalUserRepository(database);
         _errors = new LocalErrorLogger(database);
         _user = user;
         _branchCode = string.IsNullOrWhiteSpace(branchCode) ? "P28" : branchCode.Trim().ToUpperInvariant();
@@ -71,6 +74,21 @@ public partial class PosWindow : Window
         CommissionNextPageButton.IsEnabled = false;
         Loaded += async (_, _) =>
         {
+            // Facultad puntual, distinta de "puede ver Comisiones": determina si este usuario
+            // puede darle AUTORIZAR. Confirmado con el usuario el 2026-08-24: el pago de
+            // comision dejo de ser libre, requiere autorizacion previa de alguien con esta
+            // facultad (ej. Ester). Cualquiera con acceso a Comisiones puede pagar despues.
+            try
+            {
+                _canAuthorizeCommissions = await _users.HasPermissionAsync(_user, "AutorizarPagoComision", _branchCode);
+            }
+            catch
+            {
+                _canAuthorizeCommissions = false;
+            }
+            CommissionSelectionRow.CanAuthorizeCommissions = _canAuthorizeCommissions;
+            AuthorizeSelectedCommissionsButton.Visibility = _canAuthorizeCommissions ? Visibility.Visible : Visibility.Collapsed;
+
             _windowReady = true;
             await RunAsync(RefreshAsync);
         };
@@ -236,16 +254,6 @@ public partial class PosWindow : Window
         await RefreshAsync();
     });
 
-    private async void PayCommission_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
-    {
-        EnsureNotCascoWriteOperation();
-        var row = _commissionFilteredRows.FirstOrDefault(x => string.Equals(x.Source.Folio, CommissionFolio.Text, StringComparison.OrdinalIgnoreCase));
-        if (row is null) throw new InvalidOperationException("Selecciona una comision valida.");
-        await _pos.PayCommissionAsync(row.Source.Folio, row.Source.Saldo, _user);
-        await RefreshCommissionBrowserAsync(resetPage: true);
-        WebDialogWindow.Show(this, "Comision pagada exitosamente. Estado: PAGADA.", "Control Taxi", "OK");
-    });
-
     private async void CalculateCut_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
         EnsureNotCascoWriteOperation();
@@ -307,19 +315,117 @@ public partial class PosWindow : Window
         CommissionFiltersToggleButton.Content = collapse ? "Mostrar ▼" : "Ocultar ▲";
     }
 
-    // Boton PAGAR de la columna de acciones: paga solo esa fila. Marca la fila como la unica
-    // seleccionada y reusa el mismo flujo de pago del boton PAGAR de arriba, para no tener dos
-    // caminos distintos que puedan quedar desalineados.
+    // Boton PAGAR de la columna de acciones: paga SOLO ese renglon.
+    //
+    // Antes limpiaba las palomitas de toda la tabla para dejar marcada unicamente esta fila, y
+    // eso callaba un error caro: si el usuario marcaba tres renglones y luego le picaba al
+    // PAGAR de uno, se pagaba ese y los otros dos quedaban sin cobrar sin decir nada. Ahora la
+    // seleccion no se toca y, si hay renglones marcados aparte, el dialogo lo advierte.
+    // Boton AUTORIZAR de la columna de acciones: autoriza SOLO ese renglon (por folio, igual
+    // que PAGAR). Requiere la facultad AutorizarPagoComision -- sin ella el boton nunca se
+    // habilita, asi que si llega a dispararse por otra via se rechaza aqui tambien.
+    private async void AuthorizeSingleCommission_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (!_canAuthorizeCommissions) throw new InvalidOperationException("No tienes la facultad para autorizar pagos de comision.");
+        if (sender is not FrameworkElement { DataContext: CommissionSelectionRow row }) return;
+        await AuthorizeCommissionsCoreAsync(row);
+    });
+
+    private async void AuthorizeSelectedCommissions_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        if (!_canAuthorizeCommissions) throw new InvalidOperationException("No tienes la facultad para autorizar pagos de comision.");
+        await AuthorizeCommissionsCoreAsync();
+    });
+
+    private bool _commissionAuthorizeInProgress;
+
+    private async Task AuthorizeCommissionsCoreAsync(CommissionSelectionRow? soloEsteRenglon = null)
+    {
+        if (_commissionAuthorizeInProgress) return;
+        _commissionAuthorizeInProgress = true;
+        try
+        {
+            await AuthorizeCommissionsCoreInnerAsync(soloEsteRenglon);
+        }
+        finally
+        {
+            _commissionAuthorizeInProgress = false;
+        }
+    }
+
+    private async Task AuthorizeCommissionsCoreInnerAsync(CommissionSelectionRow? soloEsteRenglon)
+    {
+        if (IsCascoBranch)
+            throw new InvalidOperationException("La autorizacion de pago de comision todavia no aplica para Casco Viejo.");
+
+        List<LocalCommissionBrowserRow> selected;
+        if (soloEsteRenglon is not null)
+        {
+            if (!soloEsteRenglon.Source.PuedeAutorizar)
+                throw new InvalidOperationException("Ese renglon no se puede autorizar (ya esta autorizado o no tiene comision).");
+            selected = [soloEsteRenglon.Source];
+        }
+        else
+        {
+            selected = _commissionFilteredRows.Where(x => x.IsSelected && x.Source.PuedeAutorizar).Select(x => x.Source).ToList();
+            if (selected.Count == 0 && CommissionsGrid.SelectedItem is CommissionSelectionRow selectedRow && selectedRow.Source.PuedeAutorizar)
+                selected.Add(selectedRow.Source);
+        }
+
+        // Mismo agrupamiento por folio que el pago: una operacion puede traer varios tickets y
+        // la autorizacion aplica al folio completo, no ticket por ticket.
+        var folioGroups = selected
+            .Select(x => string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(folio => new
+            {
+                Folio = folio,
+                Rows = _commissionRows
+                    .Where(x => string.Equals(
+                        string.IsNullOrWhiteSpace(x.SaleFolio) ? x.Folio : x.SaleFolio,
+                        folio,
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList(),
+            })
+            .Where(g => g.Rows.Any(x => x.PuedeAutorizar))
+            .ToList();
+
+        if (folioGroups.Count == 0) throw new InvalidOperationException("Selecciona al menos una comision pendiente de autorizar.");
+
+        var detalle = new System.Text.StringBuilder();
+        detalle.AppendLine(folioGroups.Count == 1
+            ? "Vas a autorizar el pago de comision de 1 folio:"
+            : $"Vas a autorizar el pago de comision de {folioGroups.Count:N0} folios:");
+        detalle.AppendLine();
+        foreach (var group in folioGroups)
+        {
+            var importe = group.Rows.Sum(x => x.PagoComision);
+            var taxista = group.Rows.Select(x => x.Nombre).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+            detalle.AppendLine($"Folio {group.Folio}      {importe:C2}");
+            if (!string.IsNullOrWhiteSpace(taxista)) detalle.AppendLine($"   {taxista}");
+        }
+        detalle.AppendLine();
+        detalle.AppendLine("Una vez autorizado, cualquier usuario con acceso a Comisiones podra pagarlo.");
+
+        if (!WebDialogWindow.Confirm(this, detalle.ToString(), "AUTORIZAR PAGO DE COMISION", "?", "SI, AUTORIZAR", "CANCELAR"))
+            return;
+
+        foreach (var group in folioGroups)
+            await _pos.AuthorizeCommissionPaymentAsync(group.Folio, _user);
+
+        await RefreshCommissionBrowserAsync(resetPage: true);
+        WebDialogWindow.Show(this, folioGroups.Count == 1
+            ? "Comision autorizada. Ya se puede pagar."
+            : $"{folioGroups.Count:N0} folios autorizados. Ya se pueden pagar.", "Control Taxi", "OK");
+    }
+
     private async void PaySingleCommission_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
         if (sender is not FrameworkElement { DataContext: CommissionSelectionRow row }) return;
-        foreach (var candidate in _commissionFilteredRows) candidate.IsSelected = false;
-        row.IsSelected = true;
-        CommissionsGrid.SelectedItem = row;
-        await PayCommissionsCoreAsync();
+        await PayCommissionsCoreAsync(row);
     });
 
-    private async void PaySelectedCommissions_Click(object sender, RoutedEventArgs e) => await RunAsync(PayCommissionsCoreAsync);
+    private async void PaySelectedCommissions_Click(object sender, RoutedEventArgs e) => await RunAsync(() => PayCommissionsCoreAsync());
 
     /// <summary>
     /// Candado contra doble cobro. Los handlers son async void y el boton sigue habilitado
@@ -328,13 +434,13 @@ public partial class PosWindow : Window
     /// </summary>
     private bool _commissionPaymentInProgress;
 
-    private async Task PayCommissionsCoreAsync()
+    private async Task PayCommissionsCoreAsync(CommissionSelectionRow? soloEsteRenglon = null)
     {
         if (_commissionPaymentInProgress) return;
         _commissionPaymentInProgress = true;
         try
         {
-            await PayCommissionsCoreInnerAsync();
+            await PayCommissionsCoreInnerAsync(soloEsteRenglon);
         }
         finally
         {
@@ -342,7 +448,7 @@ public partial class PosWindow : Window
         }
     }
 
-    private async Task PayCommissionsCoreInnerAsync()
+    private async Task PayCommissionsCoreInnerAsync(CommissionSelectionRow? soloEsteRenglon)
     {
         if (IsCascoBranch)
         {
@@ -350,12 +456,24 @@ public partial class PosWindow : Window
             return;
         }
 
-        var selected = _commissionFilteredRows
-            .Where(x => x.IsSelected && x.Source.PuedePagar)
-            .Select(x => x.Source)
-            .ToList();
+        var marcados = _commissionFilteredRows.Where(x => x.IsSelected && x.Source.PuedePagar).ToList();
 
-        if (selected.Count == 0 && CommissionsGrid.SelectedItem is CommissionSelectionRow selectedRow && selectedRow.Source.PuedePagar)
+        List<LocalCommissionBrowserRow> selected;
+        var ignorados = 0;
+        if (soloEsteRenglon is not null)
+        {
+            if (!soloEsteRenglon.Source.PuedePagar)
+                throw new InvalidOperationException("Ese renglon no tiene comision pendiente por pagar.");
+            selected = [soloEsteRenglon.Source];
+            ignorados = marcados.Count(x => !ReferenceEquals(x, soloEsteRenglon));
+        }
+        else
+        {
+            selected = marcados.Select(x => x.Source).ToList();
+        }
+
+        if (soloEsteRenglon is null && selected.Count == 0
+            && CommissionsGrid.SelectedItem is CommissionSelectionRow selectedRow && selectedRow.Source.PuedePagar)
             selected.Add(selectedRow.Source);
 
         // Un mismo folio de operacion puede traer VARIOS tickets (varias llegadas del mismo
@@ -387,12 +505,39 @@ public partial class PosWindow : Window
         if (rowsToPay.Count == 0) throw new InvalidOperationException("Selecciona al menos una comision pendiente.");
 
         var total = rowsToPay.Sum(x => x.Saldo);
-        var message = folioGroups.Count == 1
-            ? $"Deseas pagar la comision del folio {folioGroups[0].Folio}?{Environment.NewLine}"
-              + $"Tickets: {rowsToPay.Count:N0}{Environment.NewLine}Importe: {total:C2}"
-            : $"Deseas pagar {folioGroups.Count:N0} folios ({rowsToPay.Count:N0} tickets)?{Environment.NewLine}"
-              + $"Importe total: {total:C2}";
-        if (!WebDialogWindow.Confirm(this, message, "PAGAR COMISION", "?", "PAGAR", "CANCELAR"))
+        // El dialogo desglosa folio por folio en vez de mostrar solo un total. Quien cobra
+        // necesita ver QUE se va a pagar antes de aceptar, sobre todo porque al pagar un ticket
+        // se paga el folio completo y eso no se adivina desde la tabla.
+        var detalle = new System.Text.StringBuilder();
+        detalle.AppendLine(folioGroups.Count == 1
+            ? "Se va a pagar la comision de 1 folio:"
+            : $"Se va a pagar la comision de {folioGroups.Count:N0} folios:");
+        detalle.AppendLine();
+        foreach (var group in folioGroups)
+        {
+            var pendientes = group.Rows.Where(x => x.PuedePagar).ToList();
+            var taxista = group.Rows.Select(x => x.Nombre).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+            detalle.AppendLine($"Folio {group.Folio}      {pendientes.Sum(x => x.Saldo):C2}");
+            if (!string.IsNullOrWhiteSpace(taxista)) detalle.AppendLine($"   {taxista}");
+            detalle.AppendLine(pendientes.Count == 1 ? "   1 ticket" : $"   {pendientes.Count:N0} tickets del mismo folio");
+            detalle.AppendLine();
+        }
+
+        detalle.AppendLine($"TOTAL A PAGAR: {total:C2}");
+
+        if (folioGroups.Any(g => g.Rows.Count(x => x.PuedePagar) > 1))
+        {
+            detalle.AppendLine();
+            detalle.AppendLine("Cuando un folio trae varios tickets se pagan TODOS juntos: no se puede cobrar uno solo.");
+        }
+
+        if (ignorados > 0)
+        {
+            detalle.AppendLine();
+            detalle.AppendLine($"CUIDADO: tienes {ignorados:N0} renglon(es) mas con palomita que NO se van a pagar ahora, porque usaste el boton PAGAR de esta fila. Para cobrarlos todos juntos, cancela y usa el boton PAGAR de arriba.");
+        }
+
+        if (!WebDialogWindow.Confirm(this, detalle.ToString(), "CONFIRMAR PAGO DE COMISION", "?", "SI, PAGAR", "CANCELAR"))
             return;
 
         foreach (var group in folioGroups)
@@ -772,7 +917,41 @@ public partial class PosWindow : Window
         CommissionSaleLinesPanel.Visibility = Visibility.Collapsed;
     }
 
-    private sealed record CommissionDetailField(string Label, string Value);
+    /// <summary>
+    /// Renglon del panel de detalle. Ademas del dato lleva una explicacion en palabras simples
+    /// y un tipo visual, porque quien lo usa a diario no es contador: la cuenta tiene que leerse
+    /// como un ticket de tienda, no como una formula.
+    /// </summary>
+    private enum DetailKind { Dato, Titulo, Resta, Resultado, Pago }
+
+    private sealed record CommissionDetailField(string Label, string Value, string Hint = "", DetailKind Kind = DetailKind.Dato)
+    {
+        public Visibility HintVisibility => string.IsNullOrWhiteSpace(Hint) ? Visibility.Collapsed : Visibility.Visible;
+        public string LineBrush => Kind == DetailKind.Titulo ? "#FFFFFF" : "#EFF3F9";
+        public string RowBackground => Kind switch
+        {
+            DetailKind.Resultado => "#F1F6FF",
+            DetailKind.Pago => "#EAF7F0",
+            _ => "Transparent"
+        };
+        public string LabelMargin => Kind is DetailKind.Resta ? "12,0,0,0" : "0";
+        public string LabelSize => Kind == DetailKind.Titulo ? "10" : "11";
+        public string LabelWeight => Kind is DetailKind.Titulo or DetailKind.Resultado or DetailKind.Pago ? "Black" : "Bold";
+        public string LabelBrush => Kind switch
+        {
+            DetailKind.Titulo => "#8496B4",
+            DetailKind.Pago => "#0F7A44",
+            _ => "#6880A6"
+        };
+        public string ValueSize => Kind is DetailKind.Resultado or DetailKind.Pago ? "15" : "12";
+        public string ValueWeight => Kind is DetailKind.Resultado or DetailKind.Pago ? "Black" : "SemiBold";
+        public string ValueBrush => Kind switch
+        {
+            DetailKind.Resta => "#B4453C",
+            DetailKind.Pago => "#0F7A44",
+            _ => "#16326B"
+        };
+    }
 
     // Cambiar de fila ya NO abre el panel: solo refresca su contenido si el panel ya estaba
     // abierto. Abrirlo con cada seleccion tapaba la tabla al marcar casillas o al arrastrar
@@ -798,26 +977,102 @@ public partial class PosWindow : Window
 
         var s = row.Source;
         CommissionDetailFolio.Text = s.Folio;
-        CommissionDetailFields.ItemsSource = new[]
+        // La cuenta se arma como un ticket de tienda: primero lo que se vendio, luego lo que se
+        // le quita y por que, y hasta abajo lo que se le paga. Cada resta lleva su explicacion
+        // en palabras simples porque el panel lo usan capturistas, no contadores.
+        var retencion = s.VentaTotal * s.DescuentoPorcentaje;
+        var neto = s.VentaTotal - retencion;
+        var baseComision = neto - s.Dejada - s.BebidasCajasRegalo - s.Reparacion - s.Degustacion - s.GastosVarios;
+        var pesos = "C2";
+        var cultura = CultureInfo.CurrentCulture;
+        var campos = new List<CommissionDetailField>
         {
-            new CommissionDetailField("Número unidad", s.NumeroUnidad),
-            new CommissionDetailField("Pax", s.Pax.ToString(CultureInfo.InvariantCulture)),
-            new CommissionDetailField("Ticket", s.Ticket),
-            new CommissionDetailField("Venta artesanía", s.VentaArtesania.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Venta farmacia", s.VentaFarmacia.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Venta tienda", s.VentaTienda.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Venta joyería", s.VentaJoyeria.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("% descuento", s.DescuentoPorcentaje.ToString("P0", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Bebidas y cajas regalo", s.BebidasCajasRegalo.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Rep", s.Reparacion.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Degustación", s.Degustacion.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Pagado", s.Pagado.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Saldo", s.Saldo.ToString("C2", CultureInfo.CurrentCulture)),
-            // Los dos estatus juntos, para que se vea claro que son pagos distintos.
-            new CommissionDetailField("Dejada", s.Dejada.ToString("C2", CultureInfo.CurrentCulture)),
-            new CommissionDetailField("Estatus dejada", string.IsNullOrWhiteSpace(s.EstatusDejada) ? "—" : s.EstatusDejada),
-            new CommissionDetailField("Estatus comisión", s.Estatus),
+            new("CÓMO SE SACÓ ESTA COMISIÓN", "", "", DetailKind.Titulo),
+            new("Lo que compraron", s.VentaTotal.ToString(pesos, cultura), "Total del ticket " + s.Ticket),
         };
+
+        if (retencion > 0m)
+        {
+            campos.Add(new(
+                $"Menos lo que cobra el banco ({s.DescuentoPorcentaje.ToString("P0", cultura)})",
+                "− " + retencion.ToString(pesos, cultura),
+                "Pagaron con " + (string.IsNullOrWhiteSpace(s.FormaPago) ? "tarjeta" : s.FormaPago.ToLowerInvariant()) + ", y el banco se queda con esa parte",
+                DetailKind.Resta));
+        }
+        else
+        {
+            campos.Add(new("El banco no cobró nada", 0m.ToString(pesos, cultura),
+                "Pagaron en efectivo, así que no se le quita nada por el banco"));
+        }
+
+        if (s.Dejada > 0m)
+        {
+            campos.Add(new("Menos la dejada del taxista", "− " + s.Dejada.ToString(pesos, cultura),
+                "Lo que ya se le pagó por traer a los pax. Si el folio trae varios tickets, a cada uno le toca su parte", DetailKind.Resta));
+        }
+        else if (!string.IsNullOrWhiteSpace(s.PayoutTicket)
+                 && !string.Equals(s.PayoutTicket, s.Ticket, StringComparison.OrdinalIgnoreCase))
+        {
+            // La dejada se cobra una sola vez por folio y se le carga al ticket de mayor venta.
+            // Sin decirlo aqui, en los demas tickets el renglon se veria vacio y pareceria que
+            // la dejada se perdio.
+            campos.Add(new("La dejada no se le quita a este ticket", 0m.ToString(pesos, cultura),
+                $"Ya se le quitó completa al ticket {s.PayoutTicket}, que es el de venta más alta de este folio"));
+        }
+        else if (!string.IsNullOrWhiteSpace(s.EstatusDejada)
+                 && !string.Equals(s.EstatusDejada, "SIN DEJADA", StringComparison.OrdinalIgnoreCase))
+        {
+            // Sin esta linea la dejada simplemente desaparece de la cuenta y parece un error:
+            // abajo dice que la dejada esta pagada, pero arriba no se resto en ningun lado.
+            campos.Add(new("La dejada NO se le quita", 0m.ToString(pesos, cultura),
+                $"La compra no llega a {CommissionGlobalRules.PayoutDeductionMinSale.ToString("C0", cultura)}. Cuando la venta es chica no se le descuenta la dejada"));
+        }
+
+        void Gasto(string etiqueta, decimal importe, string ayuda)
+        {
+            if (importe > 0m)
+                campos.Add(new(etiqueta, "− " + importe.ToString(pesos, cultura), ayuda, DetailKind.Resta));
+        }
+
+        Gasto("Menos la degustación", s.Degustacion, "Lo que se gastó en degustación durante la visita");
+        Gasto("Menos bebidas y cajas de regalo", s.BebidasCajasRegalo, "Bebidas, cajas o regalos que se dieron");
+        Gasto("Menos reparaciones", s.Reparacion, "Reparaciones cargadas a esta visita");
+        Gasto("Menos otros gastos", s.GastosVarios, "Otros gastos registrados en esta visita");
+
+        campos.Add(new("SOBRE ESTO SE SACA LA COMISIÓN", baseComision.ToString(pesos, cultura),
+            "Es lo que quedó después de todos los descuentos", DetailKind.Resultado));
+        campos.Add(new($"Le toca el {s.PorcentajeComision.ToString("P0", cultura)} de eso",
+            s.PagoComision.ToString(pesos, cultura),
+            s.PagoComision < 0m
+                ? "Salió en negativo: la dejada fue mayor que la venta, así que el taxista queda debiendo"
+                : "Ésta es la comisión de este ticket",
+            DetailKind.Pago));
+
+        campos.Add(new("YA PAGADO", "", "", DetailKind.Titulo));
+        campos.Add(new("Se le ha pagado", s.Pagado.ToString(pesos, cultura), "De la comisión de este ticket"));
+        campos.Add(new("Falta pagarle", s.Saldo.ToString(pesos, cultura), "Lo que todavía se le debe de este ticket"));
+        campos.Add(new("Estado de la comisión", s.Estatus, "El pago del porcentaje por la compra"));
+        campos.Add(new("Estado de la dejada", string.IsNullOrWhiteSpace(s.EstatusDejada) ? "—" : s.EstatusDejada,
+            "El pago por traer a los pax. Es un pago aparte de la comisión"));
+
+        // Rastro de quien autorizo y quien pago. Sin esto la autorizacion queda solo en la
+        // base de datos y nadie puede confirmar a simple vista quien hizo que.
+        campos.Add(new(s.EstaAutorizada ? "Autorizado por" : "Autorizado por",
+            s.EstaAutorizada ? $"{s.AutorizadoPor} — {s.AutorizadoEn}" : "Sin autorizar todavía",
+            s.EstaAutorizada ? "El pago de esta comisión ya fue habilitado" : "Nadie ha autorizado el pago de esta comisión todavía"));
+        if (!string.IsNullOrWhiteSpace(s.PagadoPor))
+            campos.Add(new("Pagado por", s.PagadoPor, "Quién le dio clic a pagar"));
+
+        campos.Add(new("DATOS DE LA VISITA", "", "", DetailKind.Titulo));
+        campos.Add(new("Unidad", string.IsNullOrWhiteSpace(s.NumeroUnidad) ? "—" : s.NumeroUnidad));
+        campos.Add(new("Personas que llegaron", s.Pax.ToString(CultureInfo.InvariantCulture)));
+        campos.Add(new("Ticket", s.Ticket));
+        if (s.VentaTienda > 0m) campos.Add(new("Compraron en tienda", s.VentaTienda.ToString(pesos, cultura)));
+        if (s.VentaJoyeria > 0m) campos.Add(new("Compraron en joyería", s.VentaJoyeria.ToString(pesos, cultura)));
+        if (s.VentaArtesania > 0m) campos.Add(new("Compraron en artesanía", s.VentaArtesania.ToString(pesos, cultura)));
+        if (s.VentaFarmacia > 0m) campos.Add(new("Compraron en farmacia", s.VentaFarmacia.ToString(pesos, cultura)));
+
+        CommissionDetailFields.ItemsSource = campos;
         // Ver el ticket solo aplica a comisiones ya pagadas.
         CommissionShowTicketButton.Visibility = s.PuedeImprimirTicket ? Visibility.Visible : Visibility.Collapsed;
 
@@ -1612,7 +1867,8 @@ public partial class PosWindow : Window
             ReportEndDate,
             _cachedReportRelations,
             await _pos.GetCamionesResumenAsync(ReportStartDate, ReportEndDate),
-            dialog.FileName);
+            dialog.FileName,
+            await _pos.GetCommissionBrowserRowsAsync(null, ReportStartDate, ReportEndDate));
     });
     private async void ExportCuadreExcel_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
@@ -1630,7 +1886,8 @@ public partial class PosWindow : Window
         }
 
         await EnsureDetailedReportRelationsAsync();
-        var commissions = await _pos.GetCommissionsAsync();
+        var authoritativeCommissionRows = await _pos.GetCommissionBrowserRowsAsync(null, ReportStartDate, ReportEndDate);
+        var commissions = MapReportWorkbookCommissions(authoritativeCommissionRows);
         var camiones = await _pos.GetCamionesResumenAsync(ReportStartDate, ReportEndDate);
         await _output.ExportCuadreWorkbookAsync(
             ReportStartDate,
@@ -1639,7 +1896,8 @@ public partial class PosWindow : Window
             commissions,
             _cachedReportCuts,
             camiones,
-            dialog.FileName);
+            dialog.FileName,
+            authoritativeCommissionRows);
     });
     private async void OpenReportSearch_Click(object sender, RoutedEventArgs e) => await RunAsync(LoadReportCenterAsync);
     private async void OpenReportMovementsModule_Click(object sender, RoutedEventArgs e) => await RunAsync(LoadReportCenterAsync);
@@ -2086,7 +2344,7 @@ public partial class PosWindow : Window
 
         ReportMovementsLabelText.Text = isPayments ? "PAGOS" : "MOVIMIENTOS";
         ReportMovementsText.Text = (isPayments ? paymentRows.Count : operationRows.Count).ToString("N0", CultureInfo.InvariantCulture);
-        ReportPaxLabelText.Text = isPayments ? "PAGADO" : "PAX";
+        ReportPaxLabelText.Text = isPayments ? "PAGADO" : "PAX ADULTOS";
         ReportPaxText.Text = isPayments
             ? paymentRows.Sum(x => x.Pago).ToString("C2", CultureInfo.CurrentCulture)
             : operationRows.Sum(x => x.Pax).ToString("N0", CultureInfo.InvariantCulture);
@@ -2219,6 +2477,13 @@ public partial class PosWindow : Window
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
             }
         }
+
+        // Se fija una sola vez por ventana, antes de cargar las filas (Loaded), asi que no
+        // necesita disparar PropertyChanged: para cuando el binding lo lee ya tiene su valor
+        // final.
+        public static bool CanAuthorizeCommissions { get; set; }
+
+        public bool CanShowAuthorize => Source.PuedeAutorizar && CanAuthorizeCommissions;
     }
 
     private void SetReportPrintPreview(string content)
@@ -2379,6 +2644,27 @@ public partial class PosWindow : Window
             string.IsNullOrWhiteSpace(row.Estatus) ? "PENDIENTE" : row.Estatus)).ToArray();
     }
 
+    // GetCommissionsAsync() lee LocalComisiones, que solo se llena cuando alguien le da PAGAR:
+    // un folio pendiente (la mayoria, un dia normal) nunca aparecia en el Excel de Cuadre aunque
+    // si estuviera en la pantalla de Comisiones en vivo. Esto usa la misma fuente autoritativa
+    // que la pantalla. Confirmado 2026-08-27: el 27/08 tenia 5 comisiones pendientes en pantalla
+    // y 0 en este reporte antes del cambio.
+    private static IReadOnlyList<LocalCommission> MapReportWorkbookCommissions(IEnumerable<LocalCommissionBrowserRow> rows)
+    {
+        return rows.Select((row, index) => new LocalCommission(
+            index + 1,
+            row.Folio,
+            row.SaleFolio,
+            row.Gafete,
+            row.Nombre,
+            row.Fecha,
+            row.VentaTotal,
+            row.PagoComision,
+            row.Pagado,
+            row.Saldo,
+            string.IsNullOrWhiteSpace(row.Estatus) ? "PENDIENTE" : row.Estatus)).ToArray();
+    }
+
     private static DateTime TryParsePreviewDate(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -2433,6 +2719,25 @@ public partial class PosWindow : Window
         catch (Exception ex)
         {
             await _errors.LogAsync(_user, "POS", "Error de pantalla", ex);
+
+            // "La comision ya esta pagada" no siempre es un error: en Plaza 28 varias personas
+            // usan Comisiones al mismo tiempo, y esto salta cuando alguien mas ya autorizo/pago
+            // el mismo folio segundos antes. Sin este aviso, quien lo ve piensa que el sistema
+            // esta roto y no que ya se cobro. Se refresca la tabla para que vea el estado real
+            // de una vez, en vez de quedarse mirando la fila vieja en PENDIENTE.
+            if (ex.Message.Contains("ya esta pagada", StringComparison.OrdinalIgnoreCase))
+            {
+                try { await RefreshCommissionBrowserAsync(resetPage: false); }
+                catch { /* si el refresco falla, igual se muestra el aviso de abajo */ }
+                WebDialogWindow.Show(
+                    this,
+                    "Esa comision ya se pago (puede que otra persona la haya cobrado justo antes). "
+                    + "Ya actualice la tabla: busca el folio de nuevo y deberia salir en PAGADA.",
+                    "Control Taxi",
+                    "!");
+                return;
+            }
+
             WebDialogWindow.Show(this, "No se pudo completar la operacion. " + ex.Message, "Control Taxi", "!");
         }
     }

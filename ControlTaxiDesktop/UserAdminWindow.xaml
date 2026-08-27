@@ -1,4 +1,4 @@
-<Window x:Class="ControlTaxiDesktop.UserAdminWindow"
+﻿<Window x:Class="ControlTaxiDesktop.UserAdminWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Control Taxi · Usuarios y permisos"
@@ -39,7 +39,11 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
-          <RowDefinition Height="Auto"/>
+          <!-- Antes al reves: la tabla de USUARIOS crecia sin limite (Auto) y el renglon de
+               botones se quedaba con el espacio sobrante ("*"), asi que con muchos usuarios
+               GUARDAR terminaba fuera de la ventana y no habia forma de hacerle scroll. La
+               tabla ahora es la que ocupa el espacio libre (con su propio scroll interno) y los
+               botones son Auto: siempre visibles, sin importar cuantos usuarios haya. -->
           <RowDefinition Height="*"/>
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -219,6 +219,9 @@ public partial class CommissionSettingsWindow : Window
         EditAmex.Text = rule.AmexRetentionPercent.ToString("0.####", CultureInfo.InvariantCulture);
         SetComboText(EditPaymentKind, rule.PaymentKind);
         EditPayout.IsChecked = rule.AppliesPayout;
+        EditPayoutAmount.Text = rule.PayoutAmount.ToString("0.##", CultureInfo.InvariantCulture);
+        SetComboText(EditPaxKind, rule.PaxKind);
+        EditMonedaId.Text = rule.MonedaId.ToString(CultureInfo.InvariantCulture);
         EditExpense.IsChecked = rule.AppliesExpense;
         EditActive.IsChecked = rule.Active;
         EditFrom.SelectedDate = rule.EffectiveFrom;
@@ -255,6 +258,9 @@ public partial class CommissionSettingsWindow : Window
         EditAmex.Text = "24";
         SetComboText(EditPaymentKind, string.Empty);
         EditPayout.IsChecked = true;
+        EditPayoutAmount.Text = "0";
+        EditPaxKind.SelectedIndex = 0;
+        EditMonedaId.Text = "-1";
         EditExpense.IsChecked = true;
         EditActive.IsChecked = true;
         EditFrom.SelectedDate = DateTime.Today;
@@ -300,7 +306,10 @@ public partial class CommissionSettingsWindow : Window
                 EditTo.SelectedDate,
                 string.Empty,
                 _user,
-                EditNotes.Text);
+                EditNotes.Text,
+                Money(EditPayoutAmount.Text, "Dejada"),
+                SelectedComboText(EditPaxKind),
+                Entero(EditMonedaId.Text));
 
             if (previous is not null && previous.Active && !rule.Active)
             {
@@ -710,6 +719,21 @@ public partial class CommissionSettingsWindow : Window
         rule.Code.Contains("DEFAULT", StringComparison.OrdinalIgnoreCase)
         || rule.Notes.Contains("fallback", StringComparison.OrdinalIgnoreCase)
         || rule.UpdatedBy.Contains("MIGRACION", StringComparison.OrdinalIgnoreCase);
+
+    private static int Entero(string? value)
+    {
+        var texto = (value ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(texto)) return -1;
+        return int.TryParse(texto, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numero) ? numero : -1;
+    }
+
+    private static decimal Money(string? value, string field)
+    {
+        var number = Number(value);
+        if (number < 0)
+            throw new InvalidOperationException($"{field} no puede ser negativa.");
+        return number;
+    }
 
     private static decimal Percent(string? value, string field)
     {

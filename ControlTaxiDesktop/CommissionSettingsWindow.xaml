@@ -1,4 +1,4 @@
-<Window x:Class="ControlTaxiDesktop.CommissionSettingsWindow"
+﻿<Window x:Class="ControlTaxiDesktop.CommissionSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Control Taxi · Configuración de comisiones"
@@ -218,6 +218,9 @@
                   <DataGridTextColumn Header="Efectivo" Binding="{Binding CashRetentionPercent, StringFormat={}{0:0.##}%}" Width="86"/>
                   <DataGridTextColumn Header="Tarjeta" Binding="{Binding CardRetentionPercent, StringFormat={}{0:0.##}%}" Width="86"/>
                   <DataGridTextColumn Header="AMEX" Binding="{Binding AmexRetentionPercent, StringFormat={}{0:0.##}%}" Width="76"/>
+                  <DataGridTextColumn Header="Dejada" Binding="{Binding PayoutDisplay}" Width="92"/>
+                  <DataGridTextColumn Header="Tipo de pax" Binding="{Binding PaxKindDisplay}" Width="110"/>
+                  <DataGridTextColumn Header="N° moneda" Binding="{Binding MonedaDisplay}" Width="96"/>
                   <DataGridTextColumn Header="Vigencia" Binding="{Binding EffectiveRange}" Width="128"/>
                   <DataGridTextColumn Header="Estado" Binding="{Binding StatusText}" Width="92"/>
                   <DataGridTemplateColumn Header="Acción" Width="330">
@@ -256,6 +259,16 @@
                   <StackPanel Margin="0,0,6,8"><TextBlock Text="Tarjeta %"/><TextBox x:Name="EditCard" ToolTip="Porcentaje que se descuenta al pago con tarjeta normal."/></StackPanel>
                   <StackPanel Margin="6,0,0,8"><TextBlock Text="AMEX %"/><TextBox x:Name="EditAmex" ToolTip="Porcentaje que se descuenta en pagos AMEX."/></StackPanel>
                 </UniformGrid>
+                <TextBlock Text="Tabulador" FontWeight="Black" Foreground="#0F3E95" Margin="0,8,0,8"/>
+                <TextBlock Text="Dejada $"/><TextBox x:Name="EditPayoutAmount" ToolTip="Importe de dejada del tabulador para esta unidad. Deja 0 si no aplica." Margin="0,2,0,8"/>
+                <TextBlock Text="Tipo de pax"/>
+                <TextBlock Text="N° de moneda (forma de pago del punto de venta)"/>
+                <TextBox x:Name="EditMonedaId" Margin="0,2,0,8"
+                         ToolTip="Numero de la forma de pago en el punto de venta (tabla Monedas). Deja -1 si la regla no corresponde a una forma de pago."/>
+                <ComboBox x:Name="EditPaxKind" Margin="0,2,0,8"
+                          ToolTip="Para quien aplica esta tarifa de dejada. El tabulador cobra distinto por la misma unidad segun quien llegue.">
+                  <ComboBoxItem Content=""/><ComboBoxItem Content="EXTRANJEROS"/><ComboBoxItem Content="NACIONALES"/>
+                </ComboBox>
                 <TextBlock Text="Tipo de pago"/><ComboBox x:Name="EditPaymentKind" ToolTip="Clasifica la forma de pago para aplicar la retención correcta." Margin="0,2,0,8"><ComboBoxItem Content=""/><ComboBoxItem Content="EFECTIVO"/><ComboBoxItem Content="TARJETA_NORMAL"/><ComboBoxItem Content="AMEX"/><ComboBoxItem Content="DIVISA"/><ComboBoxItem Content="OTRO"/></ComboBox>
                 <TextBlock Text="Control" FontWeight="Black" Foreground="#0F3E95" Margin="0,8,0,8"/>
                 <UniformGrid Columns="2">

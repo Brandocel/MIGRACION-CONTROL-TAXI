@@ -1519,10 +1519,21 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
         var rows = relations.Select(x =>
         {
             var importe = preferPayout ? (x.Payout ?? 0m) : (x.Sale > 0m ? x.Sale : x.Payout ?? 0m);
+
+            // El reporte de operaciones cuenta ADULTOS, no el total de pax: la venta la hace el
+            // adulto, y jovenes y menores inflaban la cifra. Confirmado con el usuario el
+            // 2026-08-21.
+            //
+            // Si el registro no trae desglose (los tres en cero, tipico de capturas viejas) se
+            // usa el total, porque ahi no hay forma de saber cuantos eran adultos y reportar
+            // cero seria peor que reportar de mas.
+            var tieneDesglose = x.AdultPassengers > 0 || x.YouthPassengers > 0 || x.ChildPassengers > 0;
+            var adultos = tieneDesglose ? x.AdultPassengers : x.Passengers;
+
             return new LocalOperationsPreviewRow(
                 string.IsNullOrWhiteSpace(x.Driver) ? x.Vendor : x.Driver,
                 x.DateText,
-                x.Passengers,
+                adultos,
                 x.Hotel,
                 x.Payout ?? 0m,
                 importe,
@@ -2440,11 +2451,8 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
 
     private static decimal CalculateRelationExpenseDeductions(string? transportType, RelationExpenseBreakdown expense)
     {
-        var duplicateSalmoranExpense = IsSalmoranTransport(transportType)
-            && expense.GastosVarios > 0m
-            && expense.GastosVarios == expense.Degustacion;
         var deductions = expense.Dejada;
-        deductions += duplicateSalmoranExpense ? 0m : expense.GastosVarios;
+        deductions += expense.GastosVarios;
         deductions += expense.Degustacion;
         deductions += expense.Reparacion;
         deductions += expense.Bebidas;
@@ -2543,18 +2551,45 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
             var text = ((reader.IsDBNull(1) ? string.Empty : reader.GetString(1)) + " " + (reader.IsDBNull(2) ? string.Empty : reader.GetString(2))).ToUpperInvariant();
             var total = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
             result.TryGetValue(ticket, out var current);
+            var bucket = ClassifyExpense(text);
             var updated = current with
             {
-                Dejada = current.Dejada + (text.Contains("DEJADA", StringComparison.OrdinalIgnoreCase) ? total : 0m),
-                GastosVarios = current.GastosVarios + ((text.Contains("GASTOS VARIOS", StringComparison.OrdinalIgnoreCase) || text.EndsWith(" GV", StringComparison.OrdinalIgnoreCase) || text.Contains(" GV ", StringComparison.OrdinalIgnoreCase)) ? total : 0m),
-                Degustacion = current.Degustacion + (text.Contains("DEGUST", StringComparison.OrdinalIgnoreCase) ? total : 0m),
-                Reparacion = current.Reparacion + (text.Contains("REPARA", StringComparison.OrdinalIgnoreCase) ? total : 0m),
-                Bebidas = current.Bebidas + (LooksLikeRelationBeverage(text) ? total : 0m),
-                CajasRegalo = current.CajasRegalo + ((text.Contains("CAJA", StringComparison.OrdinalIgnoreCase) || text.Contains("REGALO", StringComparison.OrdinalIgnoreCase)) ? total : 0m)
+                Dejada = current.Dejada + (bucket == ExpenseBucket.Dejada ? total : 0m),
+                GastosVarios = current.GastosVarios + (bucket == ExpenseBucket.GastosVarios ? total : 0m),
+                Degustacion = current.Degustacion + (bucket == ExpenseBucket.Degustacion ? total : 0m),
+                Reparacion = current.Reparacion + (bucket == ExpenseBucket.Reparacion ? total : 0m),
+                Bebidas = current.Bebidas + (bucket == ExpenseBucket.Bebidas ? total : 0m),
+                CajasRegalo = current.CajasRegalo + (bucket == ExpenseBucket.CajasRegalo ? total : 0m)
             };
             result[ticket] = updated;
         }
         return result;
+    }
+
+    // Un mismo egreso caia en varias cubetas a la vez: un concepto como "GASTOS VARIOS
+    // DEGUSTACION" sumaba en GastosVarios Y en Degustacion, y despues las dos se restaban de la
+    // base, asi que el importe se descontaba dos veces. Ahora cada renglon se clasifica en una
+    // sola cubeta, del concepto mas especifico al mas generico (gastos varios queda al final
+    // como cajon de sastre).
+    private enum ExpenseBucket { None, Dejada, Degustacion, Reparacion, Bebidas, CajasRegalo, GastosVarios }
+
+    private static ExpenseBucket ClassifyExpense(string text)
+    {
+        if (text.Contains("DEJADA", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.Dejada;
+        if (text.Contains("DEGUST", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.Degustacion;
+        if (text.Contains("REPARA", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.Reparacion;
+        if (LooksLikeRelationBeverage(text))
+            return ExpenseBucket.Bebidas;
+        if (text.Contains("CAJA", StringComparison.OrdinalIgnoreCase) || text.Contains("REGALO", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.CajasRegalo;
+        if (text.Contains("GASTOS VARIOS", StringComparison.OrdinalIgnoreCase)
+            || text.EndsWith(" GV", StringComparison.OrdinalIgnoreCase)
+            || text.Contains(" GV ", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.GastosVarios;
+        return ExpenseBucket.None;
     }
 
     private static bool LooksLikeRelationBeverage(string text) =>

@@ -132,18 +132,63 @@ public sealed class LocalPosRepository(LocalDatabase database)
         return ReadAsync(sql, Commission, string.IsNullOrWhiteSpace(folio) ? [] : [("$folio", folio.Trim())]);
     }
 
+    /// <summary>
+    /// Marca de tiempo del ultimo sincronizado de monedas. Es una lectura chica pero la pantalla
+    /// de comisiones se refresca seguido y no tiene caso repetirla en cada consulta.
+    /// </summary>
+    private static DateTime _monedasSyncedAt = DateTime.MinValue;
+
+    /// <summary>
+    /// Trae el catalogo de monedas del punto de venta (dbo.Monedas) y da de alta en las reglas de
+    /// comision las que falten. Es lo que permite amarrar la retencion al NUMERO de forma de
+    /// pago en vez de adivinarla por el texto de la descripcion.
+    /// </summary>
+    private async Task SyncMonedasCatalogAsync()
+    {
+        if (_sqlSource is null) return;
+        if (DateTime.UtcNow - _monedasSyncedAt < TimeSpan.FromMinutes(10)) return;
+        _monedasSyncedAt = DateTime.UtcNow;
+
+        try
+        {
+            await using var connection = await _sqlSource.OpenPosAsync();
+            var monedas = new List<(int Id, string Nombre)>();
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandTimeout = 20;
+                command.CommandText = """
+                    IF OBJECT_ID('dbo.Monedas', 'U') IS NOT NULL
+                        SELECT CAST(Moneda AS int) AS Id, CONVERT(nvarchar(80), COALESCE(Nombre, '')) AS Nombre
+                        FROM dbo.Monedas
+                        WHERE Moneda IS NOT NULL;
+                    """;
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                    monedas.Add((reader.GetInt32(0), reader.IsDBNull(1) ? string.Empty : reader.GetString(1)));
+            }
+
+            if (monedas.Count > 0)
+                await _commissionSettings.SyncMonedasAsync(monedas);
+        }
+        catch (Exception ex)
+        {
+            // No es critico: si falla, la clasificacion sigue funcionando por texto.
+            LogPlazaCommissionWarning(ex);
+        }
+    }
+
     public async Task<IReadOnlyList<LocalCommissionBrowserRow>> GetCommissionBrowserRowsAsync(string? search = null, DateTime? start = null, DateTime? end = null)
     {
         await EnsureCommissionSettingsLoadedAsync();
+        await SyncMonedasCatalogAsync();
         if (_sqlSource is not null)
         {
             try
             {
                 var rows = await LoadAuthoritativeCommissionRowsAsync(search, start, end);
-                ApplyLargestPayoutToHighestSale(rows);
+                DistributePayoutAcrossTickets(rows);
                 foreach (var row in rows)
                     row.CommissionAmount = CalculateAuthoritativeCommission(row);
-                ApplyStoreOnlyOperationGroupCommissions(rows);
                 ApplyCommissionPayments(rows);
                 return FilterCommissionBrowserRows(rows.Select(MapAuthoritativeCommissionRow), search, start, end).ToArray();
             }
@@ -207,10 +252,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
             try
             {
                 var rows = await LoadAuthoritativeCommissionRowsAsync(cleanFolio, null, null);
-            ApplyLargestPayoutToHighestSale(rows);
+            DistributePayoutAcrossTickets(rows);
             foreach (var row in rows)
                 row.CommissionAmount = CalculateAuthoritativeCommission(row);
-            ApplyStoreOnlyOperationGroupCommissions(rows);
             return BuildCommissionDiagnostics(rows, "SQL Server");
             }
             catch (Exception ex)
@@ -231,10 +275,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     || string.Equals(row.Ticket, cleanFolio, StringComparison.OrdinalIgnoreCase)
                     || row.LocalFolio.Contains(cleanFolio, StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            ApplyLargestPayoutToHighestSale(rows);
+            DistributePayoutAcrossTickets(rows);
             foreach (var row in rows)
                 row.CommissionAmount = CalculateAuthoritativeCommission(row);
-            ApplyStoreOnlyOperationGroupCommissions(rows);
             return BuildCommissionDiagnostics(rows, "SQLite");
         }
         catch
@@ -626,10 +669,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var authoritativeRows = await LoadImportedAuthoritativeCommissionRowsAsync(connection, transaction, start, end);
         if (authoritativeRows.Count > 0)
         {
-            ApplyLargestPayoutToHighestSale(authoritativeRows);
+            DistributePayoutAcrossTickets(authoritativeRows);
             foreach (var row in authoritativeRows)
                 row.CommissionAmount = CalculateAuthoritativeCommission(row);
-            ApplyStoreOnlyOperationGroupCommissions(authoritativeRows);
             ApplyCommissionPayments(authoritativeRows);
 
             var importedAuthoritative = authoritativeRows
@@ -657,11 +699,13 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     ResolveAuthoritativePercentage(row) / 100m,
                     row.CommissionAmount,
                     row.PaidAmount,
-                    Math.Max(row.CommissionAmount - row.PaidAmount, 0m),
+                    row.CommissionAmount - row.PaidAmount,
                     ResolveCommissionStatus(row.CommissionAmount, row.PaidAmount),
                     row.Vendedor,
                     row.Badge,
-                    row.PayoutStatus))
+                    row.PayoutStatus,
+                    row.Expenses.GastosVarios,
+                    row.PayoutTicket))
                 .ToArray();
             return FilterCommissionBrowserRows(importedAuthoritative, search, start, end).ToArray();
         }
@@ -721,10 +765,14 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     appRow.CommissionPaidDate,
                     breakdown ?? new TicketPaymentBreakdown(ticket.Total, 0m, 0m, "SIN PAGO"),
                     expense,
-                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date))
+                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date, appRow.Nationality))
                 {
                     // El estatus de la dejada viaja aparte del de la comision.
-                    PayoutStatus = appRow.PayoutStatus
+                    PayoutStatus = appRow.PayoutStatus,
+                    PayoutKey = string.IsNullOrWhiteSpace(appRow.FolioApp) ? appRow.OperationFolio : appRow.FolioApp,
+                    CommissionAuthorizedDate = appRow.CommissionAuthorizedDate,
+                    CommissionAuthorizedBy = appRow.CommissionAuthorizedBy,
+                    CommissionPaidBy = appRow.CommissionPaidBy
                 });
             }
         }
@@ -1272,7 +1320,10 @@ public sealed class LocalPosRepository(LocalDatabase database)
     {
         var dejadas = await GetSpecialReportAsync(start, end);
         var taxi = await GetTaxiReportAsync(start, end);
-        var comisiones = await GetCommissionsAsync();
+        var comisiones = (await GetCommissionsAsync())
+            .Where(x => (!start.HasValue || x.Date.Date >= start.Value.Date)
+                && (!end.HasValue || x.Date.Date < end.Value.Date.AddDays(1)))
+            .ToList();
         var cortes = (await GetCutsAsync())
             .Where(x => (!start.HasValue || x.Date.Date >= start.Value.Date)
                 && (!end.HasValue || x.Date.Date < end.Value.Date.AddDays(1)))
@@ -1813,13 +1864,19 @@ public sealed class LocalPosRepository(LocalDatabase database)
         await using var connection = database.Open();
         await using var transaction = connection.BeginTransaction();
 
+        // Busca SOLO por el folio propio de este ticket (commissionFolio), nunca por VentaFolio:
+        // VentaFolio es el folio de OPERACION, compartido por todos los tickets del mismo grupo
+        // (varias llegadas del mismo taxista). Con "OR VentaFolio=$sale" esto agarraba por
+        // accidente el snapshot de OTRO ticket hermano ya pagado, heredaba su "pagado" y
+        // arruinaba el saldo del ticket que se esta preparando ahora: a veces daba "la comision
+        // ya esta pagada" sin que nadie mas la hubiera tocado, a veces "el abono excede el
+        // saldo". Confirmado 2026-08-26 con un folio de 2 tickets (TURIBUS ADO, Lizbeth Reyes).
         var existing = (await ReadInTransactionAsync(
             connection,
             transaction,
-            "SELECT Id,Folio,VentaFolio,ClaveTaxista,Taxista,Fecha,TotalVenta,ImporteComision,Pagado,Saldo,Estatus FROM LocalComisiones WHERE Folio=$folio OR VentaFolio=$sale;",
+            "SELECT Id,Folio,VentaFolio,ClaveTaxista,Taxista,Fecha,TotalVenta,ImporteComision,Pagado,Saldo,Estatus FROM LocalComisiones WHERE Folio=$folio;",
             Commission,
-            ("$folio", commissionFolio),
-            ("$sale", saleFolio))).FirstOrDefault();
+            ("$folio", commissionFolio))).FirstOrDefault();
 
         var paid = existing?.PaidAmount ?? Math.Max(row.Pagado, 0m);
         paid = Math.Min(paid, row.PagoComision);
@@ -1871,6 +1928,56 @@ public sealed class LocalPosRepository(LocalDatabase database)
     /// enteraba. Es el equivalente, del lado de comision, a lo que PayPayoutAsync hace del
     /// lado de la dejada. No toca ninguna columna de dejada.
     /// </summary>
+    /// <summary>
+    /// Crea las columnas de autorizacion/pago de comision en AppMovilRegistro si todavia no
+    /// existen. Sigue el mismo patron de auto-provision que ya usa Casco Viejo
+    /// (CascoCommissionPersistenceService): IF COL_LENGTH ... ADD, para no depender de que el
+    /// sincronizador del servidor se actualice primero.
+    /// </summary>
+    private static async Task EnsureCommissionAuthorizationColumnsAsync(SqlConnection connection, LocalSqlServerSource sqlSource)
+    {
+        var table = sqlSource.PosTable("AppMovilRegistro");
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            IF COL_LENGTH(N'{table}', N'fecha_autorizacion_comision') IS NULL
+                ALTER TABLE {table} ADD fecha_autorizacion_comision DATETIME2 NULL;
+            IF COL_LENGTH(N'{table}', N'usuario_autorizacion_comision') IS NULL
+                ALTER TABLE {table} ADD usuario_autorizacion_comision NVARCHAR(160) NOT NULL CONSTRAINT DF_AppMovilRegistro_UsuarioAutorizacionComision DEFAULT (N'');
+            IF COL_LENGTH(N'{table}', N'usuario_pago_comision') IS NULL
+                ALTER TABLE {table} ADD usuario_pago_comision NVARCHAR(160) NOT NULL CONSTRAINT DF_AppMovilRegistro_UsuarioPagoComision DEFAULT (N'');
+            """;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Autoriza el pago de la comision de un folio. Sin esta autorizacion el boton PAGAR no se
+    /// habilita: el pago dejo de ser libre (confirmado con el usuario el 2026-08-24). Cualquier
+    /// usuario con el mismo permiso puede despues pagarlo, incluida la persona que autorizo.
+    /// </summary>
+    public async Task AuthorizeCommissionPaymentAsync(string operationFolio, string user)
+    {
+        if (_sqlSource is null) throw new InvalidOperationException("No hay conexion a SQL Server para autorizar el pago.");
+        var folio = operationFolio?.Trim();
+        if (string.IsNullOrWhiteSpace(folio)) throw new InvalidOperationException("Folio invalido.");
+        if (string.IsNullOrWhiteSpace(user)) throw new InvalidOperationException("Se requiere el usuario que autoriza.");
+
+        await using var connection = await _sqlSource.OpenPosAsync();
+        await EnsureCommissionAuthorizationColumnsAsync(connection, _sqlSource);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            UPDATE {_sqlSource.PosTable("AppMovilRegistro")}
+            SET fecha_autorizacion_comision = SYSDATETIME(),
+                usuario_autorizacion_comision = @user
+            WHERE folio_app = @folio OR folio_app_original = @folio;
+            """;
+        command.Parameters.AddWithValue("@user", user.Trim());
+        command.Parameters.AddWithValue("@folio", folio);
+        var affected = await command.ExecuteNonQueryAsync();
+        if (affected == 0)
+            throw new InvalidOperationException($"No se encontro el folio {folio} en AppMovilRegistro para autorizar.");
+    }
+
     public async Task MarkCommissionPaidInPosAsync(string operationFolio, decimal paidAmount, string user)
     {
         if (_sqlSource is null) return;
@@ -1889,17 +1996,42 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 + "asi que el pago de la comision no se puede registrar en SQL Server.");
         }
 
+        await EnsureCommissionAuthorizationColumnsAsync(connection, _sqlSource);
+
+        // El pago debe estar autorizado. Es una segunda validacion (la principal es que el
+        // boton PAGAR ni siquiera se habilita sin autorizacion), por si algo llega a llamar
+        // este metodo directamente sin pasar por la pantalla.
+        await using (var checkCommand = connection.CreateCommand())
+        {
+            checkCommand.CommandText = $"""
+                SELECT COUNT(*) FROM {_sqlSource.PosTable("AppMovilRegistro")}
+                WHERE (folio_app = @folio OR folio_app_original = @folio)
+                  AND fecha_autorizacion_comision IS NOT NULL;
+                """;
+            checkCommand.Parameters.AddWithValue("@folio", folio);
+            var authorized = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            if (authorized == 0)
+                throw new InvalidOperationException($"El folio {folio} no esta autorizado para pago. Pide que lo autoricen antes de pagarlo.");
+        }
+
         await using var command = connection.CreateCommand();
         command.CommandText = $"""
             UPDATE {_sqlSource.PosTable("AppMovilRegistro")}
             SET pago_comision = @paid,
-                fecha_pago_comision = SYSDATETIME()
+                fecha_pago_comision = SYSDATETIME(),
+                usuario_pago_comision = @user
             WHERE folio_app = @folio OR folio_app_original = @folio;
             """;
         command.Parameters.AddWithValue("@paid", paidAmount);
         command.Parameters.AddWithValue("@folio", folio);
-        await command.ExecuteNonQueryAsync();
-        _ = user;
+        command.Parameters.AddWithValue("@user", string.IsNullOrWhiteSpace(user) ? string.Empty : user.Trim());
+        var affected = await command.ExecuteNonQueryAsync();
+        // Si esto no toca ninguna fila (folio sin registro en AppMovilRegistro, p.ej. una venta
+        // "solo tienda" sin viaje ligado), antes se seguia de largo: SQL Server se quedaba sin
+        // el pago pero el snapshot local si se marcaba pagado, y la pantalla nunca dejaba de
+        // mostrar PENDIENTE. Ahora avisa en vez de dejar los dos lados desincronizados.
+        if (affected == 0)
+            throw new InvalidOperationException($"No se encontro el folio {folio} en AppMovilRegistro para registrar el pago.");
     }
 
     public async Task PayCommissionAsync(string folio, decimal amount, string user)
@@ -2239,8 +2371,14 @@ public sealed class LocalPosRepository(LocalDatabase database)
         return values.FirstOrDefault();
     }
 
+    // Un folio en negativo no es "sin comision": es una deuda del taxista (la dejada supero la
+    // venta) y tiene que verse distinta en pantalla para que nadie la confunda con una falla.
     private static string ResolveCommissionStatus(decimal amount, decimal paid) =>
-        amount <= 0m ? "SIN COMISION" : paid >= amount ? "PAGADA" : paid > 0m ? "PARCIAL" : "PENDIENTE";
+        amount < 0m ? "NEGATIVA"
+        : amount == 0m ? "SIN COMISION"
+        : paid >= amount ? "PAGADA"
+        : paid > 0m ? "PARCIAL"
+        : "PENDIENTE";
 
     public async Task CloseCutAsync(DateTime date, string user)
     {
@@ -2297,10 +2435,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var rows = await LoadAuthoritativeCommissionRowsAsync();
         if (rows.Count == 0) return 0;
 
-        ApplyLargestPayoutToHighestSale(rows);
+        DistributePayoutAcrossTickets(rows);
         foreach (var row in rows)
             row.CommissionAmount = CalculateAuthoritativeCommission(row);
-        ApplyStoreOnlyOperationGroupCommissions(rows);
         ApplyCommissionPayments(rows);
 
         await using var connection = database.Open();
@@ -2478,10 +2615,14 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     appRow.CommissionPaidDate,
                     breakdown ?? new TicketPaymentBreakdown(ticket.Total, 0m, 0m, "SIN PAGO"),
                     expense,
-                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date))
+                    ResolveTransportInfo(transportCatalog, appRow.TransportType, appRow.Date, appRow.Nationality))
                 {
                     // El estatus de la dejada viaja aparte del de la comision.
-                    PayoutStatus = appRow.PayoutStatus
+                    PayoutStatus = appRow.PayoutStatus,
+                    PayoutKey = string.IsNullOrWhiteSpace(appRow.FolioApp) ? appRow.OperationFolio : appRow.FolioApp,
+                    CommissionAuthorizedDate = appRow.CommissionAuthorizedDate,
+                    CommissionAuthorizedBy = appRow.CommissionAuthorizedBy,
+                    CommissionPaidBy = appRow.CommissionPaidBy
                 });
             }
         }
@@ -2572,6 +2713,18 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var hasPayoutStatus = await HasSqlColumnAsync(connection, "AppMovilRegistro", "payout_status");
         var hasFechaPagoDejada = await HasSqlColumnAsync(connection, "AppMovilRegistro", "fecha_pago_dejada");
         var hasPayoutDate = await HasSqlColumnAsync(connection, "AppMovilRegistro", "payout_date");
+
+        // Autorizacion de pago de comision: columnas nuevas del 2026-08-24. Si la instalacion
+        // aun no las tiene (no se ha usado AuthorizeCommissionPaymentAsync en esa maquina), se
+        // lee como "no autorizado" en vez de romper la consulta.
+        var hasFechaAutorizacion = await HasSqlColumnAsync(connection, "AppMovilRegistro", "fecha_autorizacion_comision");
+        var hasUsuarioAutorizacion = await HasSqlColumnAsync(connection, "AppMovilRegistro", "usuario_autorizacion_comision");
+        var hasUsuarioPago = await HasSqlColumnAsync(connection, "AppMovilRegistro", "usuario_pago_comision");
+        var authorizedExpression = hasFechaAutorizacion
+            ? "COALESCE(CONVERT(nvarchar(30), a.fecha_autorizacion_comision, 120), '')"
+            : "''";
+        var authorizedByExpression = hasUsuarioAutorizacion ? "COALESCE(a.usuario_autorizacion_comision, '')" : "''";
+        var paidByExpression = hasUsuarioPago ? "COALESCE(a.usuario_pago_comision, '')" : "''";
 
         var payoutDateParts = new List<string>();
         if (hasFechaPagoDejada) payoutDateParts.Add("a.fecha_pago_dejada");
@@ -2666,7 +2819,13 @@ public sealed class LocalPosRepository(LocalDatabase database)
               -- (LocalOperationsRepository): cuenta como pagada si hay fecha de pago o si el
               -- estado dice PAGADO/PAGADA. La expresion se arma arriba segun que columnas
               -- existan realmente, para no romper la consulta donde aun no estan.
-              {payoutStatusExpression} AS PayoutStatus
+              {payoutStatusExpression} AS PayoutStatus,
+              -- Tipo de pax: es lo que decide la tarifa de dejada. El tabulador cobra distinto
+              -- por la misma unidad segun lleguen extranjeros o nacionales.
+              COALESCE(CONVERT(nvarchar(40), d.nacionalidad), '') AS Nacionalidad,
+              {authorizedExpression} AS FechaAutorizacionComision,
+              {authorizedByExpression} AS UsuarioAutorizacionComision,
+              {paidByExpression} AS UsuarioPagoComision
             FROM {sqlSource.PosTable("AppMovilRegistro")} a
             OUTER APPLY
             (
@@ -2677,7 +2836,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             ) r
             OUTER APPLY
             (
-              SELECT TOP (1) dd.hotel, dd.pax, dd.unidad, dd.gafete, dd.nombrestaff, dd.nombrevendedor
+              SELECT TOP (1) dd.hotel, dd.pax, dd.unidad, dd.gafete, dd.nombrestaff, dd.nombrevendedor, dd.nacionalidad
               FROM {sqlSource.PosTable("dejadas")} dd
               WHERE dd.codigorecepcion = a.folio_app
                  OR dd.codigorecepcion = a.folio_app_original
@@ -2718,7 +2877,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 reader.IsDBNull(15) ? string.Empty : Convert.ToString(reader.GetValue(15), CultureInfo.InvariantCulture) ?? string.Empty,
                 keys,
                 !reader.IsDBNull(16) && Convert.ToBoolean(reader.GetValue(16), CultureInfo.InvariantCulture),
-                reader.IsDBNull(17) ? string.Empty : Convert.ToString(reader.GetValue(17), CultureInfo.InvariantCulture) ?? string.Empty));
+                reader.IsDBNull(17) ? string.Empty : Convert.ToString(reader.GetValue(17), CultureInfo.InvariantCulture) ?? string.Empty,
+                reader.FieldCount > 18 && !reader.IsDBNull(18) ? Convert.ToString(reader.GetValue(18), CultureInfo.InvariantCulture) ?? string.Empty : string.Empty,
+                reader.FieldCount > 19 && !reader.IsDBNull(19) ? Convert.ToString(reader.GetValue(19), CultureInfo.InvariantCulture) ?? string.Empty : string.Empty,
+                reader.FieldCount > 20 && !reader.IsDBNull(20) ? Convert.ToString(reader.GetValue(20), CultureInfo.InvariantCulture) ?? string.Empty : string.Empty,
+                reader.FieldCount > 21 && !reader.IsDBNull(21) ? Convert.ToString(reader.GetValue(21), CultureInfo.InvariantCulture) ?? string.Empty : string.Empty));
         }
         return result;
     }
@@ -2886,8 +3049,10 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 string.Empty,
                 breakdown ?? new TicketPaymentBreakdown(row.Total, 0m, 0m, "SIN PAGO"),
                 expense,
-                ResolveTransportInfo(transportCatalog, transport, row.Date),
-                row.Subtotal > 0m ? row.Subtotal : row.Total));
+                // La comision se saca sobre el total de la venta, no sobre stotal (subtotal de
+                // remisioM): con un ticket real pagado mifel+dolares+pesos, usar stotal daba
+                // $394 y usar total daba $423, que es lo que confirma la hoja oficial de Excel.
+                ResolveTransportInfo(transportCatalog, transport, row.Date)));
         }
         return result;
     }
@@ -3263,18 +3428,6 @@ public sealed class LocalPosRepository(LocalDatabase database)
 
     private static bool IsCommissionableStoreTicket(string ticket) => !string.IsNullOrWhiteSpace(ticket);
 
-    private static void ApplyLargestPayoutToHighestSale(List<AuthoritativeCommissionRow> rows)
-    {
-        foreach (var group in rows.GroupBy(x => x.OperationFolio, StringComparer.OrdinalIgnoreCase))
-        {
-            var highest = group.OrderByDescending(x => x.SaleTotal).ThenBy(x => x.Ticket, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
-            if (highest is null) continue;
-            var payout = group.Max(x => x.GroupPayout);
-            foreach (var row in group) row.PayoutDeduction = 0m;
-            highest.PayoutDeduction = payout;
-        }
-    }
-
     private static decimal CalculateAuthoritativeCommission(AuthoritativeCommissionRow row)
     {
         var fixedCommission = ResolveAuthoritativeFixedCommission(row);
@@ -3290,48 +3443,72 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var payments = row.Payments;
         var netAfterDiscount = CalculateAuthoritativeNetAfterDiscount(row, saleTotal, payments);
 
-        return Math.Max(0m, decimal.Truncate(Math.Max(0m, netAfterDiscount - deductions) * (percentage / 100m)));
+        // Sin topes en cero: si la dejada supera la venta el folio queda en negativo y esa
+        // diferencia se le cobra al taxista contra sus otros folios. Confirmado el 2026-08-21.
+        return decimal.Truncate((netAfterDiscount - deductions) * (percentage / 100m));
     }
 
     /// <summary>
-    /// Dejada que se resta de la base de comision, ya con la regla global aplicada.
-    ///
-    /// En ventas chicas la dejada no se descuenta: quitarle $200 de dejada a una venta de $300
-    /// dejaria al taxista practicamente sin comision. El umbral es configurable
-    /// (CommissionGlobalRules.PayoutDeductionMinSale, por omision $400) y aplica a todos los
-    /// transportes por igual.
-    ///
-    /// Se compara contra row.SaleTotal a proposito: es el mismo importe que la pantalla muestra
-    /// en la columna "Vnt total", para que el operador pueda verificar la regla a simple vista.
-    ///
-    /// Vive en un solo metodo porque la resta de la dejada ocurre en tres calculos distintos
-    /// (comision por renglon, comision agrupada de tienda y el diagnostico) y tienen que
-    /// coincidir siempre.
+    /// Dejada que se resta de la base de comision. El umbral de venta chica ya se evaluo al
+    /// asignarla al ticket mayor, asi que aqui solo se devuelve lo asignado: volver a aplicarlo
+    /// aqui lo dejaria en cero dos veces.
     /// </summary>
     private static decimal ResolvePayoutDeduction(AuthoritativeCommissionRow row)
-        => CommissionGlobalRules.ShouldDeductPayout(row.SaleTotal) ? row.PayoutDeduction : 0m;
+        => row.PayoutDeduction;
 
-    private static void ApplyStoreOnlyOperationGroupCommissions(List<AuthoritativeCommissionRow> rows)
+    /// <summary>
+    /// Carga la dejada del folio COMPLETA al ticket de mayor venta. Los demas tickets del folio
+    /// no descuentan nada, pero guardan cual fue el ticket que se la llevo para poder decirlo en
+    /// pantalla.
+    ///
+    /// Confirmado con el usuario el 2026-08-21: el taxista cobra la dejada una vez por folio, y
+    /// al cobrarla se le descuenta del ticket mas grande. Cada ticket sigue sacando su propio
+    /// subtotal de comision y el total del folio es la suma de esos subtotales.
+    ///
+    /// La dejada del folio se suma por LLEGADA distinta (PayoutKey), no por renglon: un mismo
+    /// registro de app genera un renglon por ticket y sumarlos la multiplicaria.
+    /// </summary>
+    private static void DistributePayoutAcrossTickets(List<AuthoritativeCommissionRow> rows)
     {
-        foreach (var group in rows
-            .Where(row => row.LocalFolio.StartsWith("C-POS-", StringComparison.OrdinalIgnoreCase))
-            .GroupBy(row => row.OperationFolio, StringComparer.OrdinalIgnoreCase)
-            .Where(group => group.Count() > 1))
+        foreach (var group in rows.GroupBy(x => x.OperationFolio, StringComparer.OrdinalIgnoreCase))
         {
             var items = group.ToArray();
-            var percentage = ResolveAuthoritativePercentage(items[0]);
-            if (percentage <= 0m) continue;
-
-            var baseTotal = items.Sum(row =>
+            foreach (var row in items)
             {
-                var saleTotal = row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal;
-                var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses);
-                return Math.Max(0m, CalculateAuthoritativeNetAfterDiscount(row, saleTotal, row.Payments) - deductions);
-            });
-            var groupCommission = Math.Max(0m, decimal.Truncate(baseTotal * (percentage / 100m)));
-            var target = items.OrderByDescending(row => row.SaleTotal).ThenBy(row => row.Ticket, StringComparer.OrdinalIgnoreCase).First();
-            foreach (var row in items) row.CommissionAmount = 0m;
-            target.CommissionAmount = groupCommission;
+                row.PayoutDeduction = 0m;
+                row.PayoutTicket = string.Empty;
+            }
+
+            var highest = items
+                .OrderByDescending(x => x.SaleTotal)
+                .ThenBy(x => x.Ticket, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (highest is null) continue;
+
+            var llegadas = items
+                .GroupBy(x => string.IsNullOrWhiteSpace(x.PayoutKey) ? x.OperationFolio : x.PayoutKey,
+                         StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            // MANDA LO CAPTURADO EN RELACION TAXI, no el tabulador del catalogo. Confirmado con
+            // el usuario el 2026-08-21: la dejada que se le paga al taxista es la que quedo
+            // registrada en la operacion; el tabulador es la referencia de cuanto deberia ser.
+            //
+            // Al reves se rompia: VAN VERDE con extranjeros esta tabulado en $450, la operacion
+            // traia los $350 realmente pagados, y la pantalla mostraba $450.
+            var registrado = llegadas.Sum(g => g.Max(x => x.GroupPayout));
+            var tabulado = items.Max(x => x.TransportInfo.PayoutAmount);
+            var payoutTotal = registrado > 0m ? registrado : tabulado * llegadas.Length;
+            if (payoutTotal <= 0m) continue;
+
+            // El umbral se compara contra la venta del FOLIO: la dejada se cobra una vez por
+            // folio, asi que la pregunta "fue una venta chica?" es sobre el folio completo.
+            if (!CommissionGlobalRules.ShouldDeductPayout(items.Sum(x => x.SaleTotal))) continue;
+
+            highest.PayoutDeduction = payoutTotal;
+            // Todos los renglones del folio saben a quien se le cargo, para que el detalle pueda
+            // decir "va en cero porque ya se considero en el ticket X" en vez de dejar el hueco.
+            foreach (var row in items) row.PayoutTicket = highest.Ticket;
         }
     }
 
@@ -3389,8 +3566,6 @@ public sealed class LocalPosRepository(LocalDatabase database)
             return saleTotal - saleTotal * (discount / 100m);
         }
 
-        // pagosM can contain only part of a ticket payment. Do not scale a partial
-        // card payment to the full sale, because that invents extra card discount.
         var scale = payments.Total > saleTotal ? saleTotal / payments.Total : 1m;
         var efectivo = payments.NonCard * scale;
         var tarjeta = payments.Card * scale;
@@ -3398,7 +3573,21 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var allocated = Math.Min(saleTotal, efectivo + tarjeta + amex);
         var unresolved = Math.Max(0m, saleTotal - allocated);
 
-        return unresolved
+        // pagosM suele traer solo una parte del pago del ticket. Esa diferencia (unresolved)
+        // antes se sumaba SIN retencion, y por eso una venta pagada con tarjeta apenas recibia
+        // descuento: de $25,530 con solo $1,579 registrados en pagosM, $23,951 se libraban de
+        // la retencion del 19%.
+        //
+        // Regla confirmada con el usuario el 2026-08-21: la retencion corresponde a la forma de
+        // pago del TICKET, asi que la parte no cubierta por pagosM hereda esa misma retencion
+        // en vez de quedar exenta.
+        var unresolvedDiscount = IsAmexPayment(payments.Description)
+            ? ResolveAuthoritativeDiscount(row, PaymentKind.Amex)
+            : IsCardPayment(payments.Description)
+                ? ResolveAuthoritativeDiscount(row, PaymentKind.Card)
+                : ResolveAuthoritativeDiscount(row, PaymentKind.Cash);
+
+        return NetAfterDiscount(unresolved, unresolvedDiscount)
             + NetAfterDiscount(efectivo, ResolveAuthoritativeDiscount(row, PaymentKind.Cash))
             + NetAfterDiscount(tarjeta, ResolveAuthoritativeDiscount(row, PaymentKind.Card))
             + NetAfterDiscount(amex, ResolveAuthoritativeDiscount(row, PaymentKind.Amex));
@@ -3409,11 +3598,8 @@ public sealed class LocalPosRepository(LocalDatabase database)
 
     private static decimal CalculateExpenseDeductions(string? transportType, StoreExpenseBreakdown expense)
     {
-        var duplicateSalmoranExpense = IsSalmoranAuthoritative(transportType)
-            && expense.GastosVarios > 0m
-            && expense.GastosVarios == expense.Degustacion;
         var deductions = expense.Dejada;
-        deductions += duplicateSalmoranExpense ? 0m : expense.GastosVarios;
+        deductions += expense.GastosVarios;
         deductions += expense.Degustacion;
         deductions += expense.Reparacion;
         deductions += expense.Bebidas;
@@ -3434,9 +3620,19 @@ public sealed class LocalPosRepository(LocalDatabase database)
     private static decimal ResolveAuthoritativePercentage(AuthoritativeCommissionRow row)
     {
         var catalogPercent = NormalizePercentValue(row.TransportInfo.CommissionPercent);
+        // MAJESTIC en efectivo/pesos SIEMPRE es 10%, sin importar lo que diga el catalogo (el
+        // catalogo local trae "MAJESTIC EXPEDITIONS" fijo en 8%, que es la tasa de TARJETA; en
+        // pesos nunca aplica). Por eso este chequeo va ANTES del catalogo, no despues: si fuera
+        // despues, el 8% del catalogo ganaba siempre y la correccion de tarjeta/efectivo nunca se
+        // alcanzaba a evaluar. Al no depender de ninguna regla con vigencia guardada, esto se
+        // recalcula solo al ver folios de cualquier fecha pasada, sin tener que tocar el
+        // catalogo ni crear una vigencia nueva. Confirmado por Jairo 2026-08-27.
+        if (IsMajesticAuthoritative(row.TransportType))
+            return row.Payments.Card > 0m || row.Payments.Amex > 0m
+                ? (catalogPercent > 0m && catalogPercent <= 100m ? catalogPercent : 8m)
+                : 10m;
         if (catalogPercent > 0m && catalogPercent <= 100m)
             return catalogPercent;
-        if (IsMajesticAuthoritative(row.TransportType)) return 8m;
         if (IsSalmoranAuthoritative(row.TransportType)) return 20m;
         return 10m;
     }
@@ -3457,19 +3653,40 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 x.AmexRetentionPercent,
                 x.EffectiveFrom,
                 x.EffectiveTo,
-                true))
+                true,
+                x.PayoutAmount,
+                x.PaxKind))
             .ToArray();
     }
 
-    private static ImportedTransportInfo ResolveTransportInfo(IReadOnlyList<ImportedTransportCatalogRow> catalog, string? transportType, DateTime operationDate)
+    /// <summary>
+    /// Normaliza el tipo de pax que viene de la operacion. En la base esta sucio: aparece como
+    /// EXTRANJEROS, Nacionales, NACIONALES, nacionales, S/N y vacio. Confirmado con el usuario
+    /// el 2026-08-21 que "PAX GABACHOS" del tabulador equivale a EXTRANJEROS.
+    /// </summary>
+    private static string NormalizePaxKind(string? value)
+    {
+        var text = (value ?? string.Empty).Trim().ToUpperInvariant();
+        if (text.StartsWith("EXTRANJ", StringComparison.Ordinal)) return "EXTRANJEROS";
+        if (text.StartsWith("NACIONAL", StringComparison.Ordinal)) return "NACIONALES";
+        return string.Empty;
+    }
+
+    private static ImportedTransportInfo ResolveTransportInfo(IReadOnlyList<ImportedTransportCatalogRow> catalog, string? transportType, DateTime operationDate, string? paxKind = null)
     {
         if (catalog.Count == 0 || string.IsNullOrWhiteSpace(transportType))
             return ImportedTransportInfo.Empty;
 
+        var pax = NormalizePaxKind(paxKind);
         var key = ResolveTransportAlias(NormalizeTransportLookup(transportType));
         var effectiveCatalog = catalog
             .Where(row => IsTransportRuleEffective(row, operationDate))
-            .OrderByDescending(row => row.Configured)
+            // Primero la regla que coincide con el tipo de pax; si no hay, la generica (sin tipo
+            // de pax), que es la que aplica a todos.
+            .OrderByDescending(row => !string.IsNullOrEmpty(pax)
+                                      && string.Equals(NormalizePaxKind(row.PaxKind), pax, StringComparison.Ordinal))
+            .ThenByDescending(row => string.IsNullOrWhiteSpace(row.PaxKind))
+            .ThenByDescending(row => row.Configured)
             .ThenByDescending(row => row.EffectiveFrom ?? DateTime.MinValue)
             .ToArray();
 
@@ -3492,7 +3709,8 @@ public sealed class LocalPosRepository(LocalDatabase database)
             CommissionPaymentRules.NormalizePercent(match.CommissionPercent),
             match.Minimum,
             match.Maximum,
-            CommissionPaymentRules.ResolveAmexRetention(match.AmexDiscount));
+            CommissionPaymentRules.ResolveAmexRetention(match.AmexDiscount),
+            Math.Max(0m, match.PayoutAmount));
     }
 
     private static bool IsTransportRuleEffective(ImportedTransportCatalogRow row, DateTime operationDate)
@@ -3820,7 +4038,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             ResolveAuthoritativePercentage(row) / 100m,
             row.CommissionAmount,
             row.PaidAmount,
-            Math.Max(row.CommissionAmount - row.PaidAmount, 0m),
+            row.CommissionAmount - row.PaidAmount,
             ResolveCommissionStatus(row.CommissionAmount, row.PaidAmount),
             vendor,
             row.Badge,
@@ -3828,7 +4046,12 @@ public sealed class LocalPosRepository(LocalDatabase database)
             // estatus de la dejada y por eso la columna salia vacia aunque el dato si venia
             // en la consulta. Las comisiones que no nacen de un registro de la app movil no
             // tienen dejada asociada: se marcan como SIN DEJADA en vez de dejarse en blanco.
-            string.IsNullOrWhiteSpace(row.PayoutStatus) ? "SIN DEJADA" : row.PayoutStatus);
+            string.IsNullOrWhiteSpace(row.PayoutStatus) ? "SIN DEJADA" : row.PayoutStatus,
+            row.Expenses.GastosVarios,
+            row.PayoutTicket,
+            row.CommissionAuthorizedDate,
+            row.CommissionAuthorizedBy,
+            row.CommissionPaidBy);
     }
 
     private static LocalCommissionBrowserRow MapRelationCommissionRow(LocalRelation relation)
@@ -3952,6 +4175,14 @@ public sealed class LocalPosRepository(LocalDatabase database)
         return result;
     }
 
+    private static async Task<bool> HasTipoCambioColumnAsync(SqlConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COL_LENGTH('dbo.pagosM', 'tipocambio');";
+        var result = await command.ExecuteScalarAsync();
+        return result is not null && result != DBNull.Value;
+    }
+
     private static async Task<Dictionary<string, TicketPaymentBreakdown>> ReadTicketPaymentsAsync(SqlConnection connection, IReadOnlyList<string> tickets)
     {
         if (tickets.Count == 0) return new Dictionary<string, TicketPaymentBreakdown>(StringComparer.OrdinalIgnoreCase);
@@ -3963,20 +4194,36 @@ public sealed class LocalPosRepository(LocalDatabase database)
             command.Parameters.AddWithValue(parameter, tickets[i]);
             parameters.Add(parameter);
         }
+        // pagosM guarda pagos en dolares con el monto crudo (p.ej. 56) y el tipo de cambio
+        // aparte en tipocambio (p.ej. 17.5): sin multiplicar, el pago quedaba subvaluado y la
+        // diferencia se le cargaba de mas a la retencion de tarjeta. Pesos y tarjeta ya traen
+        // tipocambio=1, asi que la multiplicacion no les afecta. Confirmado con un ticket real:
+        // DLS 56 x 17.5 = $980.
+        //
+        // La columna tipocambio solo existe en compuadmo.dbo.pagosM, NO en joyeria.dbo.pagosM
+        // (mismo metodo, dos conexiones distintas): referenciarla sin checar tumbaba la consulta
+        // completa con "Invalid column name" en joyeria y dejaba la pantalla de Comisiones vacia.
+        var hasTipoCambio = await HasTipoCambioColumnAsync(connection);
+        var totalExpression = hasTipoCambio
+            ? "CAST(p.total * (CASE WHEN COALESCE(p.tipocambio, 0) > 0 THEN p.tipocambio ELSE 1 END) AS decimal(18,2))"
+            : "CAST(p.total AS decimal(18,2))";
         command.CommandText = $"""
-            SELECT p.folio_factura AS Ticket, COALESCE(m.Nombre, '') AS PaymentName, CAST(p.total AS decimal(18,2)) AS Total
+            SELECT p.folio_factura AS Ticket, COALESCE(m.Nombre, '') AS PaymentName,
+                   {totalExpression} AS Total,
+                   CAST(COALESCE(p.moneda, -1) AS int) AS MonedaId
             FROM dbo.pagosM p
             LEFT JOIN dbo.monedas m ON m.moneda = p.moneda
             WHERE p.folio_factura IN ({string.Join(",", parameters)});
             """;
         await using var reader = await command.ExecuteReaderAsync();
-        var rows = new List<(string Ticket, string PaymentName, decimal Total)>();
+        var rows = new List<(string Ticket, string PaymentName, decimal Total, int MonedaId)>();
         while (await reader.ReadAsync())
         {
             rows.Add((
                 reader.GetString(0),
                 reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture)));
+                Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture),
+                reader.IsDBNull(3) ? -1 : Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture)));
         }
 
         return rows
@@ -3992,7 +4239,16 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     foreach (var payment in g)
                     {
                         descriptions.Add($"{payment.PaymentName} {payment.Total:C2}");
-                        if (IsAmexPayment(payment.PaymentName)) amex += payment.Total;
+                        // Primero por NUMERO de moneda, que es lo estable; el texto queda de
+                        // respaldo para tickets que no lo traigan. Clasificar solo por texto
+                        // dejaba "T.CREDITO DLS" como efectivo y le perdonaba el 19%.
+                        if (CommissionPaymentRules.FindMoneda(payment.MonedaId) is { } configurada)
+                        {
+                            if (configurada.Kind.Equals("AMEX", StringComparison.OrdinalIgnoreCase)) amex += payment.Total;
+                            else if (configurada.Kind.Contains("TARJETA", StringComparison.OrdinalIgnoreCase)) card += payment.Total;
+                            else nonCard += payment.Total;
+                        }
+                        else if (IsAmexPayment(payment.PaymentName)) amex += payment.Total;
                         else if (IsCardPayment(payment.PaymentName)) card += payment.Total;
                         else nonCard += payment.Total;
                     }
@@ -4043,19 +4299,46 @@ public sealed class LocalPosRepository(LocalDatabase database)
             var text = ((reader.IsDBNull(1) ? string.Empty : reader.GetString(1)) + " " + (reader.IsDBNull(2) ? string.Empty : reader.GetString(2))).ToUpperInvariant();
             var total = Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
             result.TryGetValue(ticket, out var current);
+            var bucket = ClassifyExpense(text);
             var updated = current with
             {
-                Dejada = current.Dejada + (text.Contains("DEJADA", StringComparison.OrdinalIgnoreCase) ? total : 0m),
-                GastosVarios = current.GastosVarios + ((text.Contains("GASTOS VARIOS", StringComparison.OrdinalIgnoreCase) || text.EndsWith(" GV", StringComparison.OrdinalIgnoreCase) || text.Contains(" GV ", StringComparison.OrdinalIgnoreCase)) ? total : 0m),
-                Degustacion = current.Degustacion + (text.Contains("DEGUST", StringComparison.OrdinalIgnoreCase) ? total : 0m),
-                Reparacion = current.Reparacion + (text.Contains("REPARA", StringComparison.OrdinalIgnoreCase) ? total : 0m),
-                Bebidas = current.Bebidas + (LooksLikeBeverage(text) ? total : 0m),
-                CajasRegalo = current.CajasRegalo + ((text.Contains("CAJA", StringComparison.OrdinalIgnoreCase) || text.Contains("REGALO", StringComparison.OrdinalIgnoreCase)) ? total : 0m)
+                Dejada = current.Dejada + (bucket == ExpenseBucket.Dejada ? total : 0m),
+                GastosVarios = current.GastosVarios + (bucket == ExpenseBucket.GastosVarios ? total : 0m),
+                Degustacion = current.Degustacion + (bucket == ExpenseBucket.Degustacion ? total : 0m),
+                Reparacion = current.Reparacion + (bucket == ExpenseBucket.Reparacion ? total : 0m),
+                Bebidas = current.Bebidas + (bucket == ExpenseBucket.Bebidas ? total : 0m),
+                CajasRegalo = current.CajasRegalo + (bucket == ExpenseBucket.CajasRegalo ? total : 0m)
             };
             result[ticket] = updated;
         }
 
         return result;
+    }
+
+    // Un mismo egreso caia en varias cubetas a la vez: un concepto como "GASTOS VARIOS
+    // DEGUSTACION" sumaba en GastosVarios Y en Degustacion, y despues las dos se restaban de la
+    // base, asi que el importe se descontaba dos veces. Ahora cada renglon se clasifica en una
+    // sola cubeta, del concepto mas especifico al mas generico (gastos varios queda al final
+    // como cajon de sastre).
+    private enum ExpenseBucket { None, Dejada, Degustacion, Reparacion, Bebidas, CajasRegalo, GastosVarios }
+
+    private static ExpenseBucket ClassifyExpense(string text)
+    {
+        if (text.Contains("DEJADA", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.Dejada;
+        if (text.Contains("DEGUST", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.Degustacion;
+        if (text.Contains("REPARA", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.Reparacion;
+        if (LooksLikeBeverage(text))
+            return ExpenseBucket.Bebidas;
+        if (text.Contains("CAJA", StringComparison.OrdinalIgnoreCase) || text.Contains("REGALO", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.CajasRegalo;
+        if (text.Contains("GASTOS VARIOS", StringComparison.OrdinalIgnoreCase)
+            || text.EndsWith(" GV", StringComparison.OrdinalIgnoreCase)
+            || text.Contains(" GV ", StringComparison.OrdinalIgnoreCase))
+            return ExpenseBucket.GastosVarios;
+        return ExpenseBucket.None;
     }
 
     private static bool LooksLikeBeverage(string text) =>
@@ -4120,6 +4403,25 @@ public sealed class LocalPosRepository(LocalDatabase database)
         public ImportedTransportInfo TransportInfo { get; }
         public decimal CommissionableTotal { get; }
         public decimal PayoutDeduction { get; set; }
+
+        /// <summary>
+        /// Identifica la LLEGADA a la que pertenece el ticket (el folio de app / la dejada).
+        /// Varios tickets comparten la misma llegada, por eso la dejada del folio se suma por
+        /// llave distinta y no renglon por renglon: sumarla por renglon la multiplicaria por el
+        /// numero de tickets.
+        /// </summary>
+        public string PayoutKey { get; set; } = string.Empty;
+
+        /// <summary>Ticket del folio al que se le cargo la dejada completa (el de mayor venta).</summary>
+        public string PayoutTicket { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Autorizacion de pago de comision. Vacio = no autorizado, y por lo tanto no se puede
+        /// pagar. Confirmado con el usuario el 2026-08-24: el pago dejo de ser libre.
+        /// </summary>
+        public string CommissionAuthorizedDate { get; set; } = string.Empty;
+        public string CommissionAuthorizedBy { get; set; } = string.Empty;
+        public string CommissionPaidBy { get; set; } = string.Empty;
         public decimal CommissionAmount { get; set; }
         public decimal PaidAmount { get; set; }
 
@@ -4130,7 +4432,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         public string PayoutStatus { get; set; } = string.Empty;
     }
 
-    private sealed record AuthoritativeAppRow(string OperationFolio, string PosFolio, string FolioApp, string FolioOriginal, DateTime Date, string DriverName, string DriverCode, string TransportType, decimal Payout, decimal CommissionPaidControl, string CommissionPaidDate, string Hotel, int Passengers, string UnitNumber, string Badge, string Staff, IReadOnlyList<string> Keys, bool HasLinkedOperationFolio, string PayoutStatus = "");
+    private sealed record AuthoritativeAppRow(string OperationFolio, string PosFolio, string FolioApp, string FolioOriginal, DateTime Date, string DriverName, string DriverCode, string TransportType, decimal Payout, decimal CommissionPaidControl, string CommissionPaidDate, string Hotel, int Passengers, string UnitNumber, string Badge, string Staff, IReadOnlyList<string> Keys, bool HasLinkedOperationFolio, string PayoutStatus = "", string Nationality = "", string CommissionAuthorizedDate = "", string CommissionAuthorizedBy = "", string CommissionPaidBy = "");
     private sealed record StoreTicketRow(string Ticket, decimal Total, decimal VentaTienda, decimal VentaJoyeria);
     private sealed record StoreTicketMatch(long Id, string MatchFolio, string Ticket, decimal Total, decimal VentaTienda, decimal VentaJoyeria);
     private sealed record StoreOnlyTicketRow(string Ticket, string OperationFolio, DateTime Date, decimal Total, decimal Subtotal, string Observation, bool Joyeria);
@@ -4332,7 +4634,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
         decimal AmexDiscount,
         DateTime? EffectiveFrom = null,
         DateTime? EffectiveTo = null,
-        bool Configured = false);
+        bool Configured = false,
+        decimal PayoutAmount = 0m,
+        string PaxKind = "");
     private enum PaymentKind
     {
         Cash,
@@ -4340,7 +4644,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         Amex
     }
 
-    private sealed record ImportedTransportInfo(decimal CashDiscount, decimal CardDiscount, decimal CommissionPercent, decimal Minimum, decimal Maximum, decimal AmexDiscount = 0m)
+    private sealed record ImportedTransportInfo(decimal CashDiscount, decimal CardDiscount, decimal CommissionPercent, decimal Minimum, decimal Maximum, decimal AmexDiscount = 0m, decimal PayoutAmount = 0m)
     {
         public static ImportedTransportInfo Empty { get; } = new(0m, 0m, 0m, 0m, 0m);
     }

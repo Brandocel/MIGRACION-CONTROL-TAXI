@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$SqlServer = "26.38.252.71\SQLEXPRESS",
+    [string]$SqlServer = "SERVPLAZA28\SQLEXPRESS",
     [string]$SqlUser = "sa",
     [string]$Database = "mkt",
     [string]$BranchCode = "28",

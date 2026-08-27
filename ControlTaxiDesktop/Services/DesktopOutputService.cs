@@ -106,9 +106,9 @@ public sealed partial class DesktopOutputService
         await ExportStyledWorkbookAsync(sheets, path);
     }
 
-    public async Task ExportConcentradoWorkbookAsync(DateTime start, DateTime end, IReadOnlyList<LocalRelation> rows, IReadOnlyList<LocalCuadreResumenRow> camiones, string path)
+    public async Task ExportConcentradoWorkbookAsync(DateTime start, DateTime end, IReadOnlyList<LocalRelation> rows, IReadOnlyList<LocalCuadreResumenRow> camiones, string path, IReadOnlyList<LocalCommissionBrowserRow>? authoritativeCommissions = null)
     {
-        var summaries = MergeCamionesIntoCategorySummaries(BuildCategorySummaries(rows), camiones, start);
+        var summaries = MergeCamionesIntoCategorySummaries(BuildCategorySummaries(rows, authoritativeCommissions), camiones, start);
         var sheets = ConcentratedGroups
             .Select(group =>
             {
@@ -127,9 +127,9 @@ public sealed partial class DesktopOutputService
         await ExportStyledWorkbookAsync(sheets, path);
     }
 
-    public async Task ExportCuadreWorkbookAsync(DateTime start, DateTime end, IReadOnlyList<LocalRelation> rows, IReadOnlyList<LocalCommission> commissions, IReadOnlyList<LocalCut> cuts, IReadOnlyList<LocalCuadreResumenRow> camiones, string path)
+    public async Task ExportCuadreWorkbookAsync(DateTime start, DateTime end, IReadOnlyList<LocalRelation> rows, IReadOnlyList<LocalCommission> commissions, IReadOnlyList<LocalCut> cuts, IReadOnlyList<LocalCuadreResumenRow> camiones, string path, IReadOnlyList<LocalCommissionBrowserRow>? authoritativeCommissions = null)
     {
-        var summaries = MergeCamionesIntoCategorySummaries(BuildCategorySummaries(rows), camiones, start);
+        var summaries = MergeCamionesIntoCategorySummaries(BuildCategorySummaries(rows, authoritativeCommissions), camiones, start);
         var ordered = ConcentratedGroups
             .Select(group => summaries.TryGetValue(group.Code, out var value) ? value : CategorySummary.Empty(group.Code, group.Name))
             .Where(summary => !string.Equals(summary.Code, "OTRO", StringComparison.OrdinalIgnoreCase)
@@ -436,7 +436,7 @@ public sealed partial class DesktopOutputService
                 NumberCell($"T{rowIndex}", row.Commission, 13),
                 NumberCell($"U{rowIndex}", row.CommissionPaid, 13),
                 TextCell($"V{rowIndex}", Clean(row.CommissionStatus, "SIN CALCULAR"), 3),
-                TextCell($"W{rowIndex}", ticket, 19),
+                TextCell($"W{rowIndex}", ticket, 3),
                 TextCell($"X{rowIndex}", Clean(row.TaxistaId, "0"), 3),
                 TextCell($"Y{rowIndex}", Clean(row.Badge), 3),
                 TextCell($"Z{rowIndex}", Clean(row.Nationality, "S/N"), 3)));
@@ -812,6 +812,9 @@ public sealed partial class DesktopOutputService
         var totalComision = summaries.Sum(x => x.Comision);
         var totalVenta = summaries.Sum(x => x.Venta);
         var totalGastos = summaries.Sum(x => x.TotalGastos);
+        var totalAdultos = summaries.Sum(x => x.Adultos);
+        var totalJovenes = summaries.Sum(x => x.Jovenes);
+        var totalMenores = summaries.Sum(x => x.Menores);
         var totalTicket = displayOverrides.TryGetValue("TOTAL", out var totalDisplay) && totalDisplay.TicketPromedio.HasValue
             ? totalDisplay.TicketPromedio.Value
             : totalPax > 0 ? totalVenta / totalPax : 0m;
@@ -819,31 +822,44 @@ public sealed partial class DesktopOutputService
             ? totalDisplay.PorcentajeGasto.Value
             : totalVenta > 0 ? totalGastos / totalVenta : 0m;
 
+        // Orden de columnas pedido 2026-08-27: ADULTOS/JOVENES/MENORES van pegados a PAX (junto
+        // al inicio de la tabla), no al final donde nadie los veia sin hacer scroll. Todo lo
+        // demas (ENTRARON, SALIERON, UNIDADES, DEJADA, COMISION, VENTA...) se recorre 3 columnas
+        // a la derecha para hacerles lugar: C=PAX, D=ADULTOS, E=JOVENES, F=MENORES, G=ENTRARON,
+        // H=SALIERON, I=UNIDADES, J=DEJADA, K=COMISION, L=VENTA, M=GASTOS, N=TICKET, O=PCT GASTO.
         var body = new StringBuilder();
         body.AppendLine(Row(1,
             DateCell("B1", date, 20),
             NumberCell("C1", totalPax, 10),
-            NumberCell("D1", totalEntraron, 10),
-            NumberCell("E1", totalSalieron, 10),
-            NumberCell("F1", totalUnidades, 10),
-            TextCell("G1", "DEJADA", 10),
-            TextCell("H1", "COMISION", 10),
-            TextCell("I1", "VENTA", 10),
-            TextCell("J1", "TOTAL DE GASTOS", 10),
-            TextCell("K1", "TIKET PROMEDIO", 10),
-            TextCell("L1", "PORCENTAJE DE GASTO", 10)));
+            NumberCell("D1", totalAdultos, 10),
+            NumberCell("E1", totalJovenes, 10),
+            NumberCell("F1", totalMenores, 10),
+            NumberCell("G1", totalEntraron, 10),
+            NumberCell("H1", totalSalieron, 10),
+            NumberCell("I1", totalUnidades, 10),
+            TextCell("J1", "DEJADA", 10),
+            TextCell("K1", "COMISION", 10),
+            TextCell("L1", "VENTA", 10),
+            TextCell("M1", "TOTAL DE GASTOS", 10),
+            TextCell("N1", "TIKET PROMEDIO", 10),
+            TextCell("O1", "PORCENTAJE DE GASTO", 10)));
         body.AppendLine(Row(2,
             TextCell("B2", string.Empty, 10),
             TextCell("C2", "PAX", 10),
-            TextCell("D2", "ENTRARON", 10),
-            TextCell("E2", "SALIERON", 10),
-            TextCell("F2", "UNIDADES", 10),
-            TextCell("G2", string.Empty, 10),
-            TextCell("H2", string.Empty, 10),
-            TextCell("I2", string.Empty, 10),
+            // Desglose real de pax pedido 2026-08-27: cuantos de PAX son adultos, jovenes o
+            // menores, sacado directo del registro (no una resta/adivinanza).
+            TextCell("D2", "ADULTOS", 10),
+            TextCell("E2", "JOVENES", 10),
+            TextCell("F2", "MENORES", 10),
+            TextCell("G2", "ENTRARON", 10),
+            TextCell("H2", "SALIERON", 10),
+            TextCell("I2", "UNIDADES", 10),
             TextCell("J2", string.Empty, 10),
             TextCell("K2", string.Empty, 10),
-            TextCell("L2", string.Empty, 10)));
+            TextCell("L2", string.Empty, 10),
+            TextCell("M2", string.Empty, 10),
+            TextCell("N2", string.Empty, 10),
+            TextCell("O2", string.Empty, 10)));
 
         var rowIndex = 3;
         foreach (var summary in summaries)
@@ -852,28 +868,31 @@ public sealed partial class DesktopOutputService
             var ticketPromedio = display.TicketPromedio ?? (summary.Pax > 0 ? summary.Venta / summary.Pax : 0m);
             var porcentajeGasto = display.PorcentajeGasto ?? (summary.Venta > 0 ? summary.TotalGastos / summary.Venta : 0m);
             var comisionCell = date.Date == new DateTime(2026, 8, 7) && summary.Code == "CALLE"
-                ? NumberCell($"H{rowIndex}", summary.Comision, 13)
-                : MaybeCurrencyCell($"H{rowIndex}", summary.Comision);
+                ? NumberCell($"K{rowIndex}", summary.Comision, 13)
+                : MaybeCurrencyCell($"K{rowIndex}", summary.Comision);
             var ventaCell = date.Date == new DateTime(2026, 8, 7) && summary.Code == "CALLE"
-                ? NumberCell($"I{rowIndex}", summary.Venta, 13)
+                ? NumberCell($"L{rowIndex}", summary.Venta, 13)
                 : date.Date == new DateTime(2026, 8, 7) && summary.Code == "ACAR"
-                    ? TextCell($"I{rowIndex}", string.Empty, 3)
-                    : MaybeCurrencyCell($"I{rowIndex}", summary.Venta);
+                    ? TextCell($"L{rowIndex}", string.Empty, 3)
+                    : MaybeCurrencyCell($"L{rowIndex}", summary.Venta);
             var dejadaCell = date.Date == new DateTime(2026, 8, 7) && summary.Code is "ACAR" or "MC"
-                ? NumberCell($"G{rowIndex}", summary.Dejada, 18)
-                : MaybeCurrencyCell($"G{rowIndex}", summary.Dejada);
+                ? NumberCell($"J{rowIndex}", summary.Dejada, 18)
+                : MaybeCurrencyCell($"J{rowIndex}", summary.Dejada);
             body.AppendLine(Row(rowIndex,
                 TextCell($"B{rowIndex}", summary.Name, 3),
                 NumberCell($"C{rowIndex}", summary.Pax, 17),
-                NumberCell($"D{rowIndex}", summary.Entraron, 17),
-                NumberCell($"E{rowIndex}", summary.Salieron, 17),
-                NumberCell($"F{rowIndex}", summary.Unidades, 17),
+                NumberCell($"D{rowIndex}", summary.Adultos, 17),
+                NumberCell($"E{rowIndex}", summary.Jovenes, 17),
+                NumberCell($"F{rowIndex}", summary.Menores, 17),
+                NumberCell($"G{rowIndex}", summary.Entraron, 17),
+                NumberCell($"H{rowIndex}", summary.Salieron, 17),
+                NumberCell($"I{rowIndex}", summary.Unidades, 17),
                 dejadaCell,
                 comisionCell,
                 ventaCell,
-                MaybeCurrencyCell($"J{rowIndex}", summary.TotalGastos),
-                MaybeCurrencyCell($"K{rowIndex}", ticketPromedio),
-                MaybePercentCell($"L{rowIndex}", porcentajeGasto)));
+                MaybeCurrencyCell($"M{rowIndex}", summary.TotalGastos),
+                MaybeCurrencyCell($"N{rowIndex}", ticketPromedio),
+                MaybePercentCell($"O{rowIndex}", porcentajeGasto)));
             rowIndex++;
         }
 
@@ -882,15 +901,18 @@ public sealed partial class DesktopOutputService
         body.AppendLine(Row(rowIndex,
             TextCell($"B{rowIndex}", string.Empty, 10),
             NumberCell($"C{rowIndex}", totalPax, 10),
-            NumberCell($"D{rowIndex}", totalEntraron, 10),
-            NumberCell($"E{rowIndex}", totalSalieron, 10),
-            NumberCell($"F{rowIndex}", totalUnidades, 10),
-            NumberCell($"G{rowIndex}", totalDejada, 11),
-            NumberCell($"H{rowIndex}", totalComision, 11),
-            NumberCell($"I{rowIndex}", totalVenta, 11),
-            NumberCell($"J{rowIndex}", totalGastos, 11),
-            NumberCell($"K{rowIndex}", totalTicket, 11),
-            PercentCell($"L{rowIndex}", totalPct, 12)));
+            NumberCell($"D{rowIndex}", totalAdultos, 10),
+            NumberCell($"E{rowIndex}", totalJovenes, 10),
+            NumberCell($"F{rowIndex}", totalMenores, 10),
+            NumberCell($"G{rowIndex}", totalEntraron, 10),
+            NumberCell($"H{rowIndex}", totalSalieron, 10),
+            NumberCell($"I{rowIndex}", totalUnidades, 10),
+            NumberCell($"J{rowIndex}", totalDejada, 11),
+            NumberCell($"K{rowIndex}", totalComision, 11),
+            NumberCell($"L{rowIndex}", totalVenta, 11),
+            NumberCell($"M{rowIndex}", totalGastos, 11),
+            NumberCell($"N{rowIndex}", totalTicket, 11),
+            PercentCell($"O{rowIndex}", totalPct, 12)));
         rowIndex += 2;
 
         var camionesDejada = date.Date == new DateTime(2026, 8, 7)
@@ -907,30 +929,33 @@ public sealed partial class DesktopOutputService
             NumberCell($"D{rowIndex}", 0, 10),
             NumberCell($"E{rowIndex}", 0, 10),
             NumberCell($"F{rowIndex}", 0, 10),
-            NumberCell($"G{rowIndex}", camionesDejada, date.Date == new DateTime(2026, 8, 7) ? 18 : 11),
-            TextCell($"H{rowIndex}", "$ -", 10),
-            TextCell($"I{rowIndex}", "$ -", 10),
-            TextCell($"J{rowIndex}", "$ -", 10),
-            TextCell($"K{rowIndex}", "-", 10),
-            TextCell($"L{rowIndex}", "-", 10)));
+            NumberCell($"G{rowIndex}", 0, 10),
+            NumberCell($"H{rowIndex}", 0, 10),
+            NumberCell($"I{rowIndex}", 0, 10),
+            NumberCell($"J{rowIndex}", camionesDejada, date.Date == new DateTime(2026, 8, 7) ? 18 : 11),
+            TextCell($"K{rowIndex}", "$ -", 10),
+            TextCell($"L{rowIndex}", "$ -", 10),
+            TextCell($"M{rowIndex}", "$ -", 10),
+            TextCell($"N{rowIndex}", "-", 10),
+            TextCell($"O{rowIndex}", "-", 10)));
         rowIndex++;
 
         return $$"""
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <dimension ref="B1:L{{rowIndex}}"/>
+  <dimension ref="B1:O{{rowIndex}}"/>
   <sheetViews><sheetView workbookViewId="0"><selection activeCell="B1" sqref="B1"/></sheetView></sheetViews>
   <sheetFormatPr defaultRowHeight="15"/>
   <cols>
     <col min="2" max="2" width="24" customWidth="1"/>
-    <col min="3" max="6" width="12" customWidth="1"/>
-    <col min="7" max="11" width="16" customWidth="1"/>
-    <col min="12" max="12" width="20" customWidth="1"/>
+    <col min="3" max="9" width="12" customWidth="1"/>
+    <col min="10" max="14" width="16" customWidth="1"/>
+    <col min="15" max="15" width="20" customWidth="1"/>
   </cols>
   <sheetData>
 {{body}}
   </sheetData>
-    <autoFilter ref="B2:L{{dataLastRow}}"/>
+    <autoFilter ref="B2:O{{dataLastRow}}"/>
   <pageMargins left="0.5" right="0.5" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
 </worksheet>
 """;
@@ -1108,8 +1133,20 @@ public sealed partial class DesktopOutputService
             $"B3:J{Math.Max(rowIndex - 1, 3)}");
     }
 
-    private static IReadOnlyDictionary<string, CategorySummary> BuildCategorySummaries(IReadOnlyList<LocalRelation> rows)
+    private static IReadOnlyDictionary<string, CategorySummary> BuildCategorySummaries(IReadOnlyList<LocalRelation> rows, IReadOnlyList<LocalCommissionBrowserRow>? authoritativeCommissions = null)
     {
+        // La comision por categoria NO sale de LocalRelation.Commission: ese campo lo calcula un
+        // motor distinto (el de Relacion Taxista, LocalOperationsRepository) que puede no
+        // coincidir con el motor autoritativo que ya usa la pantalla de Comisiones en vivo y la
+        // pestana "comisiones" del mismo Excel (LocalPosRepository). Confirmado 2026-08-27:
+        // SALMORAN daba $2,456 en CUADRE contra $1,126 verificado a mano con la formula correcta,
+        // sin ninguna fila duplicada de por medio. Si hay comisiones autoritativas disponibles,
+        // se usan esas por categoria en vez de sumar LocalRelation.Commission.
+        var comisionPorCategoria = (authoritativeCommissions ?? [])
+            .GroupBy(x => ResolveConcentratedCategoryCode(x.Unidad))
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.PagoComision));
+        var tieneComisionAutoritativa = authoritativeCommissions is { Count: > 0 };
+
         var grouped = rows.GroupBy(x => ResolveConcentratedCategoryCode(x.TransportType)).ToDictionary(
             g => g.Key,
             g =>
@@ -1126,11 +1163,19 @@ public sealed partial class DesktopOutputService
                     .Where(x => !string.IsNullOrWhiteSpace(x))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Count();
-                var dejada = g.Sum(x => x.Payout ?? 0m);
-                var comision = g.Sum(x => x.Commission);
-                var venta = g
-                    .GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase)
-                    .Sum(group => group.Max(item => item.Sale));
+                var salesGrouped = g.GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase).ToArray();
+                var dejada = salesGrouped.Sum(group => group.Max(item => item.Payout ?? 0m));
+                var comision = tieneComisionAutoritativa
+                    ? comisionPorCategoria.GetValueOrDefault(g.Key, 0m)
+                    : salesGrouped.Sum(group => group.Max(item => item.Commission));
+                var venta = salesGrouped.Sum(group => group.Max(item => item.Sale));
+                // Desglose real de pax, pedido 2026-08-27: PAX/ENTRARON/SALIERON no dice cuantos
+                // son adultos, jovenes o menores. Estas 3 columnas si lo dicen directo, sacadas
+                // del mismo desglose que ya trae cada registro (AdultPassengers/YouthPassengers/
+                // ChildPassengers), deduplicadas por venta unica igual que venta y dejada.
+                var adultos = salesGrouped.Sum(group => group.Max(item => Math.Max(0, item.AdultPassengers)));
+                var jovenes = salesGrouped.Sum(group => group.Max(item => Math.Max(0, item.YouthPassengers)));
+                var menores = salesGrouped.Sum(group => group.Max(item => Math.Max(0, item.ChildPassengers)));
                 return new CategorySummary(
                     g.Key,
                     ResolveCategoryName(g.Key),
@@ -1142,7 +1187,10 @@ public sealed partial class DesktopOutputService
                     dejada,
                     comision,
                     venta,
-                    dejada + comision);
+                    dejada + comision,
+                    adultos,
+                    jovenes,
+                    menores);
             });
         foreach (var group in ConcentratedGroups)
             grouped.TryAdd(group.Code, CategorySummary.Empty(group.Code, group.Name));
@@ -1214,11 +1262,10 @@ public sealed partial class DesktopOutputService
                     .Where(item => !string.IsNullOrWhiteSpace(item))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Count();
-                var dejada = group.Sum(item => item.Payout ?? 0m);
-                var comision = group.Sum(item => item.Commission);
-                var venta = group
-                    .GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase)
-                    .Sum(match => match.Max(item => item.Sale));
+                var salesGrouped = group.GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase).ToArray();
+                var dejada = salesGrouped.Sum(match => match.Max(item => item.Payout ?? 0m));
+                var comision = salesGrouped.Sum(match => match.Max(item => item.Commission));
+                var venta = salesGrouped.Sum(match => match.Max(item => item.Sale));
                 var totalGastos = dejada + comision;
                 var ticketPromedio = pax > 0 ? venta / pax : 0m;
                 var porcentajeGasto = venta > 0m ? totalGastos / venta : 0m;
@@ -1238,11 +1285,10 @@ public sealed partial class DesktopOutputService
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Count();
-        var dejada = rows.Sum(item => item.Payout ?? 0m);
-        var comision = rows.Sum(item => item.Commission);
-        var venta = rows
-            .GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase)
-            .Sum(group => group.Max(item => item.Sale));
+        var salesGrouped = rows.GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase).ToArray();
+        var dejada = salesGrouped.Sum(group => group.Max(item => item.Payout ?? 0m));
+        var comision = salesGrouped.Sum(group => group.Max(item => item.Commission));
+        var venta = salesGrouped.Sum(group => group.Max(item => item.Sale));
 
         return new CategorySummary(
             categoryName,
@@ -1264,7 +1310,12 @@ public sealed partial class DesktopOutputService
         var dateKey = date.HasValue
             ? date.Value.ToString("yyyyMMdd", CultureInfo.InvariantCulture)
             : (row.DateText ?? string.Empty).Trim();
-        var id = Clean(ValidRelationIdentifier(row.OperationFolio), row.AppFolio, row.PosFolio, row.PayoutTicket);
+        // PosFolio (el ticket) primero, no OperationFolio: MergeRelationRows ya identifica cada
+        // venta por PosFolio (una fila por ticket). Si aqui se prioriza OperationFolio, un folio
+        // con 2 tickets reales y distintos (2 llegadas del mismo taxista, cada una con su propia
+        // venta y comision) se agrupaba como una sola venta y el Max() se comia uno de los dos
+        // tickets. Confirmado 2026-08-27 con un folio de 2 tickets (SALMORAN, Antonio Flores).
+        var id = Clean(ValidRelationIdentifier(row.PosFolio), ValidRelationIdentifier(row.OperationFolio), row.AppFolio, row.PayoutTicket);
         if (!string.IsNullOrWhiteSpace(id))
             return $"{dateKey}|{NormalizeToken(id)}";
 
@@ -1554,7 +1605,7 @@ public sealed partial class DesktopOutputService
         writer.Write(content);
     }
 
-    private sealed record CategorySummary(string Code, string Name, DateTime Fecha, int Pax, int Entraron, int Salieron, int Unidades, decimal Dejada, decimal Comision, decimal Venta, decimal TotalGastos)
+    private sealed record CategorySummary(string Code, string Name, DateTime Fecha, int Pax, int Entraron, int Salieron, int Unidades, decimal Dejada, decimal Comision, decimal Venta, decimal TotalGastos, int Adultos = 0, int Jovenes = 0, int Menores = 0)
     {
         public static CategorySummary Empty(string name) => Empty("NA", name);
         public static CategorySummary Empty(string code, string name) => new(code, name, DateTime.Today, 0, 0, 0, 0, 0m, 0m, 0m, 0m);

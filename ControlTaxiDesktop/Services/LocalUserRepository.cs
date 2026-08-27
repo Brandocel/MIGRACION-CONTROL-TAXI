@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
@@ -16,7 +16,11 @@ public sealed class LocalUserRepository(LocalDatabase database)
     [
         "RegistroDiario", "Comisiones", "Transportes", "Guias", "Taxistas", "Gafetes",
         "Relaciones", "Gastos", "Cortes", "Reportes", "ReporteTaxis", "ControlDejadas",
-        "DejadasComisiones", "ConcentradoGeneral", "ConfiguracionComisiones", "Usuarios", "Navieras"
+        "DejadasComisiones", "ConcentradoGeneral", "ConfiguracionComisiones", "Usuarios", "Navieras",
+        // No es una pantalla, es una facultad: quien la tenga puede darle AUTORIZAR en Comisiones.
+        // Sin esta autorizacion el boton PAGAR de ese folio no se habilita. Confirmado con el
+        // usuario el 2026-08-24.
+        "AutorizarPagoComision"
     ];
 
     public sealed record AuthenticationResult(bool Success, DesktopSession? Session, AuthenticationFailureReason FailureReason)
@@ -262,6 +266,45 @@ public sealed class LocalUserRepository(LocalDatabase database)
         }
     }
 
+    /// <summary>
+    /// Chequeo puntual de una sola facultad, para pantallas que necesitan saber "puede este
+    /// usuario hacer X" sin cargar el catalogo completo de usuarios. Usado por Comisiones para
+    /// decidir si se muestra el boton AUTORIZAR.
+    /// </summary>
+    public async Task<bool> HasPermissionAsync(string userName, string module, string? branchCode = null)
+    {
+        if (string.IsNullOrWhiteSpace(userName)) return false;
+
+        // Plaza 28 y Casco Viejo guardan sus usuarios REALES en dbo.ControlTaxiUsuarios (SQL
+        // Server), no en DesktopPermissions (SQLite, solo aplica a la base de prueba local).
+        // Sin esto la facultad de autorizar nunca se veia como concedida aunque ya estuviera
+        // guardada, porque se estaba mirando la tabla equivocada. Detectado el 2026-08-24.
+        var normalizedBranch = NormalizeBranchCode(branchCode);
+        if (!database.IsTestDatabase && IsRemoteUserBranch(normalizedBranch))
+        {
+            try
+            {
+                await using var remoteConnection = await OpenBranchSqlConnectionAsync(normalizedBranch);
+                var remoteUser = await ReadCascoUserAsync(remoteConnection, userName);
+                if (remoteUser is null) return false;
+                return string.Equals(module, "AutorizarPagoComision", StringComparison.OrdinalIgnoreCase)
+                    ? remoteUser.Value.CanAuthorizeComision
+                    : BuildCascoPermissions(remoteUser.Value).Contains(module);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        await using var connection = database.Open();
+        var hasDesktopUsers = await HasTableAsync(connection, "DesktopUsers");
+        var hasImportedUsers = !hasDesktopUsers && await HasTableAsync(connection, "ControlTaxis__dbo__Usuarios");
+        var source = database.IsTestDatabase || hasDesktopUsers ? "Desktop" : hasImportedUsers ? "Imported" : "Desktop";
+        var modules = await ReadPermissionsAsync(connection, source, userName);
+        return modules.Contains(module);
+    }
+
     public async Task<IReadOnlyList<LocalUserRow>> GetUsersAsync(string? branchCode = null)
     {
         var normalizedBranch = NormalizeBranchCode(branchCode);
@@ -350,9 +393,26 @@ public sealed class LocalUserRepository(LocalDatabase database)
         await transaction.CommitAsync();
     }
 
+    /// <summary>
+    /// dbo.ControlTaxiUsuarios (SQL Server) es la tabla REAL de usuarios de Plaza 28 y Casco
+    /// Viejo -- DesktopPermissions (SQLite) solo aplica a la base local de prueba. La facultad
+    /// de autorizar pago de comision se agrego aqui el 2026-08-24, autoprovisionada igual que
+    /// las demas columnas de Casco (IF COL_LENGTH ... ADD) para no depender de un script aparte.
+    /// </summary>
+    private static async Task EnsureAuthorizeColumnAsync(SqlConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            IF COL_LENGTH(N'dbo.ControlTaxiUsuarios', N'PuedeAutorizarComision') IS NULL
+                ALTER TABLE dbo.ControlTaxiUsuarios ADD PuedeAutorizarComision BIT NOT NULL CONSTRAINT DF_ControlTaxiUsuarios_PuedeAutorizarComision DEFAULT (0);
+            """;
+        await command.ExecuteNonQueryAsync();
+    }
+
     private async Task<IReadOnlyList<LocalUserRow>> GetRemoteUsersAsync(string branchCode)
     {
         await using var connection = await OpenBranchSqlConnectionAsync(branchCode);
+        await EnsureAuthorizeColumnAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT
@@ -367,7 +427,8 @@ public sealed class LocalUserRepository(LocalDatabase database)
                 PuedeVerRelaciones,
                 PuedeVerReportes,
                 PuedeVerComisiones,
-                PuedePagarDejadas
+                PuedePagarDejadas,
+                PuedeAutorizarComision
             FROM dbo.ControlTaxiUsuarios
             ORDER BY Username;
             """;
@@ -388,7 +449,8 @@ public sealed class LocalUserRepository(LocalDatabase database)
                 CanViewRelaciones: reader.GetBoolean(8),
                 CanViewReportes: reader.GetBoolean(9),
                 CanViewComisiones: reader.GetBoolean(10),
-                CanPayPayouts: reader.GetBoolean(11));
+                CanPayPayouts: reader.GetBoolean(11),
+                CanAuthorizeComision: reader.GetBoolean(12));
             var createdAt = reader.IsDBNull(4)
                 ? string.Empty
                 : reader.GetDateTime(4).ToString("O", CultureInfo.InvariantCulture);
@@ -412,6 +474,7 @@ public sealed class LocalUserRepository(LocalDatabase database)
         var permissionSet = permissions.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         await using var connection = await OpenBranchSqlConnectionAsync(adminBranchCode);
+        await EnsureAuthorizeColumnAsync(connection);
         var existing = await ReadCascoUserAsync(connection, userName);
         if (existing is null && string.IsNullOrWhiteSpace(password))
             throw new InvalidOperationException("Para crear un usuario nuevo se requiere contrasena.");
@@ -426,6 +489,9 @@ public sealed class LocalUserRepository(LocalDatabase database)
         var isElevated = string.Equals(role, "Administrador", StringComparison.OrdinalIgnoreCase)
             || string.Equals(role, "Supervisor", StringComparison.OrdinalIgnoreCase);
         var canPayPayouts = canViewRelaciones && (isElevated || existing?.CanPayPayouts == true);
+        // Facultad explicita, sin heredarla de ningun rol: se guarda tal cual viene marcada en
+        // el checkbox. Confirmado con el usuario el 2026-08-24.
+        var canAuthorize = permissionSet.Contains("AutorizarPagoComision");
         var passwordHash = string.IsNullOrWhiteSpace(password) ? existing?.PasswordHash ?? string.Empty : HashPassword(password.Trim());
 
         await using var command = connection.CreateCommand();
@@ -435,10 +501,11 @@ public sealed class LocalUserRepository(LocalDatabase database)
                 INSERT INTO dbo.ControlTaxiUsuarios
                     (Username, PasswordHash, NombreCompleto, Rol, BranchCode, Activo,
                      PuedeVerInicio, PuedeVerRelaciones, PuedeVerGafetes, PuedeVerReportes,
-                     PuedeVerVentas, PuedePagarDejadas, PuedeVerComisiones, FechaCreacion, FechaActualizacion)
+                     PuedeVerVentas, PuedePagarDejadas, PuedeVerComisiones, PuedeAutorizarComision,
+                     FechaCreacion, FechaActualizacion)
                 VALUES
                     (@username, @passwordHash, @fullName, @role, @branchCode, @active,
-                     @home, @relations, @badges, @reports, @sales, @payPayouts, @commissions,
+                     @home, @relations, @badges, @reports, @sales, @payPayouts, @commissions, @authorize,
                      SYSDATETIME(), SYSDATETIME());
                 """;
         }
@@ -458,6 +525,7 @@ public sealed class LocalUserRepository(LocalDatabase database)
                     PuedeVerVentas = @sales,
                     PuedePagarDejadas = @payPayouts,
                     PuedeVerComisiones = @commissions,
+                    PuedeAutorizarComision = @authorize,
                     FechaActualizacion = SYSDATETIME()
                 WHERE UPPER(Username) = UPPER(@username);
                 """;
@@ -476,6 +544,7 @@ public sealed class LocalUserRepository(LocalDatabase database)
         command.Parameters.AddWithValue("@sales", canViewVentas);
         command.Parameters.AddWithValue("@payPayouts", canPayPayouts);
         command.Parameters.AddWithValue("@commissions", canViewComisiones);
+        command.Parameters.AddWithValue("@authorize", canAuthorize);
         await command.ExecuteNonQueryAsync();
     }
 
@@ -528,8 +597,9 @@ public sealed class LocalUserRepository(LocalDatabase database)
             : null;
     }
 
-    private static async Task<(string UserName, string PasswordHash, string Role, bool Active, string BranchCode, bool CanViewHome, bool CanViewVentas, bool CanViewGafetes, bool CanViewRelaciones, bool CanViewReportes, bool CanViewComisiones, bool CanPayPayouts)?> ReadCascoUserAsync(SqlConnection connection, string userName)
+    private static async Task<(string UserName, string PasswordHash, string Role, bool Active, string BranchCode, bool CanViewHome, bool CanViewVentas, bool CanViewGafetes, bool CanViewRelaciones, bool CanViewReportes, bool CanViewComisiones, bool CanPayPayouts, bool CanAuthorizeComision)?> ReadCascoUserAsync(SqlConnection connection, string userName)
     {
+        await EnsureAuthorizeColumnAsync(connection);
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT TOP (1)
@@ -544,7 +614,8 @@ public sealed class LocalUserRepository(LocalDatabase database)
                 PuedeVerRelaciones,
                 PuedeVerReportes,
                 PuedeVerComisiones,
-                PuedePagarDejadas
+                PuedePagarDejadas,
+                PuedeAutorizarComision
             FROM dbo.ControlTaxiUsuarios
             WHERE UPPER(Username) = UPPER(@user);
             """;
@@ -563,7 +634,8 @@ public sealed class LocalUserRepository(LocalDatabase database)
                 reader.GetBoolean(8),
                 reader.GetBoolean(9),
                 reader.GetBoolean(10),
-                reader.GetBoolean(11))
+                reader.GetBoolean(11),
+                reader.GetBoolean(12))
             : null;
     }
 
@@ -589,7 +661,7 @@ public sealed class LocalUserRepository(LocalDatabase database)
         return result;
     }
 
-    private static IReadOnlySet<string> BuildCascoPermissions((string UserName, string PasswordHash, string Role, bool Active, string BranchCode, bool CanViewHome, bool CanViewVentas, bool CanViewGafetes, bool CanViewRelaciones, bool CanViewReportes, bool CanViewComisiones, bool CanPayPayouts) user)
+    private static IReadOnlySet<string> BuildCascoPermissions((string UserName, string PasswordHash, string Role, bool Active, string BranchCode, bool CanViewHome, bool CanViewVentas, bool CanViewGafetes, bool CanViewRelaciones, bool CanViewReportes, bool CanViewComisiones, bool CanPayPayouts, bool CanAuthorizeComision) user)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -617,6 +689,8 @@ public sealed class LocalUserRepository(LocalDatabase database)
             result.Add("Cortes");
             result.Add("Gastos");
         }
+        if (user.CanAuthorizeComision)
+            result.Add("AutorizarPagoComision");
 
         if (string.Equals(user.Role, "Administrador", StringComparison.OrdinalIgnoreCase)
             || string.Equals(user.Role, "Supervisor", StringComparison.OrdinalIgnoreCase))

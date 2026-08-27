@@ -68,6 +68,51 @@ public partial class App : Application
             return;
         }
 
+        // Limpia transportes duplicados del catalogo de comisiones y deja el resultado en
+        // Logs\limpiar-catalogo.txt. Se agrego como flag y no como script de base de datos
+        // porque las maquinas donde se instala no tienen sqlite3, y esto hay que correrlo una
+        // vez por equipo.
+        if (eventArgs.Args.Contains("--limpiar-catalogo", StringComparer.OrdinalIgnoreCase))
+        {
+            var reporte = new System.Text.StringBuilder();
+            try
+            {
+                var database = new LocalDatabase();
+                await database.InitializeAsync();
+                var settings = new CommissionSettingsRepository(database);
+                // Crea el esquema y siembra antes de medir: GetDuplicateTransportNamesAsync
+                // solo lee, asi que sin esto falla en una base recien creada.
+                await settings.InitializeAsync();
+
+                var antes = (await settings.GetDuplicateTransportNamesAsync()).ToArray();
+                var borradas = await settings.RemoveDuplicateTransportsAsync();
+                // Se relee DESPUES de la limpieza y sin volver a sembrar, para que el reporte
+                // muestre el estado real y no el de un nuevo sembrado.
+                var despues = (await settings.GetDuplicateTransportNamesAsync()).ToArray();
+
+                reporte.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Limpieza de catalogo");
+                reporte.AppendLine($"Filas eliminadas: {borradas}");
+                reporte.AppendLine();
+                reporte.AppendLine($"Duplicados ANTES ({antes.Length}):");
+                foreach (var d in antes) reporte.AppendLine("  - " + d);
+                reporte.AppendLine();
+                reporte.AppendLine($"Duplicados DESPUES ({despues.Length}):");
+                if (despues.Length == 0) reporte.AppendLine("  (ninguno)");
+                foreach (var d in despues) reporte.AppendLine("  - " + d);
+            }
+            catch (Exception ex)
+            {
+                reporte.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ERROR: {ex.Message}");
+            }
+
+            var carpeta = System.IO.Path.Combine(AppContext.BaseDirectory, "Logs");
+            System.IO.Directory.CreateDirectory(carpeta);
+            var ruta = System.IO.Path.Combine(carpeta, "limpiar-catalogo.txt");
+            await System.IO.File.WriteAllTextAsync(ruta, reporte.ToString());
+            Shutdown(0);
+            return;
+        }
+
         if (eventArgs.Args.Contains("--init-local-db", StringComparer.OrdinalIgnoreCase))
         {
             var database = new LocalDatabase();
