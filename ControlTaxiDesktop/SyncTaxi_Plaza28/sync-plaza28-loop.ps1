@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
 
 $ErrorActionPreference = 'Stop'
@@ -139,6 +139,50 @@ $intervalSeconds = Read-IntValue $config.IntervalSeconds 15
 $maxRunSeconds = Read-IntValue $config.MaxRunSeconds 180
 $pullLimit = Read-IntValue $config.PullLimit 500
 
+# El cuadre se publica en Hoka Solutions cada 5 minutos, no en cada ciclo: el ciclo normal corre
+# cada 15 segundos y armar el cuadre implica releer relaciones, comisiones, cortes y camiones del
+# dia entero. Cada 5 minutos alcanza de sobra para que Hoka este al dia y no castiga a SQL Server.
+$cuadrePushIntervalSeconds = Read-IntValue $config.CuadrePushIntervalSeconds 300
+$cuadrePushTimeoutSeconds = Read-IntValue $config.CuadrePushTimeoutSeconds 180
+$desktopExePath = Join-Path $workspaceRoot 'ControlTaxiDesktop.exe'
+
+function Invoke-PushCuadre {
+    <#
+        Corre ControlTaxiDesktop.exe --push-cuadre, que calcula el cuadre del dia con las mismas
+        reglas del Excel y lo sube a la API de Hostinger.
+
+        Se llama al ejecutable y no se reimplementa el calculo aqui porque las reglas de comision
+        (guias al 8 %, venta duplicada del mismo taxista, codigos cortos del POS) viven en C# y ya
+        costaron varias correcciones. Traducirlas a PowerShell garantizaria que Hoka y el Excel
+        terminaran dando numeros distintos.
+    #>
+    param(
+        [string]$ExePath,
+        [int]$TimeoutSeconds
+    )
+
+    if (-not (Test-Path $ExePath)) {
+        Write-Log "CUADRE: no se encontro ControlTaxiDesktop.exe en $ExePath; se omite la publicacion."
+        return $false
+    }
+
+    $proceso = Start-Process -FilePath $ExePath -ArgumentList '--push-cuadre' -PassThru -WindowStyle Hidden
+    if (-not $proceso.WaitForExit($TimeoutSeconds * 1000)) {
+        try { $proceso.Kill() } catch { }
+        Write-Log "CUADRE: la publicacion paso de $TimeoutSeconds segundos y se corto."
+        return $false
+    }
+
+    if ($proceso.ExitCode -eq 0) {
+        Write-Log "CUADRE: publicado en Hoka."
+        return $true
+    }
+
+    # El detalle del fallo lo escribe el propio ejecutable, para no repetir el mensaje en dos logs.
+    Write-Log "CUADRE: la publicacion fallo (codigo $($proceso.ExitCode)). Ver Logs\push-cuadre.txt."
+    return $false
+}
+
 if ([string]::IsNullOrWhiteSpace($sqlPassword)) {
     Write-Log "Sincronizador Plaza 28 desactivado: falta credencial SQL cifrada o PLAZA28_SQL_PASSWORD"
     Write-Status -Configured:$true -PasswordAvailable:$false -IntervalSeconds $intervalSeconds -LastHttp 0 -LastReceivedCount 0 -LastInsertedCount 0 -LastOmittedCount 0 -LastError 'Falta credencial SQL' -LastDurationMs 0 -LockActive:$false
@@ -159,6 +203,10 @@ if (Test-Path $lockPath) {
 
 Set-Content -Path $lockPath -Value $PID -Encoding ASCII
 Write-Log "Sincronizador Plaza 28 automatico iniciado. Intervalo: $intervalSeconds segundos. PID: $PID"
+
+# En el primer ciclo se publica de inmediato, para que al arrancar el sincronizador (o al
+# reiniciar la maquina) Hoka quede al dia sin esperar los 5 minutos.
+$ultimoCuadrePush = [DateTime]::MinValue
 
 try {
     while ($true) {
@@ -198,7 +246,26 @@ try {
                 PullLimit = $pullLimit
             }
 
-            $output = & $legacySyncPath @syncParams 2>&1
+            # El ciclo corre en un job para poder cortarlo si se cuelga. Antes se
+            # llamaba directo: si la red o SQL no respondian, el loop se quedaba
+            # esperando para siempre y dejaba de bajar registros sin avisar.
+            $job = Start-Job -ScriptBlock {
+                param([string]$Ruta, [hashtable]$Parametros)
+                & $Ruta @Parametros *>&1
+            } -ArgumentList $legacySyncPath, $syncParams
+
+            $output = @()
+            if (Wait-Job -Job $job -Timeout $maxRunSeconds) {
+                $output = @(Receive-Job -Job $job)
+            } else {
+                Stop-Job -Job $job -ErrorAction SilentlyContinue
+                $output = @(Receive-Job -Job $job -ErrorAction SilentlyContinue)
+                $lastError = "El ciclo paso de $maxRunSeconds segundos y se corto."
+                Write-Log "TIMEOUT: $lastError"
+            }
+            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+
+            $fallas = New-Object System.Collections.Generic.List[string]
             foreach ($line in $output) {
                 $text = [string]$line
                 if ([string]::IsNullOrWhiteSpace($text)) { continue }
@@ -208,11 +275,38 @@ try {
                 if ($safeText -match 'Registros recibidos:\s*(\d+)') { $received = [int]$matches[1] }
                 if ($safeText -match 'Registros recientes encontrados:\s*(\d+)') { $received = [int]$matches[1] }
                 if ($safeText -match 'Folio .+ verificado en dejadas/gafete') { $inserted++ }
-                if ($safeText -match 'Revision extra de espejos locales omitida') { $lastHttp = 200 }
+                if ($safeText -match 'Camiones guardados en SQL Server:\s*(\d+)') { $inserted += [int]$matches[1] }
+
+                # Lo que el script hijo reporta como problema sin tronar: antes se
+                # perdia en el log y el estado seguia diciendo que todo iba bien.
+                if ($safeText -match 'NO quedo verificado|No se pudo|no se guardo|bloqueado; se omite|Error llamando API|No se marco nada') {
+                    [void]$fallas.Add($safeText)
+                }
             }
 
-            $lastHttp = 200
+            if ($fallas.Count -gt 0) {
+                $omitted = $fallas.Count
+                if ([string]::IsNullOrWhiteSpace($lastError)) {
+                    $lastError = "$($fallas.Count) avisos en el ciclo. Primero: $($fallas[0])"
+                }
+            }
+
+            if ([string]::IsNullOrWhiteSpace($lastError)) { $lastHttp = 200 }
             Write-Log "Plaza 28 sync terminado"
+
+            # La publicacion del cuadre va en su propio try: si Hostinger no contesta, el ciclo de
+            # sincronizacion normal no debe marcarse como fallido por eso.
+            if (((Get-Date) - $ultimoCuadrePush).TotalSeconds -ge $cuadrePushIntervalSeconds) {
+                # El reloj se corre haya salido bien o mal: si Hostinger esta caido no tiene caso
+                # reintentar cada 15 segundos, se espera al siguiente turno de 5 minutos.
+                $ultimoCuadrePush = Get-Date
+                try {
+                    [void](Invoke-PushCuadre -ExePath $desktopExePath -TimeoutSeconds $cuadrePushTimeoutSeconds)
+                }
+                catch {
+                    Write-Log "CUADRE ERROR: $($_.Exception.Message)"
+                }
+            }
         }
         catch {
             $lastError = $_.Exception.Message

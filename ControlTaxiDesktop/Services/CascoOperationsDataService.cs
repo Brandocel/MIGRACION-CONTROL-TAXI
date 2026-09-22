@@ -1647,6 +1647,7 @@ public static class CascoOperationsDataService
             var vendorName = FirstFilled(reader.IsDBNull(5) ? string.Empty : reader.GetString(5), remoteSellerName);
             if (string.Equals(vendorName.Trim(), driverName.Trim(), StringComparison.OrdinalIgnoreCase))
                 vendorName = string.Empty;
+            var sellerBadgesText = ExtractRemoteSellerBadges(sourceRow.DetailJson);
             var adultCount = ExtractRemoteInt(sourceRow.DetailJson, "adultCount");
             var youthCount = ExtractRemoteInt(sourceRow.DetailJson, "youthCount");
             var minorCount = ExtractRemoteInt(sourceRow.DetailJson, "minorCount");
@@ -1695,7 +1696,8 @@ public static class CascoOperationsDataService
                 sourceRow.ExchangeRate,
                 AdultPassengers: adultCount,
                 YouthPassengers: youthCount,
-                ChildPassengers: minorCount));
+                ChildPassengers: minorCount,
+                SellerBadges: sellerBadgesText));
         }
 
         return MergeRelationRowsByOperation(result);
@@ -1935,7 +1937,10 @@ public static class CascoOperationsDataService
                 return row with { Commission = 0m, CommissionStatus = "REGLA AMBIGUA", OrigenComision = "Respaldo" };
             }
 
-            var amount = CascoCommissionRuleService.CalculateAmounts(match.Rule, venta).CommissionAmount;
+            // La dejada si viaja en el renglon; gasto y degustacion se capturan al generar la
+            // comision, asi que aqui van en cero. Antes no se pasaba nada y TAXIS/VANS salia sin
+            // descontar la dejada que el Excel si descuenta.
+            var amount = CascoCommissionRuleService.ResolveCommissionAmount(match, venta, row.Payout ?? 0m);
 
             return row with
             {
@@ -3054,7 +3059,8 @@ public static class CascoOperationsDataService
                     row.Notes,
                     row.Total,
                     row.Cash,
-                    row.Card);
+                    row.Card,
+                    ExtractRemoteSellerBadges(row.DetailJson));
             })
             .OrderBy(row => row.FolioOperacion, StringComparer.OrdinalIgnoreCase)
             .ThenBy(row => row.FolioControl, StringComparer.OrdinalIgnoreCase)
@@ -3107,7 +3113,8 @@ public static class CascoOperationsDataService
             row.Cash,
             row.Card,
             row.Dollars,
-            row.ExchangeRate);
+            row.ExchangeRate,
+            SellerBadges: ExtractRemoteSellerBadges(row.DetailJson));
     }
 
     private static bool Matches(string value, string? search) =>
@@ -3389,7 +3396,72 @@ public static class CascoOperationsDataService
         !string.IsNullOrWhiteSpace(value)
         && value.Contains(token, StringComparison.OrdinalIgnoreCase);
 
-    private static string ExtractRemoteText(string? detailJson, string propertyName)
+    /// <summary>
+    /// Lee del detalle remoto los pares vendedor/gafete que mando la app y los
+    /// deja en una linea legible: "Luis Carmona - Gafete 101 | Ana Perez - Gafete 102".
+    /// Una llegada la pueden atender varios vendedores y un mismo vendedor
+    /// puede quedarse con varios gafetes.
+    /// </summary>
+    private static string ExtractRemoteSellerBadges(string? detailJson)
+    {
+        if (string.IsNullOrWhiteSpace(detailJson))
+            return string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(detailJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return string.Empty;
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "sellerBadges", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (property.Value.ValueKind != JsonValueKind.Array)
+                    return string.Empty;
+
+                var parts = new List<string>();
+                foreach (var item in property.Value.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    var badge = ReadJsonText(item, "badgeId");
+                    var seller = ReadJsonText(item, "sellerName");
+                    if (badge.Length == 0 && seller.Length == 0)
+                        continue;
+
+                    if (seller.Length == 0)
+                        parts.Add($"Gafete {badge}");
+                    else if (badge.Length == 0)
+                        parts.Add(seller);
+                    else
+                        parts.Add($"{seller} - Gafete {badge}");
+                }
+
+                return string.Join(" | ", parts);
+            }
+
+            return string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string ReadJsonText(JsonElement element, string propertyName)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                return property.Value.ToString().Trim();
+        }
+
+        return string.Empty;
+    }
+
+        private static string ExtractRemoteText(string? detailJson, string propertyName)
     {
         if (string.IsNullOrWhiteSpace(detailJson))
             return string.Empty;

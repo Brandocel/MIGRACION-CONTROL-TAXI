@@ -232,8 +232,21 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          <!-- TextElement.Foreground explicito: sin el, el texto del boton toma el color
+               oscuro del estilo global de TextBlock y "GUARDAR CAMBIO" salia gris sobre el
+               fondo azul marino. -->
+          <Border Background="{TemplateBinding Background}" CornerRadius="3" Padding="{TemplateBinding Padding}"
+                  TextElement.Foreground="{TemplateBinding Foreground}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                              TextElement.Foreground="{TemplateBinding Foreground}">
+              <!-- El estilo global de TextBlock (App.xaml) fija un gris oscuro y gana sobre la
+                   herencia, asi que el texto del boton se pinta aqui explicitamente. -->
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -261,8 +274,18 @@
           <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="3" Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  CornerRadius="3" Padding="{TemplateBinding Padding}"
+                  TextElement.Foreground="{TemplateBinding Foreground}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                              TextElement.Foreground="{TemplateBinding Foreground}">
+              <!-- El estilo global de TextBlock (App.xaml) fija un gris oscuro y gana sobre la
+                   herencia, asi que el texto del boton se pinta aqui explicitamente. -->
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -388,8 +411,18 @@
           <Border x:Name="Chrome" Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="2" Padding="{TemplateBinding Padding}">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  CornerRadius="2" Padding="{TemplateBinding Padding}"
+                  TextElement.Foreground="{TemplateBinding Foreground}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                              TextElement.Foreground="{TemplateBinding Foreground}">
+              <!-- El estilo global de TextBlock (App.xaml) fija un gris oscuro y gana sobre la
+                   herencia, asi que el texto del boton se pinta aqui explicitamente. -->
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Button}}}"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
@@ -449,5 +482,274 @@
         </Trigger.EnterActions>
       </Trigger>
     </Style.Triggers>
+  </Style>
+
+  <!-- ===== Tabla del rediseño cuadrado =====
+       Se movieron aqui (antes vivian solo dentro de PosWindow) para que Configuracion de
+       comisiones use exactamente la misma tabla que Comisiones: encabezado azul, celdas con
+       linea de columna y fila, y gris alterno visible. PosWindow conserva su copia local,
+       que gana sobre esta por ser recurso propio de la ventana. -->
+  <Style x:Key="DashboardGridHeader" TargetType="DataGridColumnHeader">
+    <Setter Property="OverridesDefaultStyle" Value="True"/>
+    <Setter Property="Background" Value="#0E4DB7"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Padding" Value="12,11"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="BorderBrush" Value="#1C63D2"/>
+    <Setter Property="BorderThickness" Value="0,0,1,0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="DataGridColumnHeader">
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="Center"
+                              Margin="{TemplateBinding Padding}"
+                              TextElement.Foreground="White">
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="White"/>
+                  <Setter Property="FontWeight" Value="Bold"/>
+                  <Setter Property="FontSize" Value="13"/>
+                  <Setter Property="TextWrapping" Value="NoWrap"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="DashboardGridCell" TargetType="DataGridCell">
+    <Setter Property="Padding" Value="14,10"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="BorderBrush" Value="#DCE5F2"/>
+    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="#16326B"/>
+  </Style>
+  <Style x:Key="DashboardGridRow" TargetType="DataGridRow">
+    <Setter Property="Background" Value="White"/>
+    <Setter Property="Foreground" Value="#16326B"/>
+    <Setter Property="BorderBrush" Value="#E3ECF8"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Style.Triggers>
+      <Trigger Property="AlternationIndex" Value="1">
+        <Setter Property="Background" Value="#EFF4FB"/>
+      </Trigger>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="#DBE8FA"/>
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="#C7DCF7"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- ===== Entradas de formulario =====
+       Caja de texto con su propio marco cuadrado, para formularios donde no conviene envolver
+       cada campo en un SquareFieldBorder aparte. -->
+  <Style x:Key="SquareInputBox" TargetType="TextBox">
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Foreground" Value="#132C63"/>
+    <Setter Property="Background" Value="#FFFFFF"/>
+    <Setter Property="BorderBrush" Value="#D3DCEC"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding" Value="9,7"/>
+    <Setter Property="MinHeight" Value="34"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Style.Triggers>
+      <Trigger Property="IsKeyboardFocusWithin" Value="True">
+        <Setter Property="BorderBrush" Value="#1E5FD0"/>
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Background" Value="#F4F7FC"/>
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- Etiqueta chica de un campo de formulario (no de filtros). -->
+  <Style x:Key="SquareInputLabel" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="#5A7096"/>
+    <Setter Property="Margin" Value="0,0,0,5"/>
+  </Style>
+
+  <!-- Titulo de bloque dentro de una tarjeta ("PORCENTAJES", "VIGENCIA"...). -->
+  <Style x:Key="SquareSectionHeading" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="Black"/>
+    <Setter Property="Foreground" Value="#16326B"/>
+    <Setter Property="Margin" Value="0,14,0,10"/>
+  </Style>
+
+  <!-- ComboBox sin el cromo gris de Windows: mismo marco y alto que SquareInputBox, con
+       chevron de linea. Sirve igual para combos editables (IsEditable="True"). -->
+  <Style x:Key="SquareComboInput" TargetType="ComboBox">
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Foreground" Value="#132C63"/>
+    <Setter Property="Background" Value="#FFFFFF"/>
+    <Setter Property="BorderBrush" Value="#D3DCEC"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding" Value="9,7"/>
+    <Setter Property="MinHeight" Value="34"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBox">
+          <Border x:Name="Chrome"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="2"
+                  SnapsToDevicePixels="True">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="28"/>
+              </Grid.ColumnDefinitions>
+              <!-- El ToggleButton invisible cubre toda la caja cuando el combo no es editable;
+                   si lo es, se recorta a la columna del chevron para no robarle el clic al
+                   cuadro de texto. -->
+              <ToggleButton x:Name="OpenButton"
+                            Grid.Column="0" Grid.ColumnSpan="2"
+                            Focusable="False"
+                            ClickMode="Press"
+                            Background="Transparent"
+                            IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                <ToggleButton.Template>
+                  <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent" BorderThickness="0"/>
+                  </ControlTemplate>
+                </ToggleButton.Template>
+              </ToggleButton>
+              <ContentPresenter x:Name="Selected"
+                                Grid.Column="0"
+                                Margin="{TemplateBinding Padding}"
+                                Content="{TemplateBinding SelectionBoxItem}"
+                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                IsHitTestVisible="False"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center"/>
+              <TextBox x:Name="PART_EditableTextBox"
+                       Grid.Column="0"
+                       Margin="{TemplateBinding Padding}"
+                       Visibility="Collapsed"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       Foreground="{TemplateBinding Foreground}"
+                       VerticalContentAlignment="Center"/>
+              <Path x:Name="Chevron"
+                    Grid.Column="1"
+                    Style="{StaticResource LineIcon}"
+                    Data="M6,9 L12,15 L18,9"
+                    Stroke="#5A7096"
+                    Width="12" Height="12"
+                    IsHitTestVisible="False"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"/>
+              <Popup x:Name="PART_Popup"
+                     Placement="Bottom"
+                     IsOpen="{TemplateBinding IsDropDownOpen}"
+                     AllowsTransparency="True"
+                     Focusable="False"
+                     PopupAnimation="Fade">
+                <Border Background="#FFFFFF"
+                        BorderBrush="#D3DCEC"
+                        BorderThickness="1"
+                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                        MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                  <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsEditable" Value="True">
+              <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+              <Setter TargetName="Selected" Property="Visibility" Value="Collapsed"/>
+              <Setter TargetName="OpenButton" Property="Grid.Column" Value="1"/>
+              <Setter TargetName="OpenButton" Property="Grid.ColumnSpan" Value="1"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+              <Setter TargetName="Chrome" Property="BorderBrush" Value="#1E5FD0"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Chrome" Property="Background" Value="#F4F7FC"/>
+              <Setter Property="Foreground" Value="#8896B0"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ===== Pestañas =====
+       Mismo lenguaje que SquareTabRadio, pero para un TabControl real: la ventana de
+       Configuracion navega por indice desde el codigo, asi que no puede usar RadioButtons. -->
+  <Style x:Key="SquareTabItem" TargetType="TabItem">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="#6B7FA6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Padding" Value="2,13"/>
+    <Setter Property="Margin" Value="0,0,24,0"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TabItem">
+          <Border x:Name="Underline"
+                  Background="Transparent"
+                  BorderBrush="Transparent"
+                  BorderThickness="0,0,0,2"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter ContentSource="Header" VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Underline" Property="BorderBrush" Value="#1E5FD0"/>
+              <Setter Property="Foreground" Value="#16326B"/>
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsMouseOver" Value="True"/>
+                <Condition Property="IsSelected" Value="False"/>
+              </MultiTrigger.Conditions>
+              <Setter Property="Foreground" Value="#41567C"/>
+            </MultiTrigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="SquareTabControl" TargetType="TabControl">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="ItemContainerStyle" Value="{StaticResource SquareTabItem}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TabControl">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <!-- StackPanel y no TabPanel: TabPanel reparte el ancho entre las pestañas y les
+                 recortaba el texto ("CATÁL...", "HISTO..."). Con StackPanel cada pestaña mide
+                 lo que necesita. -->
+            <Border Background="#FFFFFF" BorderBrush="#D7E2F2" BorderThickness="1" Padding="18,0">
+              <StackPanel IsItemsHost="True" Orientation="Horizontal" HorizontalAlignment="Left"/>
+            </Border>
+            <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" Margin="0,14,0,0"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 </ResourceDictionary>

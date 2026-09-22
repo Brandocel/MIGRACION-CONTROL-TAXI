@@ -37,6 +37,30 @@ public partial class CommissionSettingsWindow : Window
         };
     }
 
+    /// <summary>
+    /// Un solo lugar para los avisos: el mensaje del editor vive dentro del panel emergente,
+    /// asi que cuando el panel esta cerrado el mismo texto se muestra junto a los filtros.
+    /// Sin esto, avisos como "Selecciona una regla" quedaban invisibles.
+    /// </summary>
+    private string EditorMessageText
+    {
+        set
+        {
+            EditorMessage.Text = value;
+            CatalogStatusText.Text = value;
+            CatalogStatusText.Visibility = string.IsNullOrWhiteSpace(value) ? Visibility.Collapsed : Visibility.Visible;
+        }
+    }
+
+    private void OpenEditor(string title)
+    {
+        EditorTitle.Text = title;
+        EditorOverlay.Visibility = Visibility.Visible;
+        EditName.Focus();
+    }
+
+    private void CloseEditor_Click(object sender, RoutedEventArgs e) => EditorOverlay.Visibility = Visibility.Collapsed;
+
     private async Task RefreshAllAsync()
     {
         await _settings.InitializeAsync();
@@ -145,6 +169,15 @@ public partial class CommissionSettingsWindow : Window
         }
 
         RulesGrid.ItemsSource = rules;
+        // Conteo visible junto a los filtros, igual que el "REGISTROS x DE y" de Comisiones:
+        // sin el no se sabe si un filtro dejo fuera media tabla.
+        RulesCountText.Text = rules.Count == 1 ? "1 REGLA" : $"{rules.Count:N0} REGLAS";
+    }
+
+    private async void ClearRuleFilters_Click(object sender, RoutedEventArgs e)
+    {
+        VigencyFilter.SelectedDate = DateTime.Today;
+        await ApplyRuleFilterAsync("Todos", "Activos");
     }
 
     private async Task ApplyRuleFilterAsync(string category, string status, string search = "")
@@ -196,7 +229,7 @@ public partial class CommissionSettingsWindow : Window
     {
         if (!IsLoaded || RulesGrid is null) return;
         try { await RefreshRulesAsync(); }
-        catch (Exception ex) { EditorMessage.Text = ex.Message; }
+        catch (Exception ex) { EditorMessageText = ex.Message; }
     }
 
     private void RulesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -231,7 +264,7 @@ public partial class CommissionSettingsWindow : Window
         EditorHint.Text = _canEdit
             ? "Puedes editar la regla seleccionada. Antes de guardar se mostrará un resumen y se pedirá motivo."
             : "Tu usuario puede consultar y probar comisiones, pero no guardar cambios.";
-        EditorMessage.Text = _canEdit ? "Regla cargada. Revisa porcentajes, vigencia y motivo antes de guardar." : "Tu usuario puede consultar, pero no guardar cambios.";
+        EditorMessageText = _canEdit ? "Regla cargada. Revisa porcentajes, vigencia y motivo antes de guardar." : "Tu usuario puede consultar, pero no guardar cambios.";
     }
 
     private void NewRule_Click(object sender, RoutedEventArgs e)
@@ -268,7 +301,8 @@ public partial class CommissionSettingsWindow : Window
         EditNotes.Clear();
         EditReason.Clear();
         EditorHint.Text = "Nueva regla: captura nombre, porcentajes, vigencia y motivo. Los porcentajes se escriben como 10 para 10%.";
-        EditorMessage.Text = "Captura la nueva regla. El motivo es obligatorio.";
+        EditorMessageText = "Captura la nueva regla. El motivo es obligatorio.";
+        OpenEditor("NUEVA REGLA");
     }
 
     private async void SaveRule_Click(object sender, RoutedEventArgs e)
@@ -278,7 +312,7 @@ public partial class CommissionSettingsWindow : Window
 
         if (!_canEdit)
         {
-            EditorMessage.Text = "Tu usuario puede consultar esta pantalla, pero no tiene permiso para guardar cambios.";
+            EditorMessageText = "Tu usuario puede consultar esta pantalla, pero no tiene permiso para guardar cambios.";
             return;
         }
 
@@ -287,7 +321,7 @@ public partial class CommissionSettingsWindow : Window
             _isSaving = true;
             SaveRuleButton.IsEnabled = false;
             NewRuleButton.IsEnabled = false;
-            EditorMessage.Text = "Guardando configuración...";
+            EditorMessageText = "Guardando configuración...";
             var previous = RulesGrid.SelectedItem as CommissionSettingsRule;
             var rule = new CommissionSettingsRule(
                 _editingId,
@@ -321,17 +355,30 @@ public partial class CommissionSettingsWindow : Window
             var previousText = previous is null
                 ? "Nueva regla"
                 : $"{previous.Name}\nComisión: {previous.CommissionPercent:0.##}% -> {rule.CommissionPercent:0.##}%\nEfectivo: {previous.CashRetentionPercent:0.##}% -> {rule.CashRetentionPercent:0.##}%\nTarjeta: {previous.CardRetentionPercent:0.##}% -> {rule.CardRetentionPercent:0.##}%\nAMEX: {previous.AmexRetentionPercent:0.##}% -> {rule.AmexRetentionPercent:0.##}%";
-            var message = $"Vas a cambiar:\n\n{rule.Name}\n\n{previousText}\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el cambio o No para cancelar.";
-            if (MessageBox.Show(this, message, "Confirmar cambio de comisión", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            // EDITAR corrige la regla que ya existe (mismo Id): el operador quiere arreglar ESA
+            // comision, no dejar dos reglas con vigencias distintas. Para abrir una vigencia
+            // nueva esta CAMBIAR COMISIÓN con una fecha posterior.
+            var isEdit = _editingId > 0;
+            var message = isEdit
+                ? $"Vas a corregir esta regla (no se crea otra):\n\n{rule.Name}\n\n{previousText}\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el cambio o No para cancelar."
+                : $"Vas a dar de alta:\n\n{rule.Name}\n\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el alta o No para cancelar.";
+            if (MessageBox.Show(this, message, isEdit ? "Confirmar corrección de comisión" : "Confirmar alta de comisión", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            await _settings.SaveRuleAsync(rule, _user, EditReason.Text, _canEdit);
-            EditorMessage.Text = "La comisión se actualizó correctamente. El cambio quedó guardado en auditoría.";
+            if (isEdit)
+                await _settings.UpdateRuleAsync(rule, _user, EditReason.Text, _canEdit);
+            else
+                await _settings.SaveRuleAsync(rule, _user, EditReason.Text, _canEdit);
+
+            EditorMessageText = isEdit
+                ? "La comisión se corrigió sobre la misma regla. El cambio quedó guardado en auditoría."
+                : "La regla se dio de alta correctamente. El alta quedó guardada en auditoría.";
+            EditorOverlay.Visibility = Visibility.Collapsed;
             await RefreshAllAsync();
         }
         catch (Exception ex)
         {
-            EditorMessage.Text = FriendlyError(ex);
+            EditorMessageText = FriendlyError(ex);
         }
         finally
         {
@@ -390,7 +437,7 @@ public partial class CommissionSettingsWindow : Window
         }
         catch (Exception ex)
         {
-            EditorMessage.Text = FriendlyError(ex);
+            EditorMessageText = FriendlyError(ex);
         }
     }
 
@@ -409,7 +456,7 @@ public partial class CommissionSettingsWindow : Window
         }
         catch (Exception ex)
         {
-            EditorMessage.Text = FriendlyError(ex);
+            EditorMessageText = FriendlyError(ex);
         }
     }
 
@@ -418,10 +465,11 @@ public partial class CommissionSettingsWindow : Window
         if (RulesGrid.SelectedItem is CommissionSettingsRule rule)
         {
             LoadEditor(rule);
+            OpenEditor($"EDITAR: {rule.Name}");
             EditCommission.Focus();
             return;
         }
-        EditorMessage.Text = "Selecciona una regla para editar.";
+        EditorMessageText = "Selecciona una regla para editar.";
     }
 
     private void ViewHistory_Click(object sender, RoutedEventArgs e) => SettingsTabs.SelectedIndex = 2;
@@ -437,7 +485,8 @@ public partial class CommissionSettingsWindow : Window
         else
         {
             LoadEditor(rule);
-            EditorMessage.Text = "Detalle cargado en modo consulta. Tu usuario no puede guardar cambios.";
+            OpenEditor($"CONSULTA: {rule.Name}");
+            EditorMessageText = "Detalle cargado en modo consulta. Tu usuario no puede guardar cambios.";
         }
     }
 
@@ -456,8 +505,10 @@ public partial class CommissionSettingsWindow : Window
                 await ApplyRuleFilterAsync("Transportes", "Activos");
                 SettingsTabs.SelectedIndex = 0;
                 break;
+            // Los diagnosticos (de donde sale el conteo de fallback) viven en "Opciones
+            // avanzadas", que es la pestaña 4. Con el 3 la tarjeta abria "Reglas globales".
             case "FALLBACK":
-                SettingsTabs.SelectedIndex = 3;
+                SettingsTabs.SelectedIndex = 4;
                 break;
             case "POR_VENCER":
                 await ApplyRuleFilterAsync("Todos", "Por vencer");
@@ -504,7 +555,9 @@ public partial class CommissionSettingsWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            if (SettingsTabs.SelectedIndex != 0)
+            if (EditorOverlay.Visibility == Visibility.Visible)
+                EditorOverlay.Visibility = Visibility.Collapsed;
+            else if (SettingsTabs.SelectedIndex != 0)
                 SettingsTabs.SelectedIndex = 0;
             else
                 EditReason.Clear();
@@ -516,7 +569,7 @@ public partial class CommissionSettingsWindow : Window
     {
         if (RulesGrid.SelectedItem is not CommissionSettingsRule rule)
         {
-            EditorMessage.Text = "Selecciona una regla para simular.";
+            EditorMessageText = "Selecciona una regla para simular.";
             return;
         }
         SettingsTabs.SelectedIndex = 1;
@@ -545,13 +598,13 @@ public partial class CommissionSettingsWindow : Window
 
         if (RulesGrid.SelectedItem is not CommissionSettingsRule rule)
         {
-            EditorMessage.Text = "Selecciona una regla para cambiar su comisión.";
+            EditorMessageText = "Selecciona una regla para cambiar su comisión.";
             return;
         }
 
         if (!_canEdit)
         {
-            EditorMessage.Text = "Tu usuario puede consultar, pero no guardar cambios.";
+            EditorMessageText = "Tu usuario puede consultar, pero no guardar cambios.";
             return;
         }
 
@@ -562,19 +615,19 @@ public partial class CommissionSettingsWindow : Window
     {
         if (RulesGrid.SelectedItem is not CommissionSettingsRule rule)
         {
-            EditorMessage.Text = "Selecciona PRUEBA PREPUBLICACION para retirarla.";
+            EditorMessageText = "Selecciona PRUEBA PREPUBLICACION para retirarla.";
             return;
         }
 
         if (!_canEdit)
         {
-            EditorMessage.Text = "Tu usuario puede consultar, pero no retirar reglas de prueba.";
+            EditorMessageText = "Tu usuario puede consultar, pero no retirar reglas de prueba.";
             return;
         }
 
         if (!IsPrepublicationTestRule(rule))
         {
-            EditorMessage.Text = "Por seguridad, esta accion solo retira PRUEBA PREPUBLICACION. No modifica reglas reales.";
+            EditorMessageText = "Por seguridad, esta accion solo retira PRUEBA PREPUBLICACION. No modifica reglas reales.";
             return;
         }
 
@@ -588,11 +641,11 @@ public partial class CommissionSettingsWindow : Window
             await _settings.DeactivatePrepublicationTestRuleAsync(rule.Id, _user, reason, _canEdit);
             await RefreshAllAsync();
             await RefreshAuditAsync();
-            EditorMessage.Text = "PRUEBA PREPUBLICACION quedo inactiva y el retiro quedo auditado.";
+            EditorMessageText = "PRUEBA PREPUBLICACION quedo inactiva y el retiro quedo auditado.";
         }
         catch (Exception ex)
         {
-            EditorMessage.Text = FriendlyError(ex);
+            EditorMessageText = FriendlyError(ex);
         }
     }
 
@@ -611,7 +664,10 @@ public partial class CommissionSettingsWindow : Window
         };
 
         var commissionBox = new TextBox { Text = current.CommissionPercent.ToString("0.##", CultureInfo.InvariantCulture), Margin = new Thickness(0, 4, 0, 12), ToolTip = "Escribe 10 para 10%." };
-        var fromPicker = new DatePicker { SelectedDate = DateTime.Today, Margin = new Thickness(0, 4, 0, 12), ToolTip = "Fecha desde la que aplica la nueva comisión." };
+        // Por omision la fecha es la vigencia que ya tiene la regla: asi el cambio CORRIGE esa
+        // comision en lugar de abrir otra regla. Si el operador pone una fecha posterior,
+        // entonces si se versiona (la vieja se cierra y nace una nueva vigencia).
+        var fromPicker = new DatePicker { SelectedDate = current.EffectiveFrom.Date, Margin = new Thickness(0, 4, 0, 12), ToolTip = "Déjala igual para corregir esta comisión. Ponle una fecha posterior solo si quieres abrir una vigencia nueva y conservar la anterior." };
         var reasonBox = new TextBox { Height = 76, TextWrapping = TextWrapping.Wrap, AcceptsReturn = true, Margin = new Thickness(0, 4, 0, 12), ToolTip = "Motivo obligatorio para auditoría." };
         var message = new TextBlock { Foreground = System.Windows.Media.Brushes.Firebrick, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 8) };
         var save = new Button { Content = "GUARDAR CAMBIO", Width = 150, Padding = new Thickness(10, 7, 10, 7), FontWeight = FontWeights.Bold, IsDefault = true };
@@ -648,7 +704,12 @@ public partial class CommissionSettingsWindow : Window
                     return;
                 }
 
-                var confirm = $"Confirmar cambio\n\n{title}\n\nAntes: {current.CommissionPercent:0.##}%\nAhora: {newPercent:0.##}%\nVigente desde: {from:dd/MM/yyyy}\nMotivo: {reason}\n\n¿Confirmar?";
+                var creaVigencia = from.Date > current.EffectiveFrom.Date;
+                var confirm = $"Confirmar cambio\n\n{title}\n\nAntes: {current.CommissionPercent:0.##}%\nAhora: {newPercent:0.##}%\nVigente desde: {from:dd/MM/yyyy}\n"
+                    + (creaVigencia
+                        ? "Se cierra la vigencia actual y nace una regla nueva.\n"
+                        : "Se corrige esta misma regla (no se crea otra).\n")
+                    + $"Motivo: {reason}\n\n¿Confirmar?";
                 if (MessageBox.Show(window, confirm, "Confirmar cambio", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 {
                     save.IsEnabled = true;
@@ -659,12 +720,15 @@ public partial class CommissionSettingsWindow : Window
                 {
                     CommissionPercent = newPercent,
                     EffectiveFrom = from.Date,
-                    EffectiveTo = null,
+                    EffectiveTo = creaVigencia ? null : current.EffectiveTo,
                     UpdatedBy = _user
                 };
-                await _settings.SaveRuleAsync(next, _user, reason, _canEdit);
+                if (creaVigencia)
+                    await _settings.SaveRuleAsync(next, _user, reason, _canEdit);
+                else
+                    await _settings.UpdateRuleAsync(next, _user, reason, _canEdit);
                 await RefreshAllAsync();
-                EditorMessage.Text = $"✓ Comisión actualizada correctamente: {current.Name} ahora muestra {newPercent:0.##}% desde {from:dd/MM/yyyy}.";
+                EditorMessageText = $"✓ Comisión actualizada correctamente: {current.Name} ahora muestra {newPercent:0.##}% desde {from:dd/MM/yyyy}.";
                 window.DialogResult = true;
                 window.Close();
 
@@ -690,15 +754,8 @@ public partial class CommissionSettingsWindow : Window
         if (!IsLoaded) return;
         if (SettingsTabs.SelectedIndex == 2)
             _ = RefreshAuditAsync();
-        if (SettingsTabs.SelectedIndex == 3)
+        if (SettingsTabs.SelectedIndex == 4)
             _ = RefreshDiagnosticsAsync();
-    }
-
-    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-
-    private void ToggleMaximize_Click(object sender, RoutedEventArgs e)
-    {
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();

@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Text.Json;
 using ControlTaxiDesktop.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.Sqlite;
@@ -598,6 +599,7 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
                     CONVERT(nvarchar(50), g.gafete) AS Numero,
                     CONVERT(nvarchar(50), g.matricula) AS Staff,
                     CONVERT(nvarchar(50), g.folioperacion) AS FolioOperacion,
+                    COALESCE(g.vendedor, '') AS Vendedor,
                     g.fecha AS FechaEntrega,
                     COALESCE(g.hora, g.fecha) AS FechaActividad,
                     CASE
@@ -644,6 +646,7 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
                 r.Estatus,
                 CASE WHEN r.Estatus = 'LIBRE' THEN '' ELSE r.Staff END AS Staff,
                 r.FolioOperacion,
+                r.Vendedor,
                 CASE WHEN r.Estatus = 'LIBRE' THEN '' ELSE COALESCE(a.unidad, '') END AS Unidad,
                 CASE WHEN r.Estatus = 'LIBRE' THEN '' ELSE COALESCE(NULLIF(a.telefono_taxista, ''), NULLIF(a.telefono_contacto, ''), '') END AS Telefono,
                 CASE WHEN r.Estatus = 'LIBRE' THEN '' ELSE COALESCE(a.nacionalidad, '') END AS Nacionalidad,
@@ -699,13 +702,14 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
                 reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                 reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
                 null,
-                reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
                 reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                 reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
                 reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
                 reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                reader.IsDBNull(7) ? string.Empty : reader.GetString(7)));
+                reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                Vendor: reader.IsDBNull(5) ? string.Empty : reader.GetString(5)));
         }
 
         return result;
@@ -962,7 +966,9 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
               COALESCE(no_show_count, 0) AS NoShowCount,
               COALESCE(total, 0) AS CashAmount,
               COALESCE(tarjeta, 0) AS CardAmount,
-              COALESCE(dolares, 0) AS DollarsAmount
+              COALESCE(dolares, 0) AS DollarsAmount,
+              COALESCE(detalle_json, '') AS DetailJson,
+              COALESCE(detalle_json, '') AS DetailJson
             FROM "mkt__dbo__AppMovilRegistro"
             WHERE COALESCE(folio_app, '') <> ''
               AND ($start IS NULL OR substr(COALESCE(fecha_operacion, fecha_creacion, ''), 1, 10) >= $start)
@@ -1048,7 +1054,8 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
                 Convert.ToInt32(row.GetValue(29), CultureInfo.InvariantCulture),
                 Convert.ToInt32(row.GetValue(30), CultureInfo.InvariantCulture),
                 Convert.ToInt32(row.GetValue(31), CultureInfo.InvariantCulture),
-                row.IsDBNull(32) ? 0 : Convert.ToInt32(row.GetValue(32), CultureInfo.InvariantCulture));
+                row.IsDBNull(32) ? 0 : Convert.ToInt32(row.GetValue(32), CultureInfo.InvariantCulture),
+                FormatSellerBadges(Text(row, 36)));
         },
             ("$start", start?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
             ("$end", end?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
@@ -1900,7 +1907,8 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
             AdultPassengers: row.AdultPassengers,
             YouthPassengers: row.YouthPassengers,
             ChildPassengers: row.ChildPassengers,
-            NoShowCount: row.NoShowCount);
+            NoShowCount: row.NoShowCount,
+            SellerBadges: FormatSellerBadges(row.DetailJson));
     }
 
     private static string BuildRelationPosFolio(string? currentPosFolio, IReadOnlyList<(string Ticket, decimal Total)> tickets)
@@ -1962,7 +1970,8 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
             row.AdultPassengers,
             row.YouthPassengers,
             row.ChildPassengers,
-            row.NoShowCount);
+            row.NoShowCount,
+            FormatSellerBadges(row.DetailJson));
 
     private static SqlRelationRow MapSqlRelationRow(LocalRelation relation) =>
         new(
@@ -2169,7 +2178,8 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
               COALESCE(a.adult_count, 0) AS AdultPassengers,
               COALESCE(a.youth_count, 0) AS YouthPassengers,
               COALESCE(a.minor_count, 0) AS ChildPassengers,
-              COALESCE(a.no_show_count, 0) AS NoShowCount
+              COALESCE(a.no_show_count, 0) AS NoShowCount,
+              COALESCE(a.detalle_json, '') AS DetailJson
             FROM app_base a
             {relationTicketApplyClause}
             ORDER BY COALESCE(a.fecha_operacion, a.fecha_creacion) DESC;
@@ -2221,7 +2231,8 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
                 Convert.ToInt32(reader.GetValue(30), CultureInfo.InvariantCulture),
                 Convert.ToInt32(reader.GetValue(31), CultureInfo.InvariantCulture),
                 Convert.ToInt32(reader.GetValue(32), CultureInfo.InvariantCulture),
-                Convert.ToInt32(reader.GetValue(33), CultureInfo.InvariantCulture)));
+                Convert.ToInt32(reader.GetValue(33), CultureInfo.InvariantCulture),
+                reader.IsDBNull(34) ? string.Empty : reader.GetString(34)));
         }
         return result;
     }
@@ -2663,7 +2674,7 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
         Amex
     }
 
-    private sealed record SqlRelationRow(long Id, string AppFolio, string OperationFolio, string PosFolio, string Badge, string Driver, string Vendor, decimal Payout, string Notes, string Source, string SourceUser, string DateText, string Hotel, string Origin, string Site, string Destination, string Unit, string Plates, string Phone, string Nationality, string TransportType, string PaymentMethod, string PayoutStatus, string PayoutTicket, string TaxistaId, string PayoutUser, string PayoutDate, decimal CommissionPaid, decimal PayoutPaid, int Passengers, int AdultPassengers, int YouthPassengers, int ChildPassengers, int NoShowCount);
+    private sealed record SqlRelationRow(long Id, string AppFolio, string OperationFolio, string PosFolio, string Badge, string Driver, string Vendor, decimal Payout, string Notes, string Source, string SourceUser, string DateText, string Hotel, string Origin, string Site, string Destination, string Unit, string Plates, string Phone, string Nationality, string TransportType, string PaymentMethod, string PayoutStatus, string PayoutTicket, string TaxistaId, string PayoutUser, string PayoutDate, decimal CommissionPaid, decimal PayoutPaid, int Passengers, int AdultPassengers, int YouthPassengers, int ChildPassengers, int NoShowCount, string DetailJson = "");
     private sealed record RelationPaymentBreakdown(decimal NonCard, decimal Card, decimal Amex, string Description)
     {
         public decimal Total => NonCard + Card + Amex;
@@ -3080,8 +3091,34 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
 
     private sealed record AppRecordForRelation(string DriverName, string Hotel, string Site, string Unit, string Plates, string Phone, string Nationality, string TransportType, string Notes, decimal Payout, DateTime? OperationDate, string TaxistaId);
     public async Task<long> SaveBadgeAsync(string number) => await SaveAsync("INSERT INTO LocalGafetes (Numero,Estatus) VALUES ($number,'Disponible') ON CONFLICT(Numero) DO UPDATE SET Numero=excluded.Numero RETURNING Id;", ("$number", Require(number, "El gafete")));
-    public async Task SaveBadgeRecordAsync(string staff, string number, string? operationFolio, string user)
+    public async Task SaveBadgeRecordAsync(string staff, string number, string? operationFolio, string user, string? vendor = null)
     {
+        // Prioriza SQL Server, igual que el resto del modulo (GetBadgesAsync,
+        // FindBadgeAsync): en produccion _sqlSource siempre esta presente y el
+        // SQLite local de abajo es solo el respaldo de pruebas/sin conexion.
+        // Antes este metodo SOLO escribia al SQLite local, asi que el boton
+        // GUARDAR de la pantalla de Gafetes no dejaba nada en la base real.
+        if (_sqlSource is not null)
+        {
+            await using var sqlConnection = await _sqlSource.OpenPosAsync();
+            await using var sqlCommand = sqlConnection.CreateCommand();
+            sqlCommand.CommandText = $"""
+                INSERT INTO {_sqlSource.PosTable("gafete")}
+                    (matricula, gafete, fecha, venta, hora, folioperacion, movimiento, usuario, vendedor)
+                VALUES
+                    (@staff, @badge, @date, 'A', @activity, @folio, 'ENTREGA', @user, @vendor);
+                """;
+            sqlCommand.Parameters.AddWithValue("@staff", string.IsNullOrWhiteSpace(staff) ? string.Empty : staff.Trim());
+            sqlCommand.Parameters.AddWithValue("@badge", Require(number, "El gafete"));
+            sqlCommand.Parameters.AddWithValue("@date", DateTime.Today);
+            sqlCommand.Parameters.AddWithValue("@activity", DateTime.Now);
+            sqlCommand.Parameters.AddWithValue("@folio", string.IsNullOrWhiteSpace(operationFolio) ? string.Empty : operationFolio.Trim());
+            sqlCommand.Parameters.AddWithValue("@user", string.IsNullOrWhiteSpace(user) ? string.Empty : user.Trim());
+            sqlCommand.Parameters.AddWithValue("@vendor", string.IsNullOrWhiteSpace(vendor) ? string.Empty : vendor.Trim());
+            await sqlCommand.ExecuteNonQueryAsync();
+            return;
+        }
+
         await using var connection = database.Open();
         if (await HasTableAsync(connection, "mkt__dbo__gafete"))
         {
@@ -3142,6 +3179,7 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
                 END AS Estatus,
                 CASE WHEN UPPER(COALESCE(g.venta, '')) = 'R' THEN '' ELSE CONVERT(nvarchar(50), g.matricula) END AS Staff,
                 CONVERT(nvarchar(50), g.folioperacion) AS FolioOperacion,
+                COALESCE(g.vendedor, '') AS Vendedor,
                 CASE WHEN UPPER(COALESCE(g.venta, '')) = 'R' THEN '' ELSE COALESCE(a.unidad, '') END AS Unidad,
                 CASE WHEN UPPER(COALESCE(g.venta, '')) = 'R' THEN '' ELSE COALESCE(NULLIF(a.telefono_taxista, ''), NULLIF(a.telefono_contacto, ''), '') END AS Telefono,
                 CASE WHEN UPPER(COALESCE(g.venta, '')) = 'R' THEN '' ELSE COALESCE(a.nacionalidad, '') END AS Nacionalidad,
@@ -3194,13 +3232,14 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
             reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
             reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
             null,
-            reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
             reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+            reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
             reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
             reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-            reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
             reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-            reader.IsDBNull(7) ? string.Empty : reader.GetString(7));
+            reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+            reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+            Vendor: reader.IsDBNull(5) ? string.Empty : reader.GetString(5));
     }
 
     public async Task AssignBadgeAsync(string number, long driverId, bool returnBadge)
@@ -3602,6 +3641,14 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
         await EnsureSqliteColumnAsync(connection, "mkt__dbo__AppMovilRegistro", "metodo_pago", "TEXT");
         await EnsureSqliteColumnAsync(connection, "mkt__dbo__AppMovilRegistro", "pago_comision", "REAL NOT NULL DEFAULT 0");
         await EnsureSqliteColumnAsync(connection, "mkt__dbo__AppMovilRegistro", "fecha_pago_comision", "TEXT");
+        // Trae el detalle que mando la app, incluidos los pares vendedor/gafete
+        // de la llegada. Si el espejo se importa desde SQL Server la columna ya
+        // viene; esta linea solo cubre las bases locales viejas.
+        await EnsureSqliteColumnAsync(connection, "mkt__dbo__AppMovilRegistro", "detalle_json", "TEXT");
+        // Trae el detalle que mando la app, incluidos los pares vendedor/gafete
+        // de la llegada. Si el espejo se importa desde SQL Server la columna ya
+        // viene; esta linea solo cubre las bases locales viejas.
+        await EnsureSqliteColumnAsync(connection, "mkt__dbo__AppMovilRegistro", "detalle_json", "TEXT");
     }
     private static async Task<string> EnsureAppFolioControlAsync(SqliteConnection connection, SqliteTransaction transaction, string originalFolio)
     {
@@ -3723,6 +3770,68 @@ public sealed class LocalOperationsRepository(LocalDatabase database)
         await using var alter = connection.CreateCommand();
         alter.CommandText = $"ALTER TABLE \"{EscapeSqliteIdentifier(table)}\" ADD COLUMN \"{EscapeSqliteIdentifier(column)}\" {definition};";
         await alter.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// Arma la linea "Luis Carmona - Gafete 101 | Ana Perez - Gafete 102" con los
+    /// pares vendedor/gafete que la app guardo en el detalle del registro. Una
+    /// llegada la pueden atender varios vendedores y un vendedor puede quedarse
+    /// con varios gafetes.
+    /// </summary>
+    private static string FormatSellerBadges(string? detailJson)
+    {
+        if (string.IsNullOrWhiteSpace(detailJson))
+            return string.Empty;
+
+        try
+        {
+            using var document = JsonDocument.Parse(detailJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return string.Empty;
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "sellerBadges", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (property.Value.ValueKind != JsonValueKind.Array)
+                    return string.Empty;
+
+                var parts = new List<string>();
+                foreach (var item in property.Value.EnumerateArray())
+                {
+                    if (item.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    var badge = string.Empty;
+                    var seller = string.Empty;
+                    foreach (var field in item.EnumerateObject())
+                    {
+                        if (string.Equals(field.Name, "badgeId", StringComparison.OrdinalIgnoreCase))
+                            badge = field.Value.ToString().Trim();
+                        else if (string.Equals(field.Name, "sellerName", StringComparison.OrdinalIgnoreCase))
+                            seller = field.Value.ToString().Trim();
+                    }
+
+                    if (badge.Length == 0 && seller.Length == 0)
+                        continue;
+
+                    if (seller.Length == 0)
+                        parts.Add($"Gafete {badge}");
+                    else if (badge.Length == 0)
+                        parts.Add(seller);
+                    else
+                        parts.Add($"{seller} - Gafete {badge}");
+                }
+
+                return string.Join(" | ", parts);
+            }
+
+            return string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     private static string EscapeSqliteIdentifier(string value) => value.Replace("\"", "\"\"", StringComparison.Ordinal);

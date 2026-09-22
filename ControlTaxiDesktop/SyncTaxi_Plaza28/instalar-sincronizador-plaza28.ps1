@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [switch]$Uninstall,
     [switch]$Status
@@ -140,13 +140,20 @@ $registeredMode = $null
 
 try {
     $startupTrigger = New-ScheduledTaskTrigger -AtStartup
+    # Ademas del arranque: cada 5 minutos se intenta levantar. Si el proceso se
+    # murio (cierre de sesion, reinicio de PowerShell, corte de energia), vuelve
+    # solo. Si ya esta corriendo, el candado del loop y MultipleInstances
+    # IgnoreNew impiden que haya dos.
+    $repeatTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
+        -RepetitionInterval (New-TimeSpan -Minutes 5) `
+        -RepetitionDuration (New-TimeSpan -Days 3650)
     $systemPrincipal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
     Register-ScheduledTask `
         -TaskName $taskName `
         -Description $description `
         -Action $action `
-        -Trigger $startupTrigger `
+        -Trigger @($startupTrigger, $repeatTrigger) `
         -Settings $settings `
         -Principal $systemPrincipal | Out-Null
 
@@ -157,13 +164,16 @@ catch {
 
     $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     $logonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+    $repeatTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
+        -RepetitionInterval (New-TimeSpan -Minutes 5) `
+        -RepetitionDuration (New-TimeSpan -Days 3650)
     $userPrincipal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Highest
 
     Register-ScheduledTask `
         -TaskName $taskName `
         -Description ($description + ' Modo fallback: usuario actual al iniciar sesion.') `
         -Action $action `
-        -Trigger $logonTrigger `
+        -Trigger @($logonTrigger, $repeatTrigger) `
         -Settings $settings `
         -Principal $userPrincipal | Out-Null
 

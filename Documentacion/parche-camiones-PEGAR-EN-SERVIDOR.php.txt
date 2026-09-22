@@ -1,0 +1,63 @@
+    // Registros crudos de camiones, para que el sincronizador de Plaza 28 los copie a
+    // SQL Server (dbo.registroscamiones). El endpoint de arriba devuelve el resumen ya
+    // sumado; este devuelve renglon por renglon, que es lo que necesita el sincronizador
+    // para poder actualizar sin recalcular nada.
+    if ($path === '/api/pos/camiones/registros') {
+        $camiones = camiones_db();
+        $desde = clean(query('desde') ?? '');
+        $hasta = clean(query('hasta') ?? '');
+        if ($desde === '') $desde = date('Y-m-d', strtotime('-6 days'));
+        if ($hasta === '') $hasta = date('Y-m-d');
+
+        $filasRegistros = rows($camiones, "
+            SELECT r.Id_registros,
+                   r.Id_chofer,
+                   r.Camion,
+                   r.Pax,
+                   r.Pax_valido,
+                   r.Comision,
+                   r.Fecha,
+                   r.Hora,
+                   UPPER(TRIM(COALESCE(ch.Empresa, ''))) AS empresa
+            FROM registros r
+            LEFT JOIN choferes ch ON r.Id_chofer = ch.Id_chofer
+            WHERE r.Fecha >= ? AND r.Fecha <= ?
+            ORDER BY r.Id_registros
+            LIMIT 20000", [$desde, $hasta]);
+
+        // PDO regresa los enteros de MySQL como texto; el sincronizador los mete en
+        // columnas int/bigint de SQL Server, asi que se convierten aqui.
+        json_response(array_map(static fn(array $fila): array => [
+            'idRegistro' => (int)$fila['Id_registros'],
+            'idChofer' => (string)$fila['Id_chofer'],
+            'camion' => (string)$fila['Camion'],
+            'pax' => (int)$fila['Pax'],
+            'paxValido' => (int)$fila['Pax_valido'],
+            'comision' => (int)$fila['Comision'],
+            'fecha' => (string)$fila['Fecha'],
+            'hora' => (string)$fila['Hora'],
+            'empresa' => (string)$fila['empresa'],
+        ], $filasRegistros));
+    }
+
+    // Catalogo de choferes de camiones. El sincronizador lo copia a dbo.choferes, que es
+    // de donde sale la empresa (AUTOCAR / MAYA CARIBE / TURICUN) del cuadre.
+    if ($path === '/api/pos/camiones/choferes') {
+        $camiones = camiones_db();
+        $filasChoferes = rows($camiones, "
+            SELECT Id_chofer, Clave, Nombre, Empresa, NumeroTarjeta, Banco, Telefono, activo
+            FROM choferes
+            ORDER BY Id_chofer");
+
+        json_response(array_map(static fn(array $fila): array => [
+            'idChofer' => (string)$fila['Id_chofer'],
+            'clave' => (string)($fila['Clave'] ?? ''),
+            'nombre' => (string)($fila['Nombre'] ?? ''),
+            'empresa' => (string)($fila['Empresa'] ?? ''),
+            'numeroTarjeta' => (string)($fila['NumeroTarjeta'] ?? ''),
+            'banco' => (string)($fila['Banco'] ?? ''),
+            'telefono' => (string)($fila['Telefono'] ?? ''),
+            'activo' => (string)($fila['activo'] ?? 'S'),
+        ], $filasChoferes));
+    }
+

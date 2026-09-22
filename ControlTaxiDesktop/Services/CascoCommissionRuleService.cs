@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,7 +22,16 @@ public sealed record CascoCommissionRule(
     decimal? ComisionDeportiva,
     bool Activo,
     string ReglaNombre,
-    bool RequiereValidacion);
+    bool RequiereValidacion,
+    // Que se le descuenta a la venta antes de sacar el porcentaje, regla por regla. Salen del
+    // Excel de comisiones de Casco (hoja CASCO) confirmado con el negocio el 19/09/2026:
+    //  - la retencion del banco (19 %) solo va con tarjeta, salvo MAJESTIC que la lleva siempre;
+    //  - la dejada solo se descuenta en BIKE CID, TAXIS/VANS y FARMACIAS.
+    // Antes el calculo aplicaba las cuatro cosas a todas las reglas por igual.
+    bool AplicaRetencion = true,
+    bool AplicaDejada = true,
+    bool AplicaGasto = true,
+    bool AplicaDegustacion = true);
 
 public sealed record CascoCommissionPreview(
     string BranchCode,
@@ -154,11 +163,13 @@ public sealed class CascoCommissionRuleService
         var gasto = gastoOverride ?? 0m;
         var degustacion = degustacionOverride ?? 0m;
         var (agencyAmount, taxistaAmount, vendorAmount, sportAmount, commissionAmount) = CalculateAmounts(rule, ventaTotal, payout, gasto, degustacion);
+        if (rule is null && !match.IsAmbiguous)
+            commissionAmount = CalculateDefaultCommission(ventaTotal);
 
         var detail = match.IsAmbiguous
             ? match.Detail
             : rule is null
-            ? "Sin regla activa. Comision calculada en 0.00."
+            ? $"Sin regla activa para {proveedor}. Se aplica el 10 % de respaldo: {commissionAmount.ToString("0.00", CultureInfo.InvariantCulture)}."
             : string.Join(" | ", new[]
             {
                 $"Regla: {rule.ReglaNombre}",
@@ -211,6 +222,24 @@ public sealed class CascoCommissionRuleService
                 return Array.Empty<CascoCommissionRule>();
         }
 
+        // Las banderas se agregaron el 19/09/2026. Van en un comando aparte porque SQL Server
+        // compila el lote completo antes de ejecutarlo: un ALTER y un SELECT a la columna nueva
+        // en el mismo lote falla con "nombre de columna no valido". NULL = comportamiento de
+        // antes, para que una regla vieja no cambie de calculo solo por existir la columna.
+        await using (var ensureColumns = new SqlCommand("""
+            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaRetencion') IS NULL
+                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaRetencion BIT NULL;
+            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaDejada') IS NULL
+                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaDejada BIT NULL;
+            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaGasto') IS NULL
+                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaGasto BIT NULL;
+            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaDegustacion') IS NULL
+                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaDegustacion BIT NULL;
+            """, connection))
+        {
+            await ensureColumns.ExecuteNonQueryAsync(cancellationToken);
+        }
+
         const string sql = """
             SELECT
                 Id,
@@ -226,7 +255,11 @@ public sealed class CascoCommissionRuleService
                 ComisionDeportiva,
                 Activo,
                 ReglaNombre,
-                RequiereValidacion
+                RequiereValidacion,
+                CAST(COALESCE(AplicaRetencion, ConTarjeta) AS bit) AS AplicaRetencion,
+                CAST(COALESCE(AplicaDejada, 1) AS bit) AS AplicaDejada,
+                CAST(COALESCE(AplicaGasto, 1) AS bit) AS AplicaGasto,
+                CAST(COALESCE(AplicaDegustacion, 1) AS bit) AS AplicaDegustacion
             FROM dbo.ControlTaxiComisiones
             WHERE BranchCode = N'CV'
               AND Activo = 1
@@ -252,7 +285,11 @@ public sealed class CascoCommissionRuleService
                 reader.IsDBNull(10) ? null : reader.GetDecimal(10),
                 reader.GetBoolean(11),
                 reader.GetString(12),
-                reader.GetBoolean(13)));
+                reader.GetBoolean(13),
+                reader.GetBoolean(14),
+                reader.GetBoolean(15),
+                reader.GetBoolean(16),
+                reader.GetBoolean(17)));
         }
 
         return rows;
@@ -349,12 +386,17 @@ public sealed class CascoCommissionRuleService
         CascoCommissionRule? rule = null)
     {
         var (specialDiscount, specialDescription) = CalculateSpecialDiscount(rule, ventaTotal);
+        // Sin regla se conserva el calculo anterior: retencion y los tres descuentos siempre.
+        var aplicaRetencion = rule?.AplicaRetencion ?? true;
+        var aplicaDejada = rule?.AplicaDejada ?? true;
+        var aplicaGasto = rule?.AplicaGasto ?? true;
+        var aplicaDegustacion = rule?.AplicaDegustacion ?? true;
         return Calculator.Calculate(new CascoCommissionCalculationInput(
             ventaTotal,
-            Math.Max(dejada, 0m),
-            Math.Max(gasto, 0m),
-            Math.Max(degustacion, 0m),
-            CascoCommissionCalculator.DefaultDiscountRate,
+            aplicaDejada ? Math.Max(dejada, 0m) : 0m,
+            aplicaGasto ? Math.Max(gasto, 0m) : 0m,
+            aplicaDegustacion ? Math.Max(degustacion, 0m) : 0m,
+            aplicaRetencion ? CascoCommissionCalculator.DefaultDiscountRate : 0m,
             porcentajeComision,
             tipoComision,
             specialDiscount,
@@ -373,6 +415,27 @@ public sealed class CascoCommissionRuleService
         }
 
         return (0m, string.Empty);
+    }
+
+    /// <summary>
+    /// Comision de un registro ya resuelto contra las reglas. Si ninguna regla aplica se usa el
+    /// 10 % de respaldo -- el mismo numero que Casco mostraba antes de tener reglas activas --
+    /// en lugar de cero. Asi una unidad que todavia no se configura (FARMACIAS quedo pendiente
+    /// el 19/09/2026) sigue cobrando como siempre, en vez de desaparecer en cuanto se activan
+    /// las demas.
+    /// </summary>
+    public static decimal ResolveCommissionAmount(
+        CascoCommissionRuleMatch match,
+        decimal ventaTotal,
+        decimal dejada = 0m,
+        decimal gasto = 0m,
+        decimal degustacion = 0m)
+    {
+        if (match.IsAmbiguous)
+            return 0m;
+        return match.Rule is null
+            ? CalculateDefaultCommission(ventaTotal)
+            : CalculateAmounts(match.Rule, ventaTotal, dejada, gasto, degustacion).CommissionAmount;
     }
 
     public static decimal CalculateDefaultCommission(decimal ventaTotal) =>

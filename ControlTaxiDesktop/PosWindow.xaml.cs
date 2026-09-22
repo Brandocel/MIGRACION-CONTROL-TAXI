@@ -500,11 +500,28 @@ public partial class PosWindow : Window
             .Where(g => g.Rows.Count > 0)
             .ToList();
 
+        // Lo que se entrega es el NETO del folio: los tickets pendientes MENOS el ticket que salio
+        // en negativo (el de venta mas alta, cuando la dejada o el descuento fijo de $500 no se
+        // alcanzo a cubrir). Antes el negativo se quedaba fuera porque no "se puede pagar", y el
+        // taxista cobraba los otros tickets completos como si el faltante no existiera.
+        decimal NetoFolio(IEnumerable<LocalCommissionBrowserRow> rows) =>
+            rows.Sum(x => x.PagoComision - x.Pagado);
+
+        var enNegativo = folioGroups.Where(g => g.Rows.Any(x => x.PuedePagar) && NetoFolio(g.Rows) <= 0m).ToList();
+        folioGroups = folioGroups.Where(g => g.Rows.Any(x => x.PuedePagar) && NetoFolio(g.Rows) > 0m).ToList();
+
         // Solo los tickets que realmente tienen saldo pendiente entran al cobro.
         var rowsToPay = folioGroups.SelectMany(g => g.Rows).Where(x => x.PuedePagar).ToList();
-        if (rowsToPay.Count == 0) throw new InvalidOperationException("Selecciona al menos una comision pendiente.");
+        if (rowsToPay.Count == 0)
+        {
+            if (enNegativo.Count > 0)
+                throw new InvalidOperationException(
+                    $"El folio {enNegativo[0].Folio} sale en negativo ({NetoFolio(enNegativo[0].Rows):C2}): el ticket de venta más alta no alcanzó a cubrir el descuento y se come la comisión de los demás. No hay nada que pagar.");
+            throw new InvalidOperationException("Selecciona al menos una comision pendiente.");
+        }
 
-        var total = rowsToPay.Sum(x => x.Saldo);
+        var negativos = folioGroups.SelectMany(g => g.Rows).Where(x => x.PagoComision - x.Pagado < 0m).ToList();
+        var total = folioGroups.Sum(g => NetoFolio(g.Rows));
         // El dialogo desglosa folio por folio en vez de mostrar solo un total. Quien cobra
         // necesita ver QUE se va a pagar antes de aceptar, sobre todo porque al pagar un ticket
         // se paga el folio completo y eso no se adivina desde la tabla.
@@ -517,13 +534,27 @@ public partial class PosWindow : Window
         {
             var pendientes = group.Rows.Where(x => x.PuedePagar).ToList();
             var taxista = group.Rows.Select(x => x.Nombre).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
-            detalle.AppendLine($"Folio {group.Folio}      {pendientes.Sum(x => x.Saldo):C2}");
+            detalle.AppendLine($"Folio {group.Folio}      {NetoFolio(group.Rows):C2}");
             if (!string.IsNullOrWhiteSpace(taxista)) detalle.AppendLine($"   {taxista}");
             detalle.AppendLine(pendientes.Count == 1 ? "   1 ticket" : $"   {pendientes.Count:N0} tickets del mismo folio");
+            foreach (var negativo in group.Rows.Where(x => x.PagoComision - x.Pagado < 0m))
+                detalle.AppendLine($"   MENOS ticket {negativo.Ticket} en negativo: {negativo.PagoComision - negativo.Pagado:C2}");
             detalle.AppendLine();
         }
 
         detalle.AppendLine($"TOTAL A PAGAR: {total:C2}");
+
+        if (negativos.Count > 0)
+        {
+            detalle.AppendLine();
+            detalle.AppendLine("Los tickets en negativo ya van restados: el taxista recibe la comisión de los demás tickets menos lo que le faltó al ticket de venta más alta.");
+        }
+
+        if (enNegativo.Count > 0)
+        {
+            detalle.AppendLine();
+            detalle.AppendLine($"NO se pagan {enNegativo.Count:N0} folio(s) que salen en negativo: {string.Join(", ", enNegativo.Select(g => g.Folio))}.");
+        }
 
         if (folioGroups.Any(g => g.Rows.Count(x => x.PuedePagar) > 1))
         {
@@ -553,15 +584,24 @@ public partial class PosWindow : Window
             await _pos.MarkCommissionPaidInPosAsync(group.Folio, folioCommissionTotal, _user);
 
             // Y el snapshot local se guarda por CADA ticket del folio, no solo por el primero.
-            foreach (var row in group.Rows.Where(x => x.PuedePagar))
+            // Se abona el NETO (lo que se entrego de verdad), empezando por el ticket mayor: si
+            // el folio trae un ticket en negativo, el ultimo positivo queda con el faltante.
+            var restante = NetoFolio(group.Rows);
+            foreach (var row in group.Rows.Where(x => x.PuedePagar).OrderByDescending(x => x.Saldo))
             {
                 await _pos.EnsureCommissionSnapshotAsync(row, _user);
-                await _pos.PayCommissionAsync(row.Folio, row.Saldo, _user);
+                var abono = Math.Min(row.Saldo, restante);
+                // PayCommissionAsync toma 0 como "salda todo": sin nada que abonar, no se llama.
+                if (abono > 0m) await _pos.PayCommissionAsync(row.Folio, abono, _user);
+                restante -= abono;
             }
         }
 
+        // El ticket impreso lleva tambien el renglon negativo, para que la suma impresa sea lo
+        // que realmente se entrego.
         var ticketRows = rowsToPay
-            .Select(row => row with { Pagado = row.PagoComision, Saldo = 0m, Estatus = "PAGADA" })
+            .Concat(negativos)
+            .Select(row => row with { Pagado = row.PagoComision, Saldo = 0m, Estatus = row.PagoComision < 0m ? "DESCONTADA" : "PAGADA" })
             .ToArray();
         await RefreshCommissionBrowserAsync(resetPage: true);
         var preview = new TicketPreviewWindow(string.Join(
@@ -570,7 +610,9 @@ public partial class PosWindow : Window
         preview.ShowDialog();
         WebDialogWindow.Show(
             this,
-            $"Se pagaron {rowsToPay.Count:N0} comisiones de {folioGroups.Count:N0} folio(s) por {total:C2}. Estado: PAGADA.",
+            negativos.Count > 0
+                ? $"Se pagaron {rowsToPay.Count:N0} comisiones de {folioGroups.Count:N0} folio(s) por {total:C2}, ya restados {negativos.Count:N0} ticket(s) en negativo. Estado: PAGADA."
+                : $"Se pagaron {rowsToPay.Count:N0} comisiones de {folioGroups.Count:N0} folio(s) por {total:C2}. Estado: PAGADA.",
             "Control Taxi",
             "OK");
     }
@@ -982,7 +1024,8 @@ public partial class PosWindow : Window
         // en palabras simples porque el panel lo usan capturistas, no contadores.
         var retencion = s.VentaTotal * s.DescuentoPorcentaje;
         var neto = s.VentaTotal - retencion;
-        var baseComision = neto - s.Dejada - s.BebidasCajasRegalo - s.Reparacion - s.Degustacion - s.GastosVarios;
+        var baseComision = neto - s.DescuentoExtra - s.Dejada - s.BebidasCajasRegalo - s.Reparacion - s.Degustacion - s.GastosVarios;
+        var descuentoFijo = s.DescuentoFijoLlegada > 0m;
         var pesos = "C2";
         var cultura = CultureInfo.CurrentCulture;
         var campos = new List<CommissionDetailField>
@@ -993,11 +1036,29 @@ public partial class PosWindow : Window
 
         if (retencion > 0m)
         {
-            campos.Add(new(
-                $"Menos lo que cobra el banco ({s.DescuentoPorcentaje.ToString("P0", cultura)})",
-                "− " + retencion.ToString(pesos, cultura),
-                "Pagaron con " + (string.IsNullOrWhiteSpace(s.FormaPago) ? "tarjeta" : s.FormaPago.ToLowerInvariant()) + ", y el banco se queda con esa parte",
-                DetailKind.Resta));
+            // El titulo ya no lleva el porcentaje solo. Cuando el ticket se paga con dos
+            // tarjetas, ese numero es el PROMEDIO de las dos tasas, y se leia como si se hubiera
+            // aplicado parejo a todo: el 08/09/2026 reportaron que "al AMEX le quita 21 % en vez
+            // de 24 %" cuando en realidad fue 24 % a los $150 de AMEX y 19 % a los $240 de
+            // tarjeta. Ahora se muestra el desglose de cada forma de pago con su tasa, y el
+            // promedio se nombra como lo que es.
+            // Con dos o mas formas de pago el porcentaje del titulo es un promedio y hay que
+            // decirlo; con una sola es la tasa real y no hace falta aclarar nada.
+            var variasFormas = s.DesgloseRetencion.Contains('·');
+            var desglose = string.IsNullOrWhiteSpace(s.DesgloseRetencion)
+                ? "Pagaron con " + (string.IsNullOrWhiteSpace(s.FormaPago) ? "tarjeta" : s.FormaPago.ToLowerInvariant()) + ", y el banco se queda con esa parte"
+                : variasFormas
+                    ? s.DesgloseRetencion + "  →  cada forma de pago lleva su propia tasa, y se suman"
+                    : s.DesgloseRetencion;
+            // Con varias formas de pago NO se pone porcentaje en el titulo. Quien usa esta
+            // pantalla no rehace la cuenta: ve un numero grande y da por hecho que esa fue la
+            // tasa aplicada. El promedio (21 %) no le sirve a nadie y es justo lo que provoco el
+            // reporte del 08/09/2026. En su lugar va el desglose, que si se puede verificar.
+            var titulo = variasFormas
+                ? "Menos lo que cobra el banco"
+                : $"Menos lo que cobra el banco ({s.DescuentoPorcentaje.ToString("P0", cultura)})";
+
+            campos.Add(new(titulo, "− " + retencion.ToString(pesos, cultura), desglose, DetailKind.Resta));
         }
         else
         {
@@ -1005,7 +1066,25 @@ public partial class PosWindow : Window
                 "Pagaron en efectivo, así que no se le quita nada por el banco"));
         }
 
-        if (s.Dejada > 0m)
+        if (s.DescuentoExtra > 0m)
+        {
+            campos.Add(new($"Menos el descuento extra ({(s.DescuentoExtraPorcentaje / 100m).ToString("P0", cultura)})",
+                "− " + s.DescuentoExtra.ToString(pesos, cultura),
+                "Regla especial de esta unidad: se quita este porcentaje de la venta además de lo del banco", DetailKind.Resta));
+        }
+
+        if (s.Dejada > 0m && descuentoFijo)
+        {
+            // Regla especial (Majestic, 19/09/2026): no es la dejada capturada, es una cantidad
+            // fija por llegada. Se nombra asi para que no busquen $500 en la dejada del taxista.
+            var llegadas = s.Dejada / s.DescuentoFijoLlegada;
+            var cuantas = llegadas > 1m && llegadas == decimal.Truncate(llegadas)
+                ? $" × {llegadas:0} llegadas"
+                : string.Empty;
+            campos.Add(new("Menos el descuento fijo por llegada", "− " + s.Dejada.ToString(pesos, cultura),
+                $"Regla de esta unidad: {s.DescuentoFijoLlegada.ToString("C0", cultura)} por llegada{cuantas}, aunque la venta sea chica. Se le quita al ticket de venta más alta del folio", DetailKind.Resta));
+        }
+        else if (s.Dejada > 0m)
         {
             campos.Add(new("Menos la dejada del taxista", "− " + s.Dejada.ToString(pesos, cultura),
                 "Lo que ya se le pagó por traer a los pax. Si el folio trae varios tickets, a cada uno le toca su parte", DetailKind.Resta));
@@ -1016,16 +1095,21 @@ public partial class PosWindow : Window
             // La dejada se cobra una sola vez por folio y se le carga al ticket de mayor venta.
             // Sin decirlo aqui, en los demas tickets el renglon se veria vacio y pareceria que
             // la dejada se perdio.
-            campos.Add(new("La dejada no se le quita a este ticket", 0m.ToString(pesos, cultura),
-                $"Ya se le quitó completa al ticket {s.PayoutTicket}, que es el de venta más alta de este folio"));
+            campos.Add(new(descuentoFijo ? "El descuento fijo no se le quita a este ticket" : "La dejada no se le quita a este ticket",
+                0m.ToString(pesos, cultura),
+                $"Ya se le quitó completo al ticket {s.PayoutTicket}, que es el de venta más alta de este folio"));
         }
         else if (!string.IsNullOrWhiteSpace(s.EstatusDejada)
                  && !string.Equals(s.EstatusDejada, "SIN DEJADA", StringComparison.OrdinalIgnoreCase))
         {
             // Sin esta linea la dejada simplemente desaparece de la cuenta y parece un error:
             // abajo dice que la dejada esta pagada, pero arriba no se resto en ningun lado.
+            // Antes este letrero decia siempre "la compra no llega a $400", aunque la venta fuera
+            // de $8,100 y el motivo real fuera que el folio no traia dejada.
             campos.Add(new("La dejada NO se le quita", 0m.ToString(pesos, cultura),
-                $"La compra no llega a {CommissionGlobalRules.PayoutDeductionMinSale.ToString("C0", cultura)}. Cuando la venta es chica no se le descuenta la dejada"));
+                s.VentaTotal <= CommissionGlobalRules.PayoutDeductionMinSale
+                    ? $"La compra no pasa de {CommissionGlobalRules.PayoutDeductionMinSale.ToString("C0", cultura)}. Cuando la venta es chica no se le descuenta la dejada"
+                    : "Este folio no trae dejada registrada, así que no hay nada que quitar"));
         }
 
         void Gasto(string etiqueta, decimal importe, string ayuda)
@@ -1041,12 +1125,22 @@ public partial class PosWindow : Window
 
         campos.Add(new("SOBRE ESTO SE SACA LA COMISIÓN", baseComision.ToString(pesos, cultura),
             "Es lo que quedó después de todos los descuentos", DetailKind.Resultado));
+        var porPorcentaje = s.PagoComision - s.Bono;
         campos.Add(new($"Le toca el {s.PorcentajeComision.ToString("P0", cultura)} de eso",
-            s.PagoComision.ToString(pesos, cultura),
-            s.PagoComision < 0m
-                ? "Salió en negativo: la dejada fue mayor que la venta, así que el taxista queda debiendo"
-                : "Ésta es la comisión de este ticket",
+            porPorcentaje.ToString(pesos, cultura),
+            porPorcentaje < 0m
+                ? descuentoFijo
+                    ? "Salió en negativo: el descuento fijo fue mayor que la venta, así que el taxista queda debiendo"
+                    : "Salió en negativo: la dejada fue mayor que la venta, así que el taxista queda debiendo"
+                : s.Bono > 0m ? "Comisión por el porcentaje" : "Ésta es la comisión de este ticket",
             DetailKind.Pago));
+        if (s.Bono > 0m)
+        {
+            campos.Add(new("Más el bono por llegada", "+ " + s.Bono.ToString(pesos, cultura),
+                "Regla especial de esta unidad: cantidad fija que se suma a la comisión"));
+            campos.Add(new("Comisión de este ticket", s.PagoComision.ToString(pesos, cultura),
+                "Porcentaje más bono", DetailKind.Pago));
+        }
 
         campos.Add(new("YA PAGADO", "", "", DetailKind.Titulo));
         campos.Add(new("Se le ha pagado", s.Pagado.ToString(pesos, cultura), "De la comisión de este ticket"));
@@ -1898,7 +1992,39 @@ public partial class PosWindow : Window
             camiones,
             dialog.FileName,
             authoritativeCommissionRows);
+
+        // El mismo cuadre que se acaba de guardar se publica en Hoka Solutions. Se manda con los
+        // datos que ya estan en memoria, no con una consulta nueva, para que el Excel y la
+        // pantalla de Hoka no puedan salir con numeros distintos.
+        await PublicarCuadreEnHokaAsync(
+            ReportStartDate,
+            ReportEndDate,
+            _cachedReportRelations,
+            commissions,
+            _cachedReportCuts,
+            camiones,
+            authoritativeCommissionRows);
     });
+
+    /// <summary>
+    /// Sube el cuadre a Hoka. Si falla, avisa pero no interrumpe: el Excel ya quedo guardado y el
+    /// cuadre se vuelve a publicar en la siguiente exportacion.
+    /// </summary>
+    private async Task PublicarCuadreEnHokaAsync(
+        DateTime start,
+        DateTime end,
+        IReadOnlyList<LocalRelation> rows,
+        IReadOnlyList<LocalCommission> commissions,
+        IReadOnlyList<LocalCut> cuts,
+        IReadOnlyList<LocalCuadreResumenRow> camiones,
+        IReadOnlyList<LocalCommissionBrowserRow>? authoritativeCommissions)
+    {
+        var resultado = await CuadrePushService.PublicarAsync(
+            _output, start, end, rows, commissions, cuts, camiones, _branchCode, authoritativeCommissions);
+
+        if (!resultado.Ok)
+            WebDialogWindow.Show(this, "El Excel se guardo bien, pero no se pudo publicar en Hoka. " + resultado.Mensaje, "Control Taxi", "!");
+    }
     private async void OpenReportSearch_Click(object sender, RoutedEventArgs e) => await RunAsync(LoadReportCenterAsync);
     private async void OpenReportMovementsModule_Click(object sender, RoutedEventArgs e) => await RunAsync(LoadReportCenterAsync);
     private void OpenReportCommissionsModule_Click(object sender, RoutedEventArgs e)

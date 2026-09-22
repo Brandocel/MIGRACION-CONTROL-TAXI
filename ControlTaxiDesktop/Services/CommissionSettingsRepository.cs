@@ -165,13 +165,82 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         }
 
         var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
-        return await ReadRulesAsync($"""
+        var stored = await ReadRulesAsync($"""
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
                    PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId
             FROM CommissionSettingsRules
             {where}
             ORDER BY Category, Name, EffectiveFrom DESC;
             """, parameters.ToArray());
+
+        // Las comisiones por transporte ya no salen de la base de cada maquina: son el catalogo
+        // fijo del programa (HardcodedTransportCatalog), igual en todos los equipos. Se sustituyen
+        // aqui, en la lectura, para que la tabla, el simulador y el Excel salgan todos de la misma
+        // fuente y no haya forma de ver una cosa en pantalla y otra en el calculo.
+        var wantsTransport = string.IsNullOrWhiteSpace(category)
+            || string.Equals(category.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase);
+        if (!wantsTransport) return stored;
+
+        return stored
+            .Where(x => !string.Equals(x.Category, TransportCategory, StringComparison.OrdinalIgnoreCase))
+            .Concat(FilterFixedTransportRules(search, active, date))
+            .OrderBy(x => x.Category, StringComparer.Ordinal)
+            .ThenBy(x => x.Name, StringComparer.Ordinal)
+            .ThenByDescending(x => x.EffectiveFrom)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Categoria cuyas reglas viven en el programa y no en la base local.
+    /// </summary>
+    private const string TransportCategory = "TRANSPORTE";
+
+    /// <summary>
+    /// Aplica al catalogo fijo los mismos filtros que la consulta hace en la base, para que la
+    /// pantalla se comporte igual que antes (buscador, activos/inactivos y vigentes al dia).
+    /// </summary>
+    private static IEnumerable<CommissionSettingsRule> FilterFixedTransportRules(string? search, bool? active, DateTime? date)
+    {
+        var rules = HardcodedTransportCatalog.AsRules().AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var needle = search.Trim();
+            rules = rules.Where(x =>
+                x.Code.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                || x.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)
+                || x.Category.Contains(needle, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (active is not null)
+        {
+            rules = rules.Where(x => x.Active == active.Value);
+        }
+
+        if (date is not null)
+        {
+            var day = date.Value.Date;
+            rules = rules.Where(x => x.EffectiveFrom.Date <= day
+                                     && (x.EffectiveTo is null || x.EffectiveTo.Value.Date >= day));
+        }
+
+        return rules;
+    }
+
+    /// <summary>
+    /// El catalogo de transportes es fijo: se cambia en el programa y se reinstala, no maquina por
+    /// maquina. Permitir editarlo aqui devolveria el problema que resolvio: cada equipo con su
+    /// propia tarifa y el mismo folio dando cifras distintas segun desde donde se mire.
+    /// </summary>
+    private static void EnsureCategoryIsEditable(CommissionSettingsRule rule)
+    {
+        if (string.Equals(rule.Category?.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Las comisiones por transporte son del catálogo fijo del sistema y son iguales en "
+                + "todas las máquinas, así que no se editan desde aquí. Para cambiar una tarifa hay "
+                + "que actualizarla en el sistema y reinstalar.");
+        }
     }
 
     public async Task<IReadOnlyList<CommissionPaymentConfiguration>> GetActivePaymentConfigurationsAsync(DateTime? date = null)
@@ -271,6 +340,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await InitializeAsync();
         if (!canEdit)
             throw new UnauthorizedAccessException("El usuario no tiene permiso para editar configuración de comisiones.");
+        EnsureCategoryIsEditable(rule);
         ValidateRule(rule, reason);
         await using var connection = database.Open();
         await using var transaction = connection.BeginTransaction();
@@ -288,6 +358,65 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         {
             await InsertRuleAsync(connection, transaction, rule, user);
         }
+
+        await WriteAuditAsync(connection, transaction, current, rule, user, reason);
+        await transaction.CommitAsync();
+    }
+
+    /// <summary>
+    /// Corrige la regla que ya existe, sobre el mismo Id, sin abrir una vigencia nueva.
+    ///
+    /// SaveRuleAsync versiona: cierra la regla anterior e inserta otra, y por eso exige que la
+    /// nueva vigencia empiece despues. Eso sirve para "de hoy en adelante cobramos otro
+    /// porcentaje", pero no para corregir un dato mal capturado: ahi el operador quiere arreglar
+    /// ESA regla, no dejar dos. El historial no se pierde: el cambio se sigue escribiendo campo
+    /// por campo en CommissionSettingsAudit.
+    /// </summary>
+    public async Task UpdateRuleAsync(CommissionSettingsRule rule, string user, string reason, bool canEdit = true)
+    {
+        await InitializeAsync();
+        if (!canEdit)
+            throw new UnauthorizedAccessException("El usuario no tiene permiso para editar configuración de comisiones.");
+        EnsureCategoryIsEditable(rule);
+        if (rule.Id <= 0)
+            throw new InvalidOperationException("Solo se puede corregir una regla que ya existe. Usa Nueva regla para dar de alta.");
+        ValidateRule(rule, reason);
+
+        await using var connection = database.Open();
+        await using var transaction = connection.BeginTransaction();
+        var current = await GetRuleByIdAsync(connection, transaction, rule.Id)
+            ?? throw new InvalidOperationException("No se encontro la regla seleccionada.");
+        // La consulta de traslape ya excluye la propia regla (Id <> $id).
+        await EnsureNoOverlappingRuleAsync(connection, transaction, rule);
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            UPDATE CommissionSettingsRules
+            SET Category=$category,
+                Code=$code,
+                Name=$name,
+                CommissionPercent=$commission,
+                CashRetentionPercent=$cash,
+                CardRetentionPercent=$card,
+                AmexRetentionPercent=$amex,
+                PaymentKind=$paymentKind,
+                AppliesPayout=$payout,
+                AppliesExpense=$expense,
+                Active=$active,
+                EffectiveFrom=$from,
+                EffectiveTo=$to,
+                UpdatedAt=$updatedAt,
+                UpdatedBy=$updatedBy,
+                Notes=$notes,
+                PayoutAmount=$payoutAmount,
+                PaxKind=$paxKind,
+                MonedaId=$monedaId
+            WHERE Id=$id;
+            """;
+        AddRuleParameters(command, rule, user);
+        command.Parameters.AddWithValue("$id", rule.Id);
+        await command.ExecuteNonQueryAsync();
 
         await WriteAuditAsync(connection, transaction, current, rule, user, reason);
         await transaction.CommitAsync();

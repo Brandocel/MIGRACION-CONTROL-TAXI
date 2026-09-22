@@ -7,5 +7,5 @@
   "MktDatabase": "mkt",
   "PullLimit": 500,
   "IntervalSeconds": 15,
-  "MaxRunSeconds": 180
+  "MaxRunSeconds": 900
 }

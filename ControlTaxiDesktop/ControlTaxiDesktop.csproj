@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
@@ -41,7 +41,9 @@
   <ItemGroup>
     <!-- Sincronizador SyncTaxi: se copia junto al ejecutable para que el
          Desktop lo lance al arrancar y traiga los datos de Hostinger a la base configurada. -->
-    <Content Include="SyncTaxi\**\*">
+    <!-- sync.local.config.json es la configuracion de la maquina de desarrollo
+         (servidor, usuario y PullOnly de pruebas). No debe viajar en los paquetes. -->
+    <Content Include="SyncTaxi\**\*" Exclude="SyncTaxi\sync.local.config.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Sincronizador Plaza 28: solo se publican los archivos operativos.
@@ -74,6 +76,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="SyncTaxi_Plaza28\CONFIGURAR-CREDENCIAL-PLAZA28.cmd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="SyncTaxi_Plaza28\revisar-sincronizador-plaza28.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="SyncTaxi_Plaza28\REVISAR-SINCRONIZADOR-PLAZA28.cmd">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

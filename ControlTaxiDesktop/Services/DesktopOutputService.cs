@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -1158,11 +1158,7 @@ public sealed partial class DesktopOutputService
                 var childPassengers = g.Sum(x => Math.Max(0, x.ChildPassengers));
                 var salieron = noShowCount > 0 ? noShowCount : childPassengers;
                 var entraron = Math.Max(0, pax - salieron);
-                var unidades = g
-                    .Select(x => Clean(x.Unit, x.Plates, x.Badge, x.TaxistaId))
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Count();
+                var unidades = CountArrivals(g);
                 var salesGrouped = g.GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase).ToArray();
                 var dejada = salesGrouped.Sum(group => group.Max(item => item.Payout ?? 0m));
                 var comision = tieneComisionAutoritativa
@@ -1257,11 +1253,7 @@ public sealed partial class DesktopOutputService
                 var pax = group.Sum(item => item.Passengers);
                 var entraron = group.Count();
                 var salieron = group.Count(item => item.Payout.GetValueOrDefault() > 0m && item.PayoutPaid <= 0m);
-                var unidades = group
-                    .Select(item => Clean(item.Unit, item.Plates, item.Badge, item.TaxistaId))
-                    .Where(item => !string.IsNullOrWhiteSpace(item))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Count();
+                var unidades = CountArrivals(group);
                 var salesGrouped = group.GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase).ToArray();
                 var dejada = salesGrouped.Sum(match => match.Max(item => item.Payout ?? 0m));
                 var comision = salesGrouped.Sum(match => match.Max(item => item.Commission));
@@ -1280,11 +1272,7 @@ public sealed partial class DesktopOutputService
         var pax = rows.Sum(item => item.Passengers);
         var entraron = rows.Count;
         var salieron = rows.Count(item => item.Payout.GetValueOrDefault() > 0m && item.PayoutPaid <= 0m);
-        var unidades = rows
-            .Select(item => Clean(item.Unit, item.Plates, item.Badge, item.TaxistaId))
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
+        var unidades = CountArrivals(rows);
         var salesGrouped = rows.GroupBy(BuildRelationSaleKey, StringComparer.OrdinalIgnoreCase).ToArray();
         var dejada = salesGrouped.Sum(group => group.Max(item => item.Payout ?? 0m));
         var comision = salesGrouped.Sum(group => group.Max(item => item.Commission));
@@ -1357,7 +1345,15 @@ public sealed partial class DesktopOutputService
 
     private static string ResolveConcentratedCategoryCode(string? transport)
     {
-        var text = (transport ?? string.Empty).ToUpperInvariant().Trim();
+        // El tipo de transporte llega de la captura con espacios de mas: en los registros del
+        // 2026-09-01 la unidad viene como "UBER  ALIANZA", con DOS espacios. Sin colapsarlos,
+        // Contains("UBER ALIANZA") daba falso y la unidad caia en el grupo generico UBER: los
+        // 9 pax, 3 unidades y $2,545 de venta de UBER ALIANZA se sumaban a UBER y su renglon
+        // salia en cero. Se colapsa cualquier espacio o tabulador repetido antes de comparar.
+        var text = string.Join(
+            ' ',
+            (transport ?? string.Empty).Split(default(char[]), StringSplitOptions.RemoveEmptyEntries))
+            .ToUpperInvariant();
         if (text.Contains("VERDE")) return "VER";
         if (text.Contains("ROJO")) return "ROJ";
         if (text.Contains("AZUL")) return "AZU";
@@ -1367,7 +1363,13 @@ public sealed partial class DesktopOutputService
         if (text.Contains("UBER")) return "UBER";
         if (text.Contains("MAJESTIC")) return "MAJ";
         if (text.Contains("SALMORAN")) return "SALAN";
-        if (text.Contains("TRAVEL EXPERIENCE") || text.Contains("TRAVER EXPERIENCE")) return "TEXP";
+        // La unidad llega cortada a 10 caracteres desde la captura, asi que "TRAVEL EXPERIENCE"
+        // aparece como "TRAVEL EXP", y ademas se han visto las erratas "TRAVER EXPERIENCE",
+        // "TRAVEL EXPERIENCIE" y "TRAVEL EXPEROENCE". Todas son la misma empresa. Reconocer el
+        // prefijo las cubre a todas; antes solo entraba el nombre completo y el resto caia en
+        // OTRO: el folio 5176 del 2026-09-03 ("TRAVEL EXP") y el 4406 del 2026-08-20
+        // ("TRAVEL EXPERIENCIE").
+        if (text.StartsWith("TRAVEL") || text.StartsWith("TRAVER")) return "TEXP";
         if (text.Contains("CALLE") || text == "S/N" || text.StartsWith("GUIA") || text.StartsWith("GUÍA")) return "CALLE";
         if (text.Contains("VANTR") || text.Contains("TRANSPORTADORA")) return "VANS";
         if (text == "VAN" || text.StartsWith("VAN ") || text.StartsWith("VAN\t")) return "VER";
@@ -1443,6 +1445,22 @@ public sealed partial class DesktopOutputService
 
     private static string Clean(params string?[] values) =>
         values.Select(x => x?.Trim()).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)) ?? string.Empty;
+
+    /// <summary>
+    /// La columna UNIDADES del cuadre cuenta LLEGADAS, no vehiculos distintos: si la misma
+    /// unidad llega dos veces en el dia, cuenta dos veces. Decision del negocio confirmada el
+    /// 2026-09-02, para que empate con el Excel de operacion; antes se contaban unidades
+    /// distintas y por eso taxis verdes salia 18 contra 21, y TURIBUS ADO 1 contra 2 (el mismo
+    /// autobus 7825 llego dos veces).
+    ///
+    /// Se cuentan folios de operacion distintos y NO filas: una llegada con varios tickets trae
+    /// una fila por ticket, y contarlas todas inflaria el numero.
+    /// </summary>
+    private static int CountArrivals(IEnumerable<LocalRelation> rows) => rows
+        .Select(row => Clean(row.OperationFolio, row.AppFolio, row.PosFolio))
+        .Where(key => !string.IsNullOrWhiteSpace(key))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Count();
 
     private static string CleanTicketDetail(string? saleDetail, string? posFolio, string? operationFolio)
     {

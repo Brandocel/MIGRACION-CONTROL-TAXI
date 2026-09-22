@@ -1,0 +1,74 @@
+﻿[
+    {
+        "ruta":  "/",
+        "estado":  200,
+        "elementos":  2,
+        "muestra":  "{\"mensaje\":\"API HOKA Taxis MySQL activa OK VENDEDORES 2026-07-29\",\"fecha\":\"2026-09-09T17:15:16+00:00\"}"
+    },
+    {
+        "ruta":  "/health",
+        "estado":  200,
+        "elementos":  3,
+        "muestra":  "{\"ok\":true,\"mysql\":true,\"fecha\":\"2026-09-09T17:15:16+00:00\"}"
+    },
+    {
+        "ruta":  "/api/taxis/registros?dateFrom=2026-09-01\u0026dateTo=2026-09-09",
+        "estado":  200,
+        "elementos":  415,
+        "muestra":  "[{\"recordId\":\"5452\",\"catalogId\":900002383,\"badgeId\":\"269\",\"driverName\":\"EMANUEL NOH POH\",\"driverPhone\":\"9831247366\",\"contactPhone\":\"9831247366\",\"nationality\":\"n"
+    },
+    {
+        "ruta":  "/api/taxis/catalogo",
+        "estado":  404,
+        "elementos":  -1,
+        "muestra":  "Error en el servidor remoto: (404) No se encontró."
+    },
+    {
+        "ruta":  "/api/taxis/tarifas",
+        "estado":  200,
+        "elementos":  34,
+        "muestra":  "[{\"serviceType\":\"7 TOUR\",\"description\":\"7 TOUR\",\"baseAmount\":\"200.00\",\"extraPersonAmount\":\"0.00\",\"origin\":\"\",\"minPassengers\":null,\"maxPassengers\":null},{\"servic"
+    },
+    {
+        "ruta":  "/api/taxis/taxistas",
+        "estado":  200,
+        "elementos":  4,
+        "muestra":  "{\"items\":[{\"catalogId\":900001142,\"badgeId\":\"60067\",\"driverName\":\"0\",\"phoneNumber\":\"\",\"plate\":\"\",\"vehicleModel\":\"\",\"unitNumber\":\"\",\"serviceType\":\"\",\"site\":\"\",\"ho"
+    },
+    {
+        "ruta":  "/api/taxis/vendedores",
+        "estado":  200,
+        "elementos":  141,
+        "muestra":  "[{\"vendorKey\":\"ABRAHAM JUAREZ BOTELLO\",\"name\":\"ABRAHAM JUAREZ BOTELLO\",\"phoneNumber\":\"\",\"commissionPercent\":\"100.0000\"},{\"vendorKey\":\"ALAN DANIEL RODRIGUEZ LORI"
+    },
+    {
+        "ruta":  "/api/pos/camiones",
+        "estado":  200,
+        "elementos":  1,
+        "muestra":  "[{\"empresa\":\"AUTOCAR\",\"pax\":264,\"entraron\":225,\"salieron\":39,\"unidades\":38,\"dejada\":2980}]"
+    },
+    {
+        "ruta":  "/api/pos/transportes",
+        "estado":  200,
+        "elementos":  32,
+        "muestra":  "[{\"code\":\"7 TOUR\",\"name\":\"7 TOUR\"},{\"code\":\"GUIA\",\"name\":\"GUIAS\"},{\"code\":\"MAJESTIC\",\"name\":\"MAJESTIC EXPEDITIONS\"},{\"code\":\"MAYAN\",\"name\":\"MAYAN AMAZING\"},{\"co"
+    },
+    {
+        "ruta":  "/api/pos/guias",
+        "estado":  200,
+        "elementos":  0,
+        "muestra":  "[]"
+    },
+    {
+        "ruta":  "/api/pos/cuadre?sucursal=plaza28\u0026dateFrom=2026-09-09\u0026dateTo=2026-09-09",
+        "estado":  404,
+        "elementos":  -1,
+        "muestra":  "Error en el servidor remoto: (404) No se encontró."
+    },
+    {
+        "ruta":  "/api/pos/cuadre/disponibles",
+        "estado":  404,
+        "elementos":  -1,
+        "muestra":  "Error en el servidor remoto: (404) No se encontró."
+    }
+]

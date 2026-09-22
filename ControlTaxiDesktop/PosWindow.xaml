@@ -249,7 +249,7 @@
       <TabControl x:Name="PosTabs" Grid.Row="1" Margin="0" Padding="0" BorderThickness="0" Background="Transparent" ItemContainerStyle="{StaticResource HiddenWebTabItem}">
         <TabItem Header="Ventas">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-          <Grid Margin="10" MinWidth="1120">
+          <Grid Margin="10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
             <Grid Grid.Column="0">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
@@ -325,15 +325,15 @@
                     <TextBlock DockPanel.Dock="Top" Text="TICKET ACTUAL / VENTA SELECCIONADA" Style="{StaticResource SectionTitle}"/>
                     <DataGrid x:Name="ProductsGrid" IsReadOnly="True" AutoGenerateColumns="False" CanUserAddRows="False" HeadersVisibility="Column">
                       <DataGrid.Columns>
-                        <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="58"/>
-                        <DataGridTextColumn Header="Producto" Binding="{Binding Producto}" Width="220"/>
-                        <DataGridTextColumn Header="Departamento" Binding="{Binding Departamento}" Width="150"/>
-                        <DataGridTextColumn Header="Precio" Binding="{Binding Precio, StringFormat=C2}" Width="90"/>
-                        <DataGridTextColumn Header="Importe" Binding="{Binding Importe, StringFormat=C2}" Width="95"/>
-                        <DataGridTextColumn Header="Referencia" Binding="{Binding Referencia}" Width="130"/>
-                        <DataGridTextColumn Header="Factura" Binding="{Binding Factura}" Width="110"/>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding FechaVenta}" Width="135"/>
-                        <DataGridTextColumn Header="Origen" Binding="{Binding OrigenVenta}" Width="80"/>
+                        <DataGridTextColumn Header="Cant." Binding="{Binding Cantidad}" Width="45*" MinWidth="42"/>
+                        <DataGridTextColumn Header="Producto" Binding="{Binding Producto}" Width="170*" MinWidth="110"/>
+                        <DataGridTextColumn Header="Departamento" Binding="{Binding Departamento}" Width="120*" MinWidth="80"/>
+                        <DataGridTextColumn Header="Precio" Binding="{Binding Precio, StringFormat=C2}" Width="75*" MinWidth="65"/>
+                        <DataGridTextColumn Header="Importe" Binding="{Binding Importe, StringFormat=C2}" Width="78*" MinWidth="68"/>
+                        <DataGridTextColumn Header="Referencia" Binding="{Binding Referencia}" Width="100*" MinWidth="70"/>
+                        <DataGridTextColumn Header="Factura" Binding="{Binding Factura}" Width="88*" MinWidth="60"/>
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding FechaVenta}" Width="105*" MinWidth="75"/>
+                        <DataGridTextColumn Header="Origen" Binding="{Binding OrigenVenta}" Width="65*" MinWidth="55"/>
                       </DataGrid.Columns>
                     </DataGrid>
                   </DockPanel>
@@ -385,7 +385,7 @@
 
         <TabItem Header="Pagos">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-          <Grid Margin="10" MinWidth="1180">
+          <Grid Margin="10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
             <Grid Grid.Column="0">
               <Grid.RowDefinitions>
@@ -848,7 +848,7 @@
 
         <TabItem Header="Cortes">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-          <Grid Margin="10" MinWidth="1320">
+          <Grid Margin="10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
             <Grid Grid.Column="0">
               <Grid.RowDefinitions>
@@ -1155,7 +1155,7 @@
 
         <TabItem Header="Auditoria">
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-          <Grid Margin="10" MinWidth="1320">
+          <Grid Margin="10">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
             <Grid Grid.Column="0">
               <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>

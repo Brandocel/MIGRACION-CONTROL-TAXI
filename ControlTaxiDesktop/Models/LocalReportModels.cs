@@ -44,7 +44,20 @@ public sealed record LocalCommissionBrowserRow(
     // autorizado, incluida la misma persona que autorizo.
     string AutorizadoEn = "",
     string AutorizadoPor = "",
-    string PagadoPor = "")
+    string PagadoPor = "",
+    // Desglose de la retencion del banco, forma de pago por forma de pago, tal como la aplico
+    // el calculo. La pantalla mostraba solo el porcentaje promedio y operacion lo leia como si
+    // se hubiera aplicado esa tasa pareja a todo el ticket: el 08/09/2026 reportaron que "al
+    // AMEX le esta quitando 21% en vez de 24%" cuando en realidad se le quito 24% a la parte
+    // de AMEX y 19% al resto, y 21% era solo el promedio resultante.
+    string DesgloseRetencion = "",
+    // Campos extra de la unidad (HardcodedTransportCatalog.Extras), para que el detalle diga de
+    // donde sale cada peso. DescuentoFijoLlegada es la tarifa por llegada (p. ej. $500 de
+    // Majestic); lo que se le resto a ESTE ticket va en Dejada.
+    decimal DescuentoFijoLlegada = 0m,
+    decimal DescuentoExtra = 0m,
+    decimal DescuentoExtraPorcentaje = 0m,
+    decimal Bono = 0m)
 {
     public bool EstaAutorizada => !string.IsNullOrWhiteSpace(AutorizadoEn);
     public bool PuedeAutorizar => PagoComision > 0m && !EstaAutorizada && !string.Equals(Estatus, "PAGADA", StringComparison.OrdinalIgnoreCase);
@@ -199,4 +212,13 @@ public sealed record LocalRegistroDiarioRow(
     string Notas,
     decimal Total,
     decimal Efectivo,
-    decimal Tarjeta);
+    decimal Tarjeta,
+    // Vendedores que atendieron la llegada con el gafete de cada uno, tal como
+    // se capturaron en la app. Vacio en registros viejos de un solo vendedor.
+    string Vendedores = "")
+{
+    /// <summary>La misma lista pero un vendedor por renglon, para la celda de la tabla.</summary>
+    public string VendedoresLineas => string.IsNullOrWhiteSpace(Vendedores)
+        ? string.Empty
+        : string.Join(Environment.NewLine, Vendedores.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+}

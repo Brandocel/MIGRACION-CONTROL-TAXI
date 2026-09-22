@@ -314,16 +314,6 @@
       <Setter Property="Foreground" Value="#0F4AB6"/>
       <Setter Property="BorderBrush" Value="#C9DAF7"/>
     </Style>
-    <Style x:Key="BadgeGridActionButton" TargetType="Button" BasedOn="{StaticResource RelationPrimaryButton}">
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="MinWidth" Value="74"/>
-      <Setter Property="MinHeight" Value="34"/>
-      <Setter Property="Padding" Value="10,7"/>
-      <Setter Property="Margin" Value="0,0,6,6"/>
-      <Setter Property="Background" Value="#1347B8"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="#0D368A"/>
-    </Style>
     </ResourceDictionary>
   </Window.Resources>
 
@@ -421,6 +411,14 @@
                     <DataGridTextColumn Header="Hora" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding HoraTexto}" Width="70"/>
                     <DataGridTextColumn Header="Pax" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Pax}" Width="55"/>
                     <DataGridTextColumn Header="Taxista" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Taxista}" Width="190"/>
+                    <!-- Un vendedor por linea: "LUIS CRUZ - Gafete 205" / "ABRAHAM JUAREZ BOTELLO - Gafete 217". -->
+                    <DataGridTemplateColumn Header="Vendedores / Gafetes" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="260">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                          <TextBlock Text="{Binding VendedoresLineas}" ToolTip="{Binding Vendedores}" TextWrapping="Wrap"/>
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nacionalidad}" Width="110"/>
                     <DataGridTextColumn Header="Tipo" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding TipoOperacion}" Width="110"/>
                   </DataGrid.Columns>
@@ -446,6 +444,7 @@
                     <TextBlock x:Name="RegistroSelectedFolioHeader" FontSize="14" FontWeight="Black" Foreground="#123E6E" Margin="0,0,0,8"/>
                     <WrapPanel>
                       <StackPanel Margin="4"><TextBlock Text="GAFETE" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="RegistroDetailGafete" FontWeight="Black" TextWrapping="Wrap"/></StackPanel>
+                      <StackPanel Margin="4" MaxWidth="360"><TextBlock Text="VENDEDORES / GAFETES" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="RegistroDetailVendedores" FontWeight="Black" TextWrapping="Wrap"/></StackPanel>
                       <StackPanel Margin="4"><TextBlock Text="FUENTE" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="RegistroDetailFuente" FontWeight="Black" TextWrapping="Wrap"/></StackPanel>
                       <StackPanel Margin="4"><TextBlock Text="USUARIO ORIGEN" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="RegistroDetailUsuarioOrigen" FontWeight="Black" TextWrapping="Wrap"/></StackPanel>
                       <StackPanel Margin="4"><TextBlock Text="HOTEL" FontSize="10" FontWeight="Bold" Foreground="#526A83"/><TextBlock x:Name="RegistroDetailHotel" FontWeight="Black" TextWrapping="Wrap"/></StackPanel>
@@ -686,114 +685,152 @@
         </TabItem>
 
         <TabItem Header="Gafetes">
+          <!-- Sin Viewbox+StackPanel de ancho fijo (como Relaciones): ese armado
+               maquetaba a 1520px y luego ESCALABA todo hacia abajo, asi el texto se
+               veia chico en vez de reacomodarse al ancho real de la ventana. -->
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-          <Grid Margin="10">
-            <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Top">
-          <StackPanel Width="1520">
+          <StackPanel Margin="14">
 
-            <Border Margin="0,0,0,18" CornerRadius="22" Padding="16" BorderBrush="#0B3D9B" BorderThickness="1">
-              <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                  <GradientStop Color="#0A3D99" Offset="0"/>
-                  <GradientStop Color="#1855CB" Offset="0.56"/>
-                  <GradientStop Color="#0B3C99" Offset="1"/>
-                </LinearGradientBrush>
-              </Border.Background>
+            <!-- Encabezado homologado con Comisiones y Relacion Ticket-Taxista: tarjeta
+                 plana (sin degradado ni botones pildora) con icono + titulo a la izquierda
+                 y acciones cuadradas a la derecha. Antes era una tarjeta alta con esquinas
+                 de radio 22 y botones tipo pildora en dos variantes (grande/compacta); se
+                 deja solo un WrapPanel que se acomoda solo, igual que las otras pantallas. -->
+            <Border Style="{StaticResource SquareHeaderCard}">
               <Grid>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto"/>
-                  <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
-                  <Border Width="62" Height="62" CornerRadius="15" Background="#1747A9" BorderBrush="#81B5FF" BorderThickness="1.2" Margin="0,0,14,0">
-                    <Viewbox Margin="12">
-                      <TextBlock Text="🪪" Foreground="White"/>
-                    </Viewbox>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,18,0">
+                  <Border Style="{StaticResource SquareHeaderIconTile}">
+                    <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconBadge}" Stroke="White" Width="21" Height="21"/>
                   </Border>
                   <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="LIBERACION DE GAFETES" FontSize="18" FontWeight="Black" Foreground="White"/>
-                    <TextBlock Text="Control visual de captura, búsqueda y regreso de gafetes" FontSize="12" Foreground="#D3E2FF" Margin="0,4,0,0"/>
+                    <TextBlock Text="LIBERACIÓN DE GAFETES" FontSize="16" FontWeight="Black" Foreground="White"/>
+                    <TextBlock Text="Control de captura, búsqueda y regreso de gafetes" FontSize="11" Foreground="#BBD3F8" Margin="0,3,0,0"/>
                   </StackPanel>
                 </StackPanel>
-                <WrapPanel Grid.Row="1" HorizontalAlignment="Left" VerticalAlignment="Center" ItemHeight="44">
-                  <WrapPanel x:Name="BadgeActionsLarge">
-                    <Button Content="BUSCAR" Style="{StaticResource RelationPrimaryButton}" Click="RefreshBadges_Click"/>
-                    <Button Content="GUARDAR" Style="{StaticResource RelationSuccessButton}" Click="SaveBadge_Click"/>
-                    <Button Content="REINICIO" Style="{StaticResource RelationActionButtonBase}" Click="ResetBadges_Click"/>
-                    <Button Content="NUEVO" Style="{StaticResource RelationActionButtonBase}" Click="NewBadge_Click"/>
-                    <Button Content="REGRESO" Style="{StaticResource RelationGoldButton}" Click="ReturnBadge_Click"/>
-                    <Button Content="CSV" Style="{StaticResource RelationActionButtonBase}" Click="ExportBadgesCsv_Click"/>
-                    <Button Content="IMPRIMIR" Style="{StaticResource RelationActionButtonBase}" Click="PrintBadges_Click"/>
-                    <Button Content="MENU" Style="{StaticResource RelationActionButtonBase}" Click="CloseWindow_Click"/>
-                  </WrapPanel>
-                  <WrapPanel x:Name="BadgeActionsCompact" Visibility="Collapsed">
-                    <Button Content="BUSCAR" Width="92" Style="{StaticResource WebInlineActionButton}" Click="RefreshBadges_Click"/>
-                    <Button Content="GUARDAR" Width="92" Style="{StaticResource WebInlineSaveButton}" Click="SaveBadge_Click"/>
-                    <Button Content="REINICIO" Width="92" Style="{StaticResource WebInlineActionButton}" Click="ResetBadges_Click"/>
-                    <Button Content="NUEVO" Width="82" Style="{StaticResource WebInlineActionButton}" Click="NewBadge_Click"/>
-                    <Button Content="REGRESO" Width="92" Style="{StaticResource WebInlineGoldButton}" Click="ReturnBadge_Click"/>
-                    <Button Content="CSV" Width="70" Style="{StaticResource WebInlineGreenButton}" Click="ExportBadgesCsv_Click"/>
-                    <Button Content="IMPRIMIR" Width="92" Style="{StaticResource WebInlineActionButton}" Click="PrintBadges_Click"/>
-                    <Button Content="MENU" Width="82" Style="{StaticResource WebInlineActionButton}" Click="CloseWindow_Click"/>
-                  </WrapPanel>
+                <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                  <Button Style="{StaticResource SquareToolbarGhostButton}" Click="RefreshBadges_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconSearch}" Stroke="White" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="BUSCAR" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarSuccessButton}" Click="SaveBadge_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconFile}" Stroke="White" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="GUARDAR" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarButton}" Click="ResetBadges_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconRefresh}" Stroke="#0F3E95" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="REINICIO" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarButton}" Click="NewBadge_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconFilePlus}" Stroke="#0F3E95" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="NUEVO" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarGoldButton}" Click="ReturnBadge_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconChevronLeft}" Stroke="#8A5600" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="REGRESO" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarButton}" Click="ExportBadgesCsv_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconFile}" Stroke="#0F3E95" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="CSV" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarButton}" Click="PrintBadges_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconReceipt}" Stroke="#0F3E95" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="IMPRIMIR" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Style="{StaticResource SquareToolbarDangerButton}" Click="CloseWindow_Click">
+                    <StackPanel Orientation="Horizontal">
+                      <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconPower}" Stroke="White" Width="13" Height="13" Margin="0,0,7,0"/>
+                      <TextBlock Text="MENU" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <!-- Placeholders vacios: SetAdaptiveActions(...) en el code-behind los
+                       sigue referenciando para todas las pestanas, pero ya no hace falta
+                       la variante compacta con el WrapPanel de arriba. -->
+                  <StackPanel x:Name="BadgeActionsLarge" Visibility="Collapsed"/>
+                  <StackPanel x:Name="BadgeActionsCompact" Visibility="Collapsed"/>
                 </WrapPanel>
               </Grid>
             </Border>
 
-            <Border Style="{StaticResource RelationPanelCard}">
+            <Border Style="{StaticResource SquareFilterCard}">
               <StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                  <TextBlock Text="≣" FontSize="16" Foreground="#1B56D7" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                  <TextBlock Text="CAPTURA / FILTROS" Style="{StaticResource RelationSectionCaption}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                  <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconFilter}" Stroke="#0F3E95" Margin="0,0,9,0"/>
+                  <TextBlock Text="CAPTURA / FILTROS" FontSize="12" FontWeight="Black" Foreground="#16326B" VerticalAlignment="Center"/>
                 </StackPanel>
                 <WrapPanel>
                   <StackPanel Width="300" Margin="0,0,18,18">
-                    <TextBlock Text="Matricula" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="BadgeStaff" Style="{StaticResource RelationTextInput}"/>
+                    <TextBlock Text="MATRICULA" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeStaff" Style="{StaticResource DashboardTextInput}"/>
                     </Border>
                   </StackPanel>
                   <StackPanel Width="220" Margin="0,0,18,18">
-                    <TextBlock Text="Gafete" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="BadgeNumber" Style="{StaticResource RelationTextInput}"/>
+                    <TextBlock Text="GAFETE" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeNumber" Style="{StaticResource DashboardTextInput}"/>
                     </Border>
                   </StackPanel>
                   <StackPanel Width="280" Margin="0,0,18,18">
-                    <TextBlock Text="Folio operacion" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="BadgeOperationFolio" Style="{StaticResource RelationTextInput}"/>
+                    <TextBlock Text="FOLIO OPERACION" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeOperationFolio" Style="{StaticResource DashboardTextInput}"/>
+                    </Border>
+                  </StackPanel>
+                  <!-- Quien entrega el gafete en mano, no el usuario logueado en el
+                       escritorio (que suele ser una cuenta compartida/generica). -->
+                  <StackPanel Width="260" Margin="0,0,18,18">
+                    <TextBlock Text="VENDEDOR QUE ENTREGA" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeVendor" Style="{StaticResource DashboardTextInput}"/>
                     </Border>
                   </StackPanel>
 
                   <StackPanel Width="220" Margin="0,0,18,18">
-                    <TextBlock Text="Fecha desde" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <DatePicker x:Name="BadgeStart" Style="{StaticResource RelationDateInput}"/>
+                    <TextBlock Text="FECHA DESDE" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <DatePicker x:Name="BadgeStart" Style="{StaticResource DashboardDateInput}"/>
                     </Border>
                   </StackPanel>
                   <StackPanel Width="220" Margin="0,0,18,18">
-                    <TextBlock Text="Fecha hasta" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <DatePicker x:Name="BadgeEnd" Style="{StaticResource RelationDateInput}"/>
+                    <TextBlock Text="FECHA HASTA" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <DatePicker x:Name="BadgeEnd" Style="{StaticResource DashboardDateInput}"/>
                     </Border>
                   </StackPanel>
                   <StackPanel Width="260" Margin="0,0,18,18">
-                    <TextBlock Text="Buscar matricula" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="BadgeStaffSearch" Style="{StaticResource RelationTextInput}"/>
+                    <TextBlock Text="BUSCAR MATRICULA" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeStaffSearch" Style="{StaticResource DashboardTextInput}"/>
                     </Border>
                   </StackPanel>
                   <StackPanel Width="240" Margin="0,0,18,18">
-                    <TextBlock Text="Buscar gafete" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="BadgeSearch" Style="{StaticResource RelationTextInput}"/>
+                    <TextBlock Text="BUSCAR GAFETE" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeSearch" Style="{StaticResource DashboardTextInput}"/>
                     </Border>
                   </StackPanel>
                   <StackPanel Width="240" Margin="0,0,0,18">
-                    <TextBlock Text="Buscar folio" Style="{StaticResource RelationFieldLabel}"/>
-                    <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12">
-                      <TextBox x:Name="BadgeOperationSearch" Style="{StaticResource RelationTextInput}"/>
+                    <TextBlock Text="BUSCAR FOLIO" Style="{StaticResource SquareFieldLabel}"/>
+                    <Border Style="{StaticResource SquareFieldBorder}">
+                      <TextBox x:Name="BadgeOperationSearch" Style="{StaticResource DashboardTextInput}"/>
                     </Border>
                   </StackPanel>
                 </WrapPanel>
@@ -802,18 +839,18 @@
 
             <Border Style="{StaticResource RelationPanelCard}">
               <StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
-                  <TextBlock Text="↺" FontSize="16" Foreground="#1B56D7" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                  <TextBlock Text="REGRESO DE GAFETES EN BLOQUE" Style="{StaticResource RelationSectionCaption}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                  <Path Style="{StaticResource LineIcon}" Data="{StaticResource IconRefresh}" Stroke="#0F3E95" Margin="0,0,9,0"/>
+                  <TextBlock Text="REGRESO DE GAFETES EN BLOQUE" FontSize="12" FontWeight="Black" Foreground="#16326B" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock Text="Escanea y presiona Enter; repite con cada gafete." Style="{StaticResource RelationFieldLabel}"/>
-                <Border Background="#FFFFFF" BorderBrush="#CAD8EE" BorderThickness="1" CornerRadius="12" Margin="0,0,0,10">
-                  <TextBox x:Name="BadgeBulkScan" Height="42" ToolTip="Escanea y presiona Enter; repite con cada gafete" KeyDown="BadgeBulkScan_KeyDown" TextChanged="BadgeBulkScan_TextChanged" LostKeyboardFocus="BadgeBulkScan_LostKeyboardFocus" Style="{StaticResource RelationTextInput}"/>
+                <TextBlock Text="ESCANEA Y PRESIONA ENTER; REPITE CON CADA GAFETE" Style="{StaticResource SquareFieldLabel}"/>
+                <Border Style="{StaticResource SquareFieldBorder}" Margin="0,0,0,10">
+                  <TextBox x:Name="BadgeBulkScan" Height="42" ToolTip="Escanea y presiona Enter; repite con cada gafete" KeyDown="BadgeBulkScan_KeyDown" TextChanged="BadgeBulkScan_TextChanged" LostKeyboardFocus="BadgeBulkScan_LostKeyboardFocus" Style="{StaticResource DashboardTextInput}"/>
                 </Border>
                 <TextBlock x:Name="BadgeBulkInfoText" Margin="0,2,0,12" FontSize="11" Foreground="#52677F" TextWrapping="Wrap"/>
-                <Border Background="#FFFFFF" BorderBrush="#D4E0EC" BorderThickness="1" CornerRadius="14" Padding="12" Margin="0,0,0,12">
+                <Border Background="#F7FAFF" BorderBrush="#D7E2F2" BorderThickness="1" Padding="12" Margin="0,0,0,12">
                   <StackPanel>
-                    <TextBlock Text="GAFETES ESCANEADOS" FontSize="11" FontWeight="Bold" Foreground="#425A73" Margin="0,0,0,8"/>
+                    <TextBlock Text="GAFETES ESCANEADOS" FontSize="11" FontWeight="Black" Foreground="#5A7096" Margin="0,0,0,8"/>
                     <ItemsControl x:Name="BadgeScannedItems">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -822,7 +859,7 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                          <Border Background="#F5F9FF" BorderBrush="#B8CCE4" BorderThickness="1" CornerRadius="12" Padding="10,7" Margin="0,0,0,6" HorizontalAlignment="Stretch">
+                          <Border Background="#FFFFFF" BorderBrush="#D3DCEC" BorderThickness="1" Padding="10,7" Margin="0,0,0,6" HorizontalAlignment="Stretch">
                             <Grid>
                               <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -832,6 +869,7 @@
                                 <TextBlock FontWeight="Black" Foreground="#064EA2" Text="{Binding Number, StringFormat=Gafete {0}}"/>
                                 <WrapPanel Margin="0,4,0,0">
                                   <TextBlock FontSize="10" Foreground="#52677F" Margin="0,0,14,2" Text="{Binding Staff, StringFormat=Taxista {0}}"/>
+                                  <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B5FA5" Margin="0,0,14,2" Text="{Binding Vendor, StringFormat=Vendedor {0}}"/>
                                   <TextBlock FontSize="10" Foreground="#52677F" Margin="0,0,14,2" Text="{Binding OperationFolio, StringFormat=Folio {0}}"/>
                                   <TextBlock FontSize="10" Foreground="#52677F" Margin="0,0,14,2" Text="{Binding LocalFolio, StringFormat=Local {0}}"/>
                                   <TextBlock FontSize="10" Foreground="#52677F" Margin="0,0,14,2" Text="{Binding Unit, StringFormat=Unidad {0}}"/>
@@ -847,7 +885,7 @@
                     </ItemsControl>
                   </StackPanel>
                 </Border>
-                <Button x:Name="BadgeBulkReturnButton" Content="REGRESAR SELECCIONADOS" Style="{StaticResource RelationGoldButton}" Click="ReturnSelectedBadges_Click" HorizontalAlignment="Left"/>
+                <Button x:Name="BadgeBulkReturnButton" Content="REGRESAR SELECCIONADOS" Style="{StaticResource SquareToolbarGoldButton}" Click="ReturnSelectedBadges_Click" HorizontalAlignment="Left"/>
               </StackPanel>
             </Border>
 
@@ -874,6 +912,7 @@
                 </Border>
                 <Border Grid.Row="1" Margin="14,14,14,16" Background="White" BorderBrush="#D9E6F6" BorderThickness="1" CornerRadius="16">
                   <DataGrid x:Name="BadgesGrid" IsReadOnly="True" AutoGenerateColumns="False" SelectionMode="Extended"
+                            MinRowHeight="52"
                             HeadersVisibility="Column" GridLinesVisibility="None" BorderThickness="0"
                             Background="Transparent" ColumnHeaderStyle="{StaticResource RelationDataGridHeader}"
                             CellStyle="{StaticResource RelationDataGridCell}" RowStyle="{StaticResource RelationDataGridRow}"
@@ -886,18 +925,40 @@
                           <DataTemplate><CheckBox HorizontalAlignment="Center" IsChecked="{Binding BulkSelected, Mode=TwoWay}" IsEnabled="{Binding CanBulkReturn}" Click="BadgeBulkCheckBox_Click"/></DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                       </DataGridTemplateColumn>
-                      <DataGridTextColumn Header="Gafete" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Number}" Width="90"/>
-                      <DataGridTextColumn Header="Staff" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Staff}" Width="90"/>
-                      <DataGridTextColumn Header="Folio Operacion" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding OperationFolio}" Width="130"/>
-                      <DataGridTextColumn Header="Unidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Unit}" Width="100"/>
-                      <DataGridTextColumn Header="Telefono" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Phone}" Width="120"/>
-                      <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nationality}" Width="130"/>
-                      <DataGridTextColumn Header="Entrega" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding AssignedAt}" Width="130"/>
-                      <DataGridTextColumn Header="Estatus" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Status}" Width="100"/>
-                      <DataGridTextColumn Header="Regreso" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding ReturnedAt}" Width="130"/>
-                      <DataGridTemplateColumn Header="Accion" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="95">
+                      <DataGridTextColumn Header="Gafete" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Number}" Width="70*" MinWidth="55"/>
+                      <DataGridTextColumn Header="Staff" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Staff}" Width="70*" MinWidth="55"/>
+                      <!-- Nombre completo con salto de linea (antes se cortaba: "ABRAHAM JUA") y,
+                           debajo, con quien mas atendio la misma llegada. -->
+                      <DataGridTemplateColumn Header="Vendedor" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="170*" MinWidth="140">
                         <DataGridTemplateColumn.CellTemplate>
-                          <DataTemplate><Button Content="EDITAR" Style="{StaticResource BadgeGridActionButton}" Click="EditBadge_Click"/></DataTemplate>
+                          <DataTemplate>
+                            <StackPanel ToolTip="{Binding VendorTooltip}">
+                              <TextBlock Text="{Binding VendorDisplay}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                              <TextBlock Text="{Binding VendorTeam}" FontSize="10" Foreground="#5B7397" TextWrapping="Wrap" Margin="0,2,0,0">
+                                <TextBlock.Style>
+                                  <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                      <DataTrigger Binding="{Binding VendorTeam}" Value="">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                      </DataTrigger>
+                                    </Style.Triggers>
+                                  </Style>
+                                </TextBlock.Style>
+                              </TextBlock>
+                            </StackPanel>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
+                      <DataGridTextColumn Header="Folio Operacion" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding OperationFolio}" Width="90*" MinWidth="70"/>
+                      <DataGridTextColumn Header="Unidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Unit}" Width="70*" MinWidth="55"/>
+                      <DataGridTextColumn Header="Telefono" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Phone}" Width="90*" MinWidth="70"/>
+                      <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nationality}" Width="90*" MinWidth="65"/>
+                      <DataGridTextColumn Header="Entrega" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding AssignedAt}" Width="95*" MinWidth="75"/>
+                      <DataGridTextColumn Header="Estatus" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Status}" Width="70*" MinWidth="55"/>
+                      <DataGridTextColumn Header="Regreso" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding ReturnedAt}" Width="95*" MinWidth="75"/>
+                      <DataGridTemplateColumn Header="Accion" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="90*" MinWidth="90">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate><Button Content="EDITAR" Style="{StaticResource RelationGridActionButton}" Click="EditBadge_Click"/></DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                       </DataGridTemplateColumn>
                     </DataGrid.Columns>
@@ -907,8 +968,6 @@
             </Border>
 
           </StackPanel>
-            </Viewbox>
-          </Grid>
           </ScrollViewer>
         </TabItem>
 
@@ -1215,7 +1274,7 @@
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                             ScrollViewer.CanContentScroll="True">
                   <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="App / asignado" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="170*" MinWidth="120">
+                    <DataGridTemplateColumn Header="App / asignado" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="170*" MinWidth="100">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <Border Style="{StaticResource SquareStatusBadge}" Margin="0,0,0,5" Background="#EAF6FE" BorderBrush="#B9D3EF">
@@ -1237,8 +1296,8 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Fecha" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding DateText}" Width="110*" MinWidth="78"/>
-                    <DataGridTemplateColumn Header="Viaje" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="180*" MinWidth="120">
+                    <DataGridTextColumn Header="Fecha" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding DateText}" Width="110*" MinWidth="60"/>
+                    <DataGridTemplateColumn Header="Viaje" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="180*" MinWidth="100">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock Text="{Binding Hotel}" FontWeight="Bold" TextWrapping="Wrap" Foreground="#16326B"/>
@@ -1248,7 +1307,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Taxista" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="175*" MinWidth="120">
+                    <DataGridTemplateColumn Header="Taxista" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="175*" MinWidth="100">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock Text="{Binding Driver}" FontWeight="Bold" Foreground="#1F5784" TextWrapping="Wrap"/>
@@ -1258,8 +1317,8 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nationality}" Width="105*" MinWidth="74"/>
-                    <DataGridTemplateColumn Header="Unidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="100*" MinWidth="70">
+                    <DataGridTextColumn Header="Nacionalidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Binding="{Binding Nationality}" Width="105*" MinWidth="55"/>
+                    <DataGridTemplateColumn Header="Unidad" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="100*" MinWidth="55">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock Text="{Binding TransportType}" FontWeight="Bold" TextWrapping="Wrap" Foreground="#16326B"/>
@@ -1267,7 +1326,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Importes" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="120*" MinWidth="88">
+                    <DataGridTemplateColumn Header="Importes" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="120*" MinWidth="70">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock FontSize="10" FontWeight="Bold" Foreground="#16326B"><Run Text="Venta: "/><Run Text="{Binding SaleDisplay, Mode=OneWay}"/></TextBlock>
@@ -1277,7 +1336,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Pago dejada" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="185*" MinWidth="130">
+                    <DataGridTemplateColumn Header="Pago dejada" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="185*" MinWidth="100">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <Border Style="{StaticResource SquareStatusBadge}" Margin="0,0,0,5"
@@ -1296,7 +1355,7 @@
                     </DataGridTemplateColumn>
                     <!-- Forma de pago y Moneda se fusionaron: eran dos columnas con una sola
                          palabra cada una ("Efectivo" / "MXN") ocupando 260px entre ambas. -->
-                    <DataGridTemplateColumn Header="Forma de pago" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="130*" MinWidth="88">
+                    <DataGridTemplateColumn Header="Forma de pago" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="130*" MinWidth="65">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <TextBlock TextWrapping="Wrap" Text="{Binding PaymentMethod}" Foreground="#16326B"/>
@@ -1304,7 +1363,7 @@
                         </StackPanel>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Comision" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="110*" MinWidth="80">
+                    <DataGridTemplateColumn Header="Comision" HeaderTemplate="{StaticResource WhiteGridHeaderTemplate}" Width="110*" MinWidth="65">
                       <DataGridTemplateColumn.CellTemplate><DataTemplate>
                         <StackPanel Margin="2,0">
                           <Border Style="{StaticResource SquareStatusBadge}" Margin="0,0,0,4"
@@ -1985,6 +2044,12 @@
                         <TextBlock Text="No entraron" FontSize="11" FontWeight="Bold" Foreground="#A72F59"/>
                         <TextBox x:Name="RelationNoShowCount" Style="{StaticResource RelationStatValueText}" Text="0" Foreground="#A72F59"/>
                       </StackPanel>
+                    </StackPanel>
+                  </Border>
+                  <Border Width="560" Background="#F7F9FF" BorderBrush="#C8D6F3" BorderThickness="1" CornerRadius="14" Padding="16" Margin="0,0,20,16">
+                    <StackPanel>
+                      <TextBlock Text="Vendedores que atendieron / gafete asignado" FontSize="11" FontWeight="Bold" Foreground="#194BAF"/>
+                      <TextBlock x:Name="RelationSellerBadges" FontSize="13" FontWeight="Bold" Foreground="#123E6E" TextWrapping="Wrap" Margin="0,6,0,0" Text="Sin captura de vendedores"/>
                     </StackPanel>
                   </Border>
                   <Border Width="320" Background="#FFFBEF" BorderBrush="#F3CB66" BorderThickness="1.3" CornerRadius="14" Padding="16" Margin="0,0,0,16">

@@ -1025,8 +1025,30 @@ public partial class OperationsWindow : Window
     });
     private async void SaveRelation_Click(object sender, RoutedEventArgs e) => await RunAsync(SaveRelationCoreAsync);
 
+    /// <summary>
+    /// La unidad y el taxista son obligatorios. Sin unidad el folio se queda sin regla de
+    /// comision y termina cobrandose el 10 % por omision, que es de donde salieron varias de las
+    /// diferencias del cuadre; y sin taxista no hay a quien pagarle. Un espacio en blanco no
+    /// cuenta como capturado. Pedido por operacion el 2026-09-03.
+    /// </summary>
+    private static void EnsureRelationIsComplete(string? driver, string? transportType)
+    {
+        var faltantes = new List<string>();
+        if (string.IsNullOrWhiteSpace(driver)) faltantes.Add("el nombre del taxista");
+        if (string.IsNullOrWhiteSpace(transportType)) faltantes.Add("la unidad (tipo de transporte)");
+
+        if (faltantes.Count > 0)
+        {
+            throw new InvalidOperationException(
+                "Falta capturar " + string.Join(" y ", faltantes)
+                + ". Sin ese dato la comisión no se puede calcular bien, así que no se guarda la relación.");
+        }
+    }
+
     private async Task SaveRelationCoreAsync()
     {
+        EnsureRelationIsComplete(RelationDriver.Text, RelationTransportType.Text);
+
         var relation = BuildRelationFromForm(_loadedRelationForm ?? new LocalRelation(
             0,
             RelationAppFolio.Text,
@@ -1259,6 +1281,7 @@ public partial class OperationsWindow : Window
         RelationYouthPassengers.Text = "0";
         RelationChildPassengers.Text = "0";
         RelationNoShowCount.Text = "0";
+        RelationSellerBadges.Text = "Sin captura de vendedores";
         RelationPassengers.Text = "0";
         RelationSale.Text = "0";
         RelationPayout.Text = "0";
@@ -1773,6 +1796,9 @@ public partial class OperationsWindow : Window
         RelationYouthPassengers.Text = Math.Max(0, relation.YouthPassengers).ToString(CultureInfo.InvariantCulture);
         RelationChildPassengers.Text = Math.Max(0, relation.ChildPassengers).ToString(CultureInfo.InvariantCulture);
         RelationNoShowCount.Text = Math.Max(0, relation.NoShowCount).ToString(CultureInfo.InvariantCulture);
+        RelationSellerBadges.Text = string.IsNullOrWhiteSpace(relation.SellerBadges)
+            ? "Sin captura de vendedores"
+            : relation.SellerBadges;
         RelationPassengers.Text = Math.Max(0, relation.Passengers).ToString(CultureInfo.InvariantCulture);
         RelationSale.Text = relation.Sale.ToString("0.##", CultureInfo.InvariantCulture);
         RelationPayout.Text = relation.Payout?.ToString(CultureInfo.InvariantCulture) ?? "0";
@@ -1806,6 +1832,7 @@ public partial class OperationsWindow : Window
         RelationYouthPassengers.Text = "0";
         RelationChildPassengers.Text = "0";
         RelationNoShowCount.Text = "0";
+        RelationSellerBadges.Text = "Sin captura de vendedores";
         RelationPassengers.Text = "0";
         RelationSale.Text = "0";
         RelationPayout.Text = "0";
@@ -2413,7 +2440,7 @@ public partial class OperationsWindow : Window
             return;
         }
 
-        await RunAsync(async () => { await _operations.SaveBadgeRecordAsync(BadgeStaff.Text, BadgeNumber.Text, BadgeOperationFolio.Text, _user); await LoadBadgesAsync(); });
+        await RunAsync(async () => { await _operations.SaveBadgeRecordAsync(BadgeStaff.Text, BadgeNumber.Text, BadgeOperationFolio.Text, _user, BadgeVendor.Text); await LoadBadgesAsync(); });
     }
     private async void ReturnBadge_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
@@ -2555,7 +2582,7 @@ public partial class OperationsWindow : Window
         }
 
         var scannedNumber = isCascoBranch ? normalized : row.Number;
-        _scannedBadges.Add(new LocalScannedBadgeItem(scannedNumber, row.Staff, row.OperationFolio, row.Status, row.Unit, row.Phone, row.LocalFolio));
+        _scannedBadges.Add(new LocalScannedBadgeItem(scannedNumber, row.Staff, row.OperationFolio, row.Status, row.Unit, row.Phone, row.LocalFolio, row.Vendor));
         if (!resolution.IsOccupied)
         {
             ShowBadgeBulkInfo($"El gafete {row.Number} ya esta libre.", Brushes.SteelBlue);
@@ -2984,6 +3011,7 @@ public partial class OperationsWindow : Window
                 _windowCts.Token);
             foreach (var badge in cascoBadges.Badges)
                 badge.BulkSelected = false;
+            FillBadgeVendorTeams(cascoBadges.Badges);
             BadgesGrid.ItemsSource = cascoBadges.Badges;
             _scannedBadges.Clear();
             RefreshBadgeBulkState();
@@ -2995,6 +3023,7 @@ public partial class OperationsWindow : Window
         var badges = await _operations.GetBadgesAsync(BadgeStart.SelectedDate, BadgeEnd.SelectedDate, BadgeStaffSearch.Text, BadgeSearch.Text, BadgeOperationSearch.Text);
         foreach (var badge in badges)
             badge.BulkSelected = false;
+        FillBadgeVendorTeams(badges);
         BadgesGrid.ItemsSource = badges;
         _scannedBadges.Clear();
         RefreshBadgeBulkState();
@@ -3248,7 +3277,8 @@ public partial class OperationsWindow : Window
             row.Notes,
             sale,
             isCard ? 0m : sale,
-            isCard ? sale : 0m);
+            isCard ? sale : 0m,
+            row.SellerBadges);
     }
     private void RegistroGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -3262,6 +3292,7 @@ public partial class OperationsWindow : Window
         RegistroSelectedPax.Text = row.Pax.ToString(CultureInfo.InvariantCulture);
         RegistroSelectedFolioHeader.Text = row.FolioOperacion;
         RegistroDetailGafete.Text = row.Gafete;
+        RegistroDetailVendedores.Text = string.IsNullOrWhiteSpace(row.Vendedores) ? "Sin captura de vendedores" : row.Vendedores;
         RegistroDetailFuente.Text = row.Fuente;
         RegistroDetailUsuarioOrigen.Text = row.UsuarioOrigen;
         RegistroDetailHotel.Text = row.Hotel;
@@ -3289,6 +3320,7 @@ public partial class OperationsWindow : Window
         RegistroSelectedPax.Clear();
         RegistroSelectedFolioHeader.Text = string.Empty;
         RegistroDetailGafete.Text = string.Empty;
+        RegistroDetailVendedores.Text = string.Empty;
         RegistroDetailFuente.Text = string.Empty;
         RegistroDetailUsuarioOrigen.Text = string.Empty;
         RegistroDetailHotel.Text = string.Empty;
@@ -3426,18 +3458,32 @@ public partial class OperationsWindow : Window
             return;
         }
 
+        // Los datos se guardan en variables y no se piden dos veces: el Excel y la publicacion en
+        // Hoka tienen que salir del mismo material, o los dos reportes terminarian discrepando.
         var authoritativeCommissionRows = await _pos.GetCommissionBrowserRowsAsync(null, start, end);
+        var relations = await GetReportWorkbookRelationsAsync();
+        var commissions = MapReportWorkbookCommissions(authoritativeCommissionRows);
+        var cuts = (await _pos.GetCutsAsync())
+            .Where(x => x.Date.Date >= start.Date && x.Date.Date <= end.Date)
+            .ToArray();
+        var camiones = await _pos.GetCamionesResumenAsync(ReportStart.SelectedDate, ReportEnd.SelectedDate);
+
         await _output.ExportCuadreWorkbookAsync(
             start,
             end,
-            await GetReportWorkbookRelationsAsync(),
-            MapReportWorkbookCommissions(authoritativeCommissionRows),
-            (await _pos.GetCutsAsync())
-                .Where(x => x.Date.Date >= start.Date && x.Date.Date <= end.Date)
-                .ToArray(),
-            await _pos.GetCamionesResumenAsync(ReportStart.SelectedDate, ReportEnd.SelectedDate),
+            relations,
+            commissions,
+            cuts,
+            camiones,
             dialog.FileName,
             authoritativeCommissionRows);
+
+        var publicacion = await CuadrePushService.PublicarAsync(
+            _output, start, end, relations, commissions, cuts, camiones,
+            _currentBranch?.Code ?? _branchCode, authoritativeCommissionRows);
+
+        if (!publicacion.Ok)
+            WebDialogWindow.Show(this, "El Excel se guardo bien, pero no se pudo publicar en Hoka. " + publicacion.Mensaje, "Control Taxi", "!");
     });
     private async void ExportBadgesCsv_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
@@ -3685,6 +3731,35 @@ public partial class OperationsWindow : Window
             return MapReportWorkbookCommissions(await GetCommissionPaymentPreviewRowsAsync());
 
         return await _pos.GetCommissionsAsync();
+    }
+
+    /// <summary>
+    /// Cuando una llegada la atendieron varios vendedores, cada gafete trae el suyo en su
+    /// fila; aqui se les agrega "Con FULANO (gafete)" para que se vea que van juntos sin
+    /// tener que buscar el folio en las demas filas. Solo agrupa gafetes ocupados: los
+    /// regresados ya no forman equipo con nadie.
+    /// </summary>
+    private static void FillBadgeVendorTeams(IEnumerable<LocalBadge> badges)
+    {
+        var groups = badges
+            .Where(x => x.CanBulkReturn && !string.IsNullOrWhiteSpace(x.OperationFolio))
+            .GroupBy(x => x.OperationFolio.Trim(), StringComparer.OrdinalIgnoreCase);
+        foreach (var group in groups)
+        {
+            var members = group.ToList();
+            if (members.Count < 2)
+                continue;
+            foreach (var badge in members)
+            {
+                var others = members
+                    .Where(x => !ReferenceEquals(x, badge))
+                    .Select(x => string.IsNullOrWhiteSpace(x.Vendor)
+                        ? $"gafete {x.Number}"
+                        : $"{x.Vendor.Trim()} ({x.Number})")
+                    .ToList();
+                badge.VendorTeam = others.Count == 0 ? string.Empty : "Con " + string.Join(", ", others);
+            }
+        }
     }
 
     private static IReadOnlyList<LocalRelation> MapReportWorkbookRelations(IEnumerable<LocalOperationsPreviewRow> rows)

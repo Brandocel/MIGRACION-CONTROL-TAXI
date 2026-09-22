@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$ApiBaseUrl = "https://lightyellow-porpoise-679527.hostingersite.com",
     [string]$SyncToken = "HokaTaxisSync2050",
     [string]$SqlServer = "26.38.252.71\SQLEXPRESS",
@@ -278,6 +278,9 @@ IF OBJECT_ID('dbo.AppMovilRegistro', 'U') IS NOT NULL
 BEGIN
     IF COL_LENGTH('dbo.AppMovilRegistro', 'seller_key') IS NULL ALTER TABLE dbo.AppMovilRegistro ADD seller_key NVARCHAR(50) NOT NULL DEFAULT '';
     IF COL_LENGTH('dbo.AppMovilRegistro', 'seller_name') IS NULL ALTER TABLE dbo.AppMovilRegistro ADD seller_name NVARCHAR(150) NOT NULL DEFAULT '';
+    IF COL_LENGTH('dbo.AppMovilRegistro', 'detalle_json') IS NULL ALTER TABLE dbo.AppMovilRegistro ADD detalle_json NVARCHAR(MAX) NOT NULL DEFAULT '';
+    -- Vendedor que atendio con ese gafete; la pantalla de Gafetes del escritorio lo lee de aqui.
+    IF COL_LENGTH('dbo.gafete', 'vendedor') IS NULL ALTER TABLE dbo.gafete ADD vendedor NVARCHAR(150) NULL;
     IF COL_LENGTH('dbo.AppMovilRegistro', 'adult_count') IS NULL ALTER TABLE dbo.AppMovilRegistro ADD adult_count INT NOT NULL DEFAULT 0;
     IF COL_LENGTH('dbo.AppMovilRegistro', 'youth_count') IS NULL ALTER TABLE dbo.AppMovilRegistro ADD youth_count INT NOT NULL DEFAULT 0;
     IF COL_LENGTH('dbo.AppMovilRegistro', 'minor_count') IS NULL ALTER TABLE dbo.AppMovilRegistro ADD minor_count INT NOT NULL DEFAULT 0;
@@ -639,6 +642,9 @@ BEGIN
         tarjeta = @cardAmount,
         usuario_movil = @mobileUser,
         notas = @notes,
+        -- Solo se pisa el detalle cuando el registro trae los pares vendedor/gafete
+        -- (viene de la API). Los espejos locales no los traen y no deben borrarlos.
+        detalle_json = CASE WHEN @hasSellerBadges = 1 THEN @detailJson ELSE detalle_json END,
         estado_sync = 'SINCRONIZADO',
         payout_status = CASE WHEN UPPER(@payoutStatus) IN ('PAGADO','PAGADA','PAID') THEN @payoutStatus ELSE payout_status END,
         payout_date = CASE WHEN UPPER(@payoutStatus) IN ('PAGADO','PAGADA','PAID') THEN @payoutDate ELSE payout_date END,
@@ -713,6 +719,7 @@ END;
     Add-Parameter $command "@mobileUser" (Text-Max $mobileUser 80)
     Add-Parameter $command "@notes" (Text $Record.notes)
     Add-Parameter $command "@detailJson" (($Record | ConvertTo-Json -Depth 20 -Compress))
+    Add-Parameter $command "@hasSellerBadges" $(if (Test-RecordHasSellerBadges $Record) { 1 } else { 0 })
     Add-Parameter $command "@payoutStatus" (Text-Max $payoutStatus 30)
     Add-Parameter $command "@payoutDate" (Date-Value $Record.payoutDate)
     Add-Parameter $command "@payoutUser" (Text-Max $Record.payoutUser 80)
@@ -813,6 +820,39 @@ END;
     }
 }
 
+function Test-RecordHasSellerBadges($Record) {
+    if ($null -eq $Record) { return $false }
+    $property = $Record.PSObject.Properties['sellerBadges']
+    if ($null -eq $property -or $null -eq $property.Value) { return $false }
+    return @($property.Value).Count -gt 0
+}
+
+# Vendedor que se quedo con un gafete concreto, segun los pares sellerBadges que
+# manda la app. Si el registro no trae pares (registros viejos o espejos locales)
+# se usa el vendedor principal cuando la llegada tuvo un solo gafete.
+function Get-SellerForBadge($Record, [string]$Badge) {
+    $wanted = (Text $Badge).Trim().TrimStart('0')
+    if ($wanted -eq '') { $wanted = '0' }
+    if (Test-RecordHasSellerBadges $Record) {
+        foreach ($pair in @($Record.sellerBadges)) {
+            if ($null -eq $pair) { continue }
+            $pairBadge = (Text $pair.badgeId).Trim().TrimStart('0')
+            if ($pairBadge -eq '') { $pairBadge = '0' }
+            if ($pairBadge -eq $wanted) {
+                $name = (Text $pair.sellerName).Trim()
+                if ($name -eq '') { $name = (Text $pair.sellerKey).Trim() }
+                return $name
+            }
+        }
+        return ''
+    }
+    $badges = @(Split-Badges $Record.badgeId)
+    if ($badges.Count -le 1) {
+        return (Text $Record.sellerName).Trim()
+    }
+    return ''
+}
+
 function Save-GafeteInsertOnly($Connection, [string]$FolioControl, $Record) {
     $rawBadge = Text $Record.badgeId
     if ([string]::IsNullOrWhiteSpace($rawBadge)) { return }
@@ -830,6 +870,7 @@ function Save-GafeteInsertOnly($Connection, [string]$FolioControl, $Record) {
             $command.CommandText = @"
 IF OBJECT_ID('dbo.gafete', 'U') IS NULL RETURN;
 IF COL_LENGTH('dbo.gafete', 'folioperacion') IS NULL ALTER TABLE dbo.gafete ADD folioperacion NVARCHAR(50) NULL;
+IF COL_LENGTH('dbo.gafete', 'vendedor') IS NULL ALTER TABLE dbo.gafete ADD vendedor NVARCHAR(150) NULL;
 IF EXISTS (
     SELECT 1
     FROM sys.columns c
@@ -863,14 +904,26 @@ AND NOT EXISTS (
       AND UPPER(COALESCE(venta, '')) IN ('R', 'S')
 )
 BEGIN
-    INSERT INTO dbo.gafete (matricula,gafete,fecha,venta,hora,folioperacion)
-    VALUES (@folioControl,@badgeNumber,CONVERT(DATETIME, CONVERT(DATE, @recordDate)),'A',@recordDate,@folioControl);
+    INSERT INTO dbo.gafete (matricula,gafete,fecha,venta,hora,folioperacion,vendedor)
+    VALUES (@folioControl,@badgeNumber,CONVERT(DATETIME, CONVERT(DATE, @recordDate)),'A',@recordDate,@folioControl,@vendedor);
+END;
+
+-- Filas que ya existian sin vendedor (sincronizadas antes de este cambio, o cuyo
+-- primer pull no traia los pares): se rellenan sin tocar nada mas.
+IF @vendedor <> ''
+BEGIN
+    UPDATE dbo.gafete
+    SET vendedor = @vendedor
+    WHERE folioperacion = @folioControl
+      AND gafete = @badgeNumber
+      AND COALESCE(LTRIM(RTRIM(vendedor)), '') = '';
 END;
 "@
             Add-Parameter $command "@badgeNumber" $badgeNumber
             Add-Parameter $command "@catalogId" (Int-Value $Record.catalogId)
             Add-Parameter $command "@recordDate" (Record-DateTimeValue $Record)
             Add-Parameter $command "@folioControl" (Text-Max $FolioControl 50)
+            Add-Parameter $command "@vendedor" (Text-Max (Get-SellerForBadge $Record $badge) 150)
             [void]$command.ExecuteNonQuery()
         } catch {
             Write-Warning "No se pudo insertar gafete nuevo para folio ${FolioControl}, gafete ${badge}: $($_.Exception.Message)"
@@ -1190,6 +1243,238 @@ ORDER BY fecha_creacion DESC;
     }
 }
 
+# ---------------------------------------------------------------------------
+# CAMIONES (AUTOCAR / MAYA CARIBE / TURICUN)
+#
+# La app de camiones (VB6) escribe en OTRA cuenta de Hostinger: base MySQL
+# u679771392_choferes, tablas 'registros' y 'choferes'. La copia en SQL Server
+# (dbo.registroscamiones / dbo.choferes) la hacia otro proceso que se quedo
+# atras, y por eso el cuadre salia con llegadas incompletas.
+#
+# Aqui se baja igual que los registros de la app movil: por la API, para que la
+# contrasena de esa base viva solo en el servidor y no en cada maquina de la
+# tienda, y se guarda en SQL Server, que es de donde lee el escritorio.
+#
+# Solo se escriben las columnas que manda la app de camiones. Las que son del
+# POS local -- pagos, fechadepago, Id_tipo -- no se tocan nunca, para no borrar
+# los pagos ya capturados aqui.
+# ---------------------------------------------------------------------------
+
+function Expand-ApiArray($Response) {
+    # Invoke-RestMethod a veces entrega el arreglo JSON como UN solo objeto, y
+    # entonces @() lo envuelve en lugar de expandirlo: quedaba 1 en vez de 44 y
+    # el bucle recorria un objeto sin propiedades, guardando cero.
+    $items = @($Response)
+    if ($items.Count -eq 1 -and $items[0] -is [array]) {
+        return @($items[0])
+    }
+    return $items
+}
+
+function Date-Only-Value($Value) {
+    $texto = Text $Value
+    if ([string]::IsNullOrWhiteSpace($texto)) { return $null }
+    $fecha = [datetime]::MinValue
+    if ([datetime]::TryParse($texto, [ref]$fecha)) { return $fecha.Date }
+    return $null
+}
+
+function Time-Only-Value($Value) {
+    $texto = Text $Value
+    if ([string]::IsNullOrWhiteSpace($texto)) { return $null }
+    # La API puede mandar "19:03:20" o una fecha completa; ambas caen aqui.
+    $lapso = [TimeSpan]::Zero
+    if ([TimeSpan]::TryParse($texto, [ref]$lapso)) { return $lapso }
+    $fecha = [datetime]::MinValue
+    if ([datetime]::TryParse($texto, [ref]$fecha)) { return $fecha.TimeOfDay }
+    return $null
+}
+
+function Ensure-CamionesSchema($Connection) {
+    # dbo.registroscamiones no trae llave primaria ni indice, y el upsert busca
+    # por Id_registros en cada fila. Sin indice son 14 mil filas de barrido por
+    # registro; con el indice es inmediato.
+    $command = $Connection.CreateCommand()
+    $command.CommandTimeout = 60
+    $command.CommandText = @"
+IF OBJECT_ID('dbo.registroscamiones', 'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.registroscamiones') AND name = 'IX_registroscamiones_Id_registros')
+BEGIN
+    CREATE UNIQUE INDEX IX_registroscamiones_Id_registros
+        ON dbo.registroscamiones (Id_registros)
+        WHERE Id_registros IS NOT NULL;
+END;
+
+IF OBJECT_ID('dbo.registroscamiones', 'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.registroscamiones') AND name = 'IX_registroscamiones_fecha')
+BEGIN
+    CREATE INDEX IX_registroscamiones_fecha ON dbo.registroscamiones (fecha);
+END;
+
+SELECT 1;
+"@
+    try {
+        [void]$command.ExecuteScalar()
+    } catch {
+        # Si hay Id_registros duplicados de antes, el indice unico no se puede
+        # crear. No es motivo para no sincronizar: se sigue sin indice.
+        Write-Warning "No se pudo asegurar el indice de registroscamiones: $($_.Exception.Message)"
+    }
+}
+
+function Save-CamionChofer($Connection, $Chofer) {
+    $idChofer = Text-Max $Chofer.idChofer 10
+    if ([string]::IsNullOrWhiteSpace($idChofer)) { return }
+
+    $command = $Connection.CreateCommand()
+    $command.CommandTimeout = 60
+    $command.CommandText = @"
+IF OBJECT_ID('dbo.choferes', 'U') IS NULL RETURN;
+
+IF EXISTS (SELECT 1 FROM dbo.choferes WITH (UPDLOCK, HOLDLOCK) WHERE Id_chofer = @idChofer)
+BEGIN
+    UPDATE dbo.choferes
+    SET clave = @clave,
+        nombre = @nombre,
+        empresa = @empresa,
+        numerotarjeta = @numeroTarjeta,
+        banco = @banco,
+        telefono = @telefono,
+        activo = @activo
+    WHERE Id_chofer = @idChofer;
+END
+ELSE
+BEGIN
+    INSERT INTO dbo.choferes (Id_chofer, clave, nombre, empresa, numerotarjeta, banco, telefono, activo)
+    VALUES (@idChofer, @clave, @nombre, @empresa, @numeroTarjeta, @banco, @telefono, @activo);
+END;
+"@
+    Add-Parameter $command "@idChofer" $idChofer
+    Add-Parameter $command "@clave" (Text-Max $Chofer.clave 40)
+    Add-Parameter $command "@nombre" (Text-Max $Chofer.nombre 200)
+    Add-Parameter $command "@empresa" (Text-Max $Chofer.empresa 200)
+    Add-Parameter $command "@numeroTarjeta" (Text-Max $Chofer.numeroTarjeta 60)
+    Add-Parameter $command "@banco" (Text-Max $Chofer.banco 100)
+    Add-Parameter $command "@telefono" (Text-Max $Chofer.telefono 100)
+    $activo = Text-Max $Chofer.activo 1
+    if ([string]::IsNullOrWhiteSpace($activo)) { $activo = "S" }
+    Add-Parameter $command "@activo" $activo
+    [void]$command.ExecuteNonQuery()
+}
+
+function Save-CamionRegistro($Connection, $Registro) {
+    $idRegistro = Int-Value $Registro.idRegistro
+    if ($idRegistro -le 0) { return $false }
+
+    $command = $Connection.CreateCommand()
+    $command.CommandTimeout = 60
+    $command.CommandText = @"
+IF OBJECT_ID('dbo.registroscamiones', 'U') IS NULL RETURN;
+
+IF EXISTS (SELECT 1 FROM dbo.registroscamiones WITH (UPDLOCK, HOLDLOCK) WHERE Id_registros = @idRegistro)
+BEGIN
+    UPDATE dbo.registroscamiones
+    SET id_chofer = @idChofer,
+        camion = @camion,
+        pax = @pax,
+        pax_valido = @paxValido,
+        comision = @comision,
+        fecha = @fecha,
+        hora = @hora
+    WHERE Id_registros = @idRegistro;
+END
+ELSE
+BEGIN
+    INSERT INTO dbo.registroscamiones (Id_registros, id_chofer, camion, pax, pax_valido, comision, fecha, hora)
+    VALUES (@idRegistro, @idChofer, @camion, @pax, @paxValido, @comision, @fecha, @hora);
+END;
+"@
+    Add-Parameter $command "@idRegistro" $idRegistro
+    Add-Parameter $command "@idChofer" (Text-Max $Registro.idChofer 10)
+    Add-Parameter $command "@camion" (Text-Max $Registro.camion 10)
+    Add-Parameter $command "@pax" (Int-Value $Registro.pax)
+    Add-Parameter $command "@paxValido" (Int-Value $Registro.paxValido)
+    Add-Parameter $command "@comision" ([int64](Int-Value $Registro.comision))
+    Add-Parameter $command "@fecha" (Date-Only-Value $Registro.fecha)
+    Add-Parameter $command "@hora" (Time-Only-Value $Registro.hora)
+    [void]$command.ExecuteNonQuery()
+    return $true
+}
+
+function Sync-CamionesFromHostinger([int]$Dias = 3) {
+    # El loop llama a este script cada 15 segundos. Bajar los camiones tan seguido
+    # no aporta nada -- la app de camiones no captura a ese ritmo -- y son cientos
+    # de escrituras por vuelta. Por eso se corre cada 5 minutos, y el catalogo de
+    # choferes (800 filas que casi nunca cambian) cada hora.
+    $marcaRuta = Join-Path $PSScriptRoot "camiones-ultima-corrida.txt"
+    $ultimaCorrida = [datetime]::MinValue
+    if (Test-Path $marcaRuta) {
+        $textoMarca = (Get-Content -Path $marcaRuta -ErrorAction SilentlyContinue | Select-Object -First 1)
+        $parseada = [datetime]::MinValue
+        if ([datetime]::TryParse($textoMarca, [ref]$parseada)) { $ultimaCorrida = $parseada }
+    }
+
+    $minutosDesdeUltima = ((Get-Date) - $ultimaCorrida).TotalMinutes
+    if ($minutosDesdeUltima -lt 5) {
+        Write-Host "Camiones: se bajaron hace $([int]$minutosDesdeUltima) min; se omite esta vuelta."
+        return
+    }
+
+    $desde = (Get-Date).AddDays(-1 * [Math]::Max(0, $Dias - 1)).ToString("yyyy-MM-dd")
+    $hasta = (Get-Date).ToString("yyyy-MM-dd")
+
+    Write-Host "Bajando camiones de Hostinger ($desde a $hasta)..."
+
+    $choferes = @()
+    if ($minutosDesdeUltima -ge 60) {
+        try {
+            $choferes = Expand-ApiArray (Invoke-HostingerApi "Get" "/api/pos/camiones/choferes")
+        } catch {
+            Write-Warning "No se pudo bajar el catalogo de choferes de camiones: $($_.Exception.Message)"
+        }
+    }
+
+    $registros = @()
+    try {
+        $registros = Expand-ApiArray (Invoke-HostingerApi "Get" "/api/pos/camiones/registros?desde=$desde&hasta=$hasta")
+    } catch {
+        Write-Warning "No se pudieron bajar los registros de camiones: $($_.Exception.Message)"
+        return
+    }
+
+    Write-Host "Camiones recibidos: $($registros.Count) registros, $($choferes.Count) choferes."
+    if ($registros.Count -eq 0 -and $choferes.Count -eq 0) { return }
+
+    $connection = New-SqlConnection
+    try {
+        Ensure-CamionesSchema $connection
+
+        $choferesGuardados = 0
+        foreach ($chofer in $choferes) {
+            try {
+                Save-CamionChofer $connection $chofer
+                $choferesGuardados++
+            } catch {
+                Write-Warning "Chofer de camion $($chofer.idChofer) no se guardo: $($_.Exception.Message)"
+            }
+        }
+
+        $registrosGuardados = 0
+        foreach ($registro in $registros) {
+            try {
+                if (Save-CamionRegistro $connection $registro) { $registrosGuardados++ }
+            } catch {
+                Write-Warning "Registro de camion $($registro.idRegistro) no se guardo: $($_.Exception.Message)"
+            }
+        }
+
+        Write-Host "Camiones guardados en SQL Server: $registrosGuardados registros, $choferesGuardados choferes."
+        Set-Content -Path $marcaRuta -Value ((Get-Date).ToString("o")) -Encoding ASCII
+    } finally {
+        $connection.Close()
+    }
+}
+
 Write-Host "Bajando registros de la app movil desde Hostinger..."
 $pullResponse = Invoke-HostingerApi "Get" "/sync/pull-changes?limit=$PullLimit&branchCode=$BranchCode"
 $records = @($pullResponse.changes.mkt2_trip_records)
@@ -1225,6 +1510,13 @@ if ($RunLocalMirrorReview) {
     Save-RecentLocalLegacyMirrors
 } else {
     Write-Host "Revision extra de espejos locales omitida; use -RunLocalMirrorReview para reparacion masiva."
+}
+
+try {
+    Sync-CamionesFromHostinger 3
+} catch {
+    # Los camiones no deben tumbar la sincronizacion de la app movil.
+    Write-Warning "Sincronizacion de camiones fallida: $($_.Exception.Message)"
 }
 
 Write-Host "Sincronizacion app movil terminada: $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')"

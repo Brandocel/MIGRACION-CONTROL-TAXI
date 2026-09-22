@@ -296,7 +296,8 @@ public sealed class CascoBackgroundSyncService
                     ReadText(element, "payoutStatus"),
                     ReadText(element, "payoutDate"),
                     ReadText(element, "payoutUser"),
-                    ReadText(element, "payoutTicket")));
+                    ReadText(element, "payoutTicket"),
+                    ReadSellerBadges(element)));
             }
 
             return records;
@@ -309,6 +310,33 @@ public sealed class CascoBackgroundSyncService
 
     private static string ReadText(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var value) ? value.ToString() : string.Empty;
+
+    /// <summary>
+    /// Vendedores que atendieron la llegada, uno por gafete entregado. Viaja
+    /// junto al registro para que el detalle quede guardado en detalle_json y
+    /// el escritorio lo pueda mostrar sin columnas nuevas.
+    /// </summary>
+    private static IReadOnlyList<CascoTripRecordSeller> ReadSellerBadges(JsonElement element)
+    {
+        if (!element.TryGetProperty("sellerBadges", out var value) || value.ValueKind != JsonValueKind.Array)
+            return Array.Empty<CascoTripRecordSeller>();
+
+        var sellers = new List<CascoTripRecordSeller>();
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var badgeId = ReadText(item, "badgeId");
+            var sellerName = ReadText(item, "sellerName");
+            if (badgeId.Length == 0 && sellerName.Length == 0)
+                continue;
+
+            sellers.Add(new CascoTripRecordSeller(badgeId, ReadText(item, "sellerKey"), sellerName));
+        }
+
+        return sellers;
+    }
 
     private static int? ReadInt(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var value) && int.TryParse(value.ToString(), out var parsed) ? parsed : null;
@@ -1168,7 +1196,10 @@ public sealed record CascoTripRecord(
     string PayoutStatus,
     string PayoutDate,
     string PayoutUser,
-    string PayoutTicket);
+    string PayoutTicket,
+    IReadOnlyList<CascoTripRecordSeller>? SellerBadges = null);
+
+public sealed record CascoTripRecordSeller(string BadgeId, string SellerKey, string SellerName);
 
 public sealed record CascoApiCallResult(string Url, int HttpStatusCode, string? ContentType, IReadOnlyList<CascoTripRecord> Records);
 

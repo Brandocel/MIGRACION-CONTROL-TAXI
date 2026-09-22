@@ -186,6 +186,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             try
             {
                 var rows = await LoadAuthoritativeCommissionRowsAsync(search, start, end);
+                InheritTransportAcrossTickets(rows);
                 DistributePayoutAcrossTickets(rows);
                 foreach (var row in rows)
                     row.CommissionAmount = CalculateAuthoritativeCommission(row);
@@ -252,6 +253,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             try
             {
                 var rows = await LoadAuthoritativeCommissionRowsAsync(cleanFolio, null, null);
+            InheritTransportAcrossTickets(rows);
             DistributePayoutAcrossTickets(rows);
             foreach (var row in rows)
                 row.CommissionAmount = CalculateAuthoritativeCommission(row);
@@ -275,6 +277,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     || string.Equals(row.Ticket, cleanFolio, StringComparison.OrdinalIgnoreCase)
                     || row.LocalFolio.Contains(cleanFolio, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+            InheritTransportAcrossTickets(rows);
             DistributePayoutAcrossTickets(rows);
             foreach (var row in rows)
                 row.CommissionAmount = CalculateAuthoritativeCommission(row);
@@ -669,6 +672,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var authoritativeRows = await LoadImportedAuthoritativeCommissionRowsAsync(connection, transaction, start, end);
         if (authoritativeRows.Count > 0)
         {
+            InheritTransportAcrossTickets(authoritativeRows);
             DistributePayoutAcrossTickets(authoritativeRows);
             foreach (var row in authoritativeRows)
                 row.CommissionAmount = CalculateAuthoritativeCommission(row);
@@ -811,7 +815,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 Decimal(row, 7))));
         }
 
-        rows.AddRange(await ReadConfiguredTransportCatalogRowsAsync());
+        rows.AddRange(BuildConfiguredTransportCatalogRows());
         return rows;
     }
 
@@ -1370,21 +1374,75 @@ public sealed class LocalPosRepository(LocalDatabase database)
         // AUTOCAR/MAYA/TURICUN se "pierdan" por una base remota incompleta, sin
         // volver a clasificar desde dejadas.tipotransporte.
         // -----------------------------------------------------------------------
+        // 1) SQL Server primero. En agosto de 2026 se puso la API de Hostinger por delante
+        //    porque la copia en SQL Server llegaba tarde y el corte del dia salia con llegadas
+        //    incompletas. Desde el 04/09/2026 el sincronizador baja los camiones cada 5 minutos
+        //    a dbo.registroscamiones, asi que la copia local ya esta al dia: leerla es mas
+        //    rapido, no depende de internet y sigue el mismo camino que el resto del sistema
+        //    (las maquinas de la tienda leen SQL Server, no la nube).
         if (_sqlSource is not null)
         {
             try
             {
                 var sqlRows = await GetCamionesResumenFromSqlServerAsync(_sqlSource, start, end);
-                return await CompleteCamionesResumenWithSqliteAsync(sqlRows, start, end);
+                var completadas = await CompleteCamionesResumenWithSqliteAsync(sqlRows, start, end);
+                if (HasCamionesData(completadas))
+                    return completadas;
             }
             catch
             {
-                // SQL Server no respondió. Cae al fallback SQLite solo en este caso.
+                // SQL Server no respondió. Se intenta con la API antes de rendirse.
             }
         }
 
-        // Fallback SQLite: misma fuente logica que SQL Server, espejo local.
+        // 2) API de Hostinger: respaldo para cuando SQL Server no responde, o cuando no tiene
+        //    nada del rango porque el sincronizador lleva rato detenido. La app de camiones
+        //    escribe en esa base al momento, asi que ahi siempre esta el dato mas fresco.
+        try
+        {
+            var apiRows = await GetCamionesResumenFromApiAsync(start, end);
+            if (apiRows.Count > 0)
+                return apiRows;
+        }
+        catch (Exception ex)
+        {
+            LogPlazaCommissionWarning(ex);
+        }
+
+        // 3) Fallback SQLite: misma fuente logica que SQL Server, espejo local.
         return await GetCamionesResumenFromSqliteAsync(start, end);
+    }
+
+    /// <summary>
+    /// Un resumen sin renglones, o con todos los renglones en ceros, significa que la fuente no
+    /// tiene nada del rango — no que ese dia no hubo camiones con movimiento. Se distingue para
+    /// no dar por bueno un cuadre vacio cuando el sincronizador lleva horas detenido.
+    /// </summary>
+    private static bool HasCamionesData(IReadOnlyList<LocalCuadreResumenRow> rows)
+    {
+        if (rows.Count == 0)
+            return false;
+
+        return rows.Any(row =>
+            row.Pax != 0
+            || row.Entraron != 0
+            || row.Salieron != 0
+            || row.Unidades != 0
+            || row.Dejada != 0m);
+    }
+
+    /// <summary>
+    /// Resumen de camiones desde la API de Hostinger, que lee la base donde la app de camiones
+    /// escribe al momento. Devuelve vacio si la sucursal no tiene URL configurada.
+    /// </summary>
+    private static async Task<IReadOnlyList<LocalCuadreResumenRow>> GetCamionesResumenFromApiAsync(DateTime? start, DateTime? end)
+    {
+        var baseUrl = new BranchConfigurationService().GetBranch("P28").ApiBaseUrl;
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            return [];
+
+        var api = new PlazaCamionesApiService(baseUrl);
+        return await api.GetResumenAsync(start, end);
     }
 
     private async Task<IReadOnlyList<LocalCuadreResumenRow>> CompleteCamionesResumenWithSqliteAsync(
@@ -2435,6 +2493,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var rows = await LoadAuthoritativeCommissionRowsAsync();
         if (rows.Count == 0) return 0;
 
+        InheritTransportAcrossTickets(rows);
         DistributePayoutAcrossTickets(rows);
         foreach (var row in rows)
             row.CommissionAmount = CalculateAuthoritativeCommission(row);
@@ -2672,7 +2731,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 Convert.ToDecimal(reader.GetValue(6), CultureInfo.InvariantCulture),
                 Convert.ToDecimal(reader.GetValue(7), CultureInfo.InvariantCulture)));
         }
-        result.AddRange(await ReadConfiguredTransportCatalogRowsAsync());
+        result.AddRange(BuildConfiguredTransportCatalogRows());
         return result;
     }
 
@@ -3107,6 +3166,20 @@ public sealed class LocalPosRepository(LocalDatabase database)
         return result;
     }
 
+    /// <summary>
+    /// Taxistas que siempre manejan la misma unidad. Se usa SOLO como ultimo recurso, cuando el
+    /// ticket no dice la unidad por ningun lado: sin esto el folio se queda sin unidad y se le
+    /// cobra el 10 % por omision.
+    ///
+    /// Confirmado con operacion el 2026-09-03: los tickets sueltos de ANTONIO FLORES son de
+    /// TURIBUS SALMORAN (20 %), y salio uno al 10 % (folio C-POS-0-BF146759, $70.00) por venir
+    /// sin unidad. El nombre se compara completo, no por pedazos, para no arrastrar homonimos.
+    /// </summary>
+    private static readonly Dictionary<string, string> TransportByDriverName = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ANTONIO FLORES"] = "TURIBUS SALMORAN",
+    };
+
     private static string InferTransportFromObservation(string? observation)
     {
         var text = observation ?? string.Empty;
@@ -3118,6 +3191,17 @@ public sealed class LocalPosRepository(LocalDatabase database)
             return "SALMORAN";
         if (text.Contains("TURIBUS", StringComparison.OrdinalIgnoreCase))
             return "TURIBUS";
+
+        // Ultimo recurso: el ticket no dice la unidad, pero si trae el nombre de un taxista que
+        // siempre maneja la misma. Se colapsan los espacios repetidos antes de buscar, porque el
+        // texto llega sucio ("ANTONIO  FLORES" con dos espacios) y comparando literal se escapa.
+        var limpio = string.Join(' ', text.Split(default(char[]), StringSplitOptions.RemoveEmptyEntries));
+        foreach (var (taxista, unidad) in TransportByDriverName)
+        {
+            if (limpio.Contains(taxista, StringComparison.OrdinalIgnoreCase))
+                return unidad;
+        }
+
         return string.Empty;
     }
 
@@ -3134,6 +3218,22 @@ public sealed class LocalPosRepository(LocalDatabase database)
         var matches = new List<StoreTicketMatch>();
         matches.AddRange(await ReadStoreTicketMatchesAsync(compuConnection, "folioregistro", "folio_remision", appRows, false));
         matches.AddRange(await ReadStoreTicketMatchesAsync(joyeriaConnection, "folio_registro", "COALESCE(folio_pedido, folio_factura)", appRows, true));
+
+        // Cada llamada a ReadStoreTicketMatchesAsync numera sus filas desde cero, asi que el
+        // ticket 3 de compuadmo y el ticket 3 de joyeria llegaban aqui con el mismo Id. Mas
+        // abajo el Id es lo unico que distingue una fila de otra al repartirlas por llegada
+        // (el HashSet<long> seen), de modo que el de joyeria se descartaba como si fuera
+        // repetido -- y no lo era: son tickets distintos de tiendas distintas.
+        //
+        // Confirmado el 2026-09-04 con el folio 5186: 3 tickets en compuadmo y 3 en joyeria;
+        // se perdio el B9822 de $40,250 y la comision de VAN TRANSPORTADORAS salio en $4,886
+        // cuando eran $8,747. Solo se notaba al pedir el dia completo, porque con un folio
+        // solo los Id casi nunca alcanzan a chocar.
+        //
+        // Se renumera despues de juntar las dos tiendas para que el Id sea unico en el
+        // conjunto, sin tocar como cada tienda cuenta sus propias filas repetidas.
+        for (var i = 0; i < matches.Count; i++)
+            matches[i] = matches[i] with { Id = i };
 
         var byFolio = new Dictionary<string, List<StoreTicketMatch>>(StringComparer.OrdinalIgnoreCase);
         var byTicket = new Dictionary<string, List<StoreTicketMatch>>(StringComparer.OrdinalIgnoreCase);
@@ -3330,7 +3430,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         if (direct.Count > 0 || !allowObservationFallback || string.IsNullOrWhiteSpace(driverName))
             return direct;
 
-        return await ReadStoreTicketsByObservationAsync(connection, ticketColumn, driverName, operationDate, joyeria);
+        return await ReadStoreTicketsByObservationAsync(connection, folioColumn, ticketColumn, driverName, operationDate, joyeria);
     }
 
     private static string BuildStoreTicketMergeKey(StoreTicketRow row)
@@ -3340,6 +3440,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
 
     private static async Task<List<StoreTicketRow>> ReadStoreTicketsByObservationAsync(
         SqlConnection connection,
+        string folioColumn,
         string ticketColumn,
         string driverName,
         DateTime operationDate,
@@ -3352,6 +3453,15 @@ public sealed class LocalPosRepository(LocalDatabase database)
         await using var command = connection.CreateCommand();
         command.Parameters.AddWithValue("@driverLike", "%" + normalizedDriver + "%");
         command.Parameters.AddWithValue("@opDate", operationDate.Date);
+        // Solo tickets que NO estan amarrados a ningun folio de llegada. Este respaldo existe
+        // para el ticket que el cajero dejo sin folio y solo anoto el nombre del taxista; un
+        // ticket que ya trae folio pertenece a otra llegada y tomarlo aqui duplica la venta.
+        // Como el respaldo unicamente corre cuando la busqueda directa por folio no encontro
+        // nada, cualquier ticket con folio que aparezca aqui es forzosamente de otra llegada.
+        // Caso confirmado el 2026-09-01: MIGUEL RADILLA llego dos veces el mismo dia (folio
+        // 5055 a las 11:57 con compra, folio 5075 a las 14:57 sin compra). La segunda llegada
+        // no tenia relacion ni tickets propios, asi que este respaldo le pegaba los dos tickets
+        // de la primera (folioregistro = 5055) y la comision salia cobrada dos veces.
         command.CommandText = $"""
             SELECT
                 CAST({ticketColumn} AS nvarchar(80)) AS Ticket,
@@ -3360,6 +3470,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             FROM dbo.remisioM
             WHERE UPPER(COALESCE(CONVERT(nvarchar(max), observaciones), '')) LIKE UPPER(@driverLike)
               AND CAST(COALESCE(fecha, GETDATE()) AS date) = @opDate
+              AND COALESCE(NULLIF(LTRIM(RTRIM(CAST({folioColumn} AS nvarchar(60)))), ''), '0') = '0'
               AND UPPER(LTRIM(RTRIM(COALESCE(estatus, '')))) NOT IN ('C', 'CANCELADO', 'CANCELADA');
             """;
 
@@ -3432,20 +3543,28 @@ public sealed class LocalPosRepository(LocalDatabase database)
     {
         var fixedCommission = ResolveAuthoritativeFixedCommission(row);
         if (fixedCommission > 0m)
-            return fixedCommission;
+            return fixedCommission + row.BonusAmount;
 
         var percentage = ResolveAuthoritativePercentage(row);
         if (percentage <= 0m)
-            return 0m;
+            return row.BonusAmount;
 
         var saleTotal = row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal;
-        var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses);
+        var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses)
+            + ResolveExtraPercentDeduction(row, saleTotal);
         var payments = row.Payments;
         var netAfterDiscount = CalculateAuthoritativeNetAfterDiscount(row, saleTotal, payments);
 
         // Sin topes en cero: si la dejada supera la venta el folio queda en negativo y esa
         // diferencia se le cobra al taxista contra sus otros folios. Confirmado el 2026-08-21.
-        return decimal.Truncate((netAfterDiscount - deductions) * (percentage / 100m));
+        return decimal.Truncate((netAfterDiscount - deductions) * (percentage / 100m)) + row.BonusAmount;
+    }
+
+    /// <summary>DescuentoExtraPorcentaje de la unidad aplicado a la venta del ticket.</summary>
+    private static decimal ResolveExtraPercentDeduction(AuthoritativeCommissionRow row, decimal saleTotal)
+    {
+        var percent = row.TransportInfo.Extra.DescuentoExtraPorcentaje;
+        return percent > 0m && saleTotal > 0m ? saleTotal * (NormalizePercentValue(percent) / 100m) : 0m;
     }
 
     /// <summary>
@@ -3468,6 +3587,41 @@ public sealed class LocalPosRepository(LocalDatabase database)
     /// La dejada del folio se suma por LLEGADA distinta (PayoutKey), no por renglon: un mismo
     /// registro de app genera un renglon por ticket y sumarlos la multiplicaria.
     /// </summary>
+    /// <summary>
+    /// Completa la unidad de los renglones que llegan sin ella copiandola de otro renglon del
+    /// MISMO folio.
+    ///
+    /// Un folio es una llegada, y una llegada trae un solo transporte; pero los tickets del
+    /// punto de venta no siempre arrastran el tipo de unidad y llegan vacios o como "S/N". Ese
+    /// renglon no encontraba regla y se le aplicaba la comision por omision: el folio 4767 de
+    /// TURIBUS SALMORAN (20%) tenia un ticket de $8,584 calculado al 10%.
+    ///
+    /// Solo se completa hacia los renglones que NO resolvieron regla, nunca se pisa una unidad
+    /// que si se reconocio.
+    /// </summary>
+    private static void InheritTransportAcrossTickets(List<AuthoritativeCommissionRow> rows)
+    {
+        foreach (var group in rows.GroupBy(x => x.OperationFolio, StringComparer.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(group.Key)) continue;
+            var items = group.ToArray();
+            if (items.Length < 2) continue;
+
+            var reference = items.FirstOrDefault(x =>
+                x.TransportInfo.CommissionPercent > 0m
+                && !string.IsNullOrWhiteSpace(x.TransportType));
+            if (reference is null) continue;
+
+            foreach (var row in items)
+            {
+                if (ReferenceEquals(row, reference)) continue;
+                if (row.TransportInfo.CommissionPercent > 0m) continue;
+                row.TransportType = reference.TransportType;
+                row.TransportInfo = reference.TransportInfo;
+            }
+        }
+    }
+
     private static void DistributePayoutAcrossTickets(List<AuthoritativeCommissionRow> rows)
     {
         foreach (var group in rows.GroupBy(x => x.OperationFolio, StringComparer.OrdinalIgnoreCase))
@@ -3477,6 +3631,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
             {
                 row.PayoutDeduction = 0m;
                 row.PayoutTicket = string.Empty;
+                row.BonusAmount = 0m;
             }
 
             var highest = items
@@ -3498,12 +3653,26 @@ public sealed class LocalPosRepository(LocalDatabase database)
             // traia los $350 realmente pagados, y la pantalla mostraba $450.
             var registrado = llegadas.Sum(g => g.Max(x => x.GroupPayout));
             var tabulado = items.Max(x => x.TransportInfo.PayoutAmount);
-            var payoutTotal = registrado > 0m ? registrado : tabulado * llegadas.Length;
+
+            // Campos extra de la unidad (HardcodedTransportCatalog.Extras). Sin extras no cambia
+            // nada. Ejemplo: MAJESTIC desde el 19/09/2026 lleva $500 fijos por llegada sin umbral,
+            // y si la venta no alcanza la base queda en negativo (venta $150 -> base -$350).
+            var extra = highest.TransportInfo.Extra;
+            if (extra.BonoFijoPorLlegada > 0m)
+                highest.BonusAmount = extra.BonoFijoPorLlegada * llegadas.Length;
+
+            var payoutTotal = extra.DescuentoFijoPorLlegada > 0m
+                ? extra.DescuentoFijoPorLlegada * llegadas.Length
+                : registrado > 0m ? registrado : tabulado * llegadas.Length;
             if (payoutTotal <= 0m) continue;
 
             // El umbral se compara contra la venta del FOLIO: la dejada se cobra una vez por
             // folio, asi que la pregunta "fue una venta chica?" es sobre el folio completo.
-            if (!CommissionGlobalRules.ShouldDeductPayout(items.Sum(x => x.SaleTotal))) continue;
+            var ventaFolio = items.Sum(x => x.SaleTotal);
+            var descuenta = extra.UmbralVentaChica is { } umbral
+                ? umbral <= 0m || ventaFolio > umbral
+                : CommissionGlobalRules.ShouldDeductPayout(ventaFolio);
+            if (!descuenta) continue;
 
             highest.PayoutDeduction = payoutTotal;
             // Todos los renglones del folio saben a quien se le cargo, para que el detalle pueda
@@ -3523,8 +3692,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
                 var amexRetentionPercent = ResolveAuthoritativeDiscount(row, PaymentKind.Amex);
                 var cardRetention = row.Payments.Card * (CommissionPaymentRules.NormalizePercent(cardRetentionPercent) / 100m);
                 var amexRetention = row.Payments.Amex * (CommissionPaymentRules.NormalizePercent(amexRetentionPercent) / 100m);
-                var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses);
                 var saleTotal = row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal;
+                var deductions = ResolvePayoutDeduction(row) + CalculateExpenseDeductions(row.TransportType, row.Expenses)
+                    + ResolveExtraPercentDeduction(row, saleTotal);
                 var baseCommission = Math.Max(0m, CalculateAuthoritativeNetAfterDiscount(row, saleTotal, row.Payments) - deductions);
                 return new LocalCommissionDiagnosticRow(
                     row.OperationFolio,
@@ -3549,6 +3719,76 @@ public sealed class LocalPosRepository(LocalDatabase database)
                     source);
             })
             .ToArray();
+    }
+
+    /// <summary>
+    /// Desglose en palabras de la retencion del banco, forma de pago por forma de pago.
+    ///
+    /// Reparte exactamente igual que <see cref="CalculateAuthoritativeNetAfterDiscount"/> -- misma
+    /// escala, mismos porcentajes, mismo trato para la parte que pagosM no cubre -- para que lo
+    /// que dice la pantalla no pueda separarse de lo que hizo el calculo.
+    ///
+    /// Existe porque el panel mostraba unicamente el porcentaje promedio: con un ticket pagado
+    /// mitad AMEX y mitad tarjeta salia "(21 %)", y operacion lo leyo como que al AMEX se le
+    /// estaba quitando 21 % en vez de 24 % (reportado el 08/09/2026). El 21 % era el promedio de
+    /// haber aplicado 24 % a $150 y 19 % a $240.
+    /// </summary>
+    private static string BuildRetentionBreakdown(AuthoritativeCommissionRow row, decimal saleTotal, TicketPaymentBreakdown payments)
+    {
+        if (saleTotal <= 0m)
+            return string.Empty;
+
+        var partes = new List<string>();
+
+        void Agrega(string etiqueta, decimal monto, decimal tasaPorcentaje)
+        {
+            if (monto <= 0m || tasaPorcentaje <= 0m)
+                return;
+            var retenido = monto * (tasaPorcentaje / 100m);
+            partes.Add(string.Format(
+                CultureInfo.CurrentCulture,
+                "{0} {1:C2} al {2:0.##} % = {3:C2}",
+                etiqueta,
+                monto,
+                tasaPorcentaje,
+                retenido));
+        }
+
+        if (payments.Total <= 0m)
+        {
+            var kind = IsAmexPayment(payments.Description)
+                ? PaymentKind.Amex
+                : IsCardPayment(payments.Description) ? PaymentKind.Card : PaymentKind.Cash;
+            var etiqueta = kind switch
+            {
+                PaymentKind.Amex => "AMEX",
+                PaymentKind.Card => "Tarjeta",
+                _ => "Efectivo"
+            };
+            Agrega(etiqueta, saleTotal, ResolveAuthoritativeDiscount(row, kind));
+            return string.Join("  ·  ", partes);
+        }
+
+        var scale = payments.Total > saleTotal ? saleTotal / payments.Total : 1m;
+        var efectivo = payments.NonCard * scale;
+        var tarjeta = payments.Card * scale;
+        var amex = payments.Amex * scale;
+        var allocated = Math.Min(saleTotal, efectivo + tarjeta + amex);
+        var unresolved = Math.Max(0m, saleTotal - allocated);
+
+        Agrega("AMEX", amex, ResolveAuthoritativeDiscount(row, PaymentKind.Amex));
+        Agrega("Tarjeta", tarjeta, ResolveAuthoritativeDiscount(row, PaymentKind.Card));
+        Agrega("Efectivo", efectivo, ResolveAuthoritativeDiscount(row, PaymentKind.Cash));
+
+        if (unresolved > 0m)
+        {
+            var unresolvedKind = IsAmexPayment(payments.Description)
+                ? PaymentKind.Amex
+                : IsCardPayment(payments.Description) ? PaymentKind.Card : PaymentKind.Cash;
+            Agrega("Resto del ticket", unresolved, ResolveAuthoritativeDiscount(row, unresolvedKind));
+        }
+
+        return string.Join("  ·  ", partes);
     }
 
     private static decimal CalculateAuthoritativeNetAfterDiscount(AuthoritativeCommissionRow row, decimal saleTotal, TicketPaymentBreakdown payments)
@@ -3620,44 +3860,47 @@ public sealed class LocalPosRepository(LocalDatabase database)
     private static decimal ResolveAuthoritativePercentage(AuthoritativeCommissionRow row)
     {
         var catalogPercent = NormalizePercentValue(row.TransportInfo.CommissionPercent);
-        // MAJESTIC en efectivo/pesos SIEMPRE es 10%, sin importar lo que diga el catalogo (el
-        // catalogo local trae "MAJESTIC EXPEDITIONS" fijo en 8%, que es la tasa de TARJETA; en
-        // pesos nunca aplica). Por eso este chequeo va ANTES del catalogo, no despues: si fuera
-        // despues, el 8% del catalogo ganaba siempre y la correccion de tarjeta/efectivo nunca se
-        // alcanzaba a evaluar. Al no depender de ninguna regla con vigencia guardada, esto se
-        // recalcula solo al ver folios de cualquier fecha pasada, sin tener que tocar el
-        // catalogo ni crear una vigencia nueva. Confirmado por Jairo 2026-08-27.
-        if (IsMajesticAuthoritative(row.TransportType))
-            return row.Payments.Card > 0m || row.Payments.Amex > 0m
-                ? (catalogPercent > 0m && catalogPercent <= 100m ? catalogPercent : 8m)
-                : 10m;
+        // Historico (confirmado por Jairo 2026-08-27): en efectivo/pesos se forzaba 10% para
+        // Majestic sin importar el catalogo. Esto mezclaba dos cosas distintas: el 10% es lo que
+        // se cobra/retiene en efectivo (columna "Efectivo" del catalogo, CashRetentionPercent),
+        // NO la comision que le toca al taxista. La comision del taxista debe ser siempre la del
+        // catalogo (8% para MAJESTIC EXPEDITIONS), sin importar la forma de pago -- corregido a
+        // peticion del negocio 2026-08-31, se estaba pagando de mas al taxista.
         if (catalogPercent > 0m && catalogPercent <= 100m)
             return catalogPercent;
+        if (IsMajesticAuthoritative(row.TransportType)) return 8m;
         if (IsSalmoranAuthoritative(row.TransportType)) return 20m;
         return 10m;
     }
 
-    private async Task<IReadOnlyList<ImportedTransportCatalogRow>> ReadConfiguredTransportCatalogRowsAsync()
-    {
-        var rules = await _commissionSettings.GetRulesAsync("TRANSPORTE");
-        return rules
-            .Where(x => x.Active)
+    /// <summary>
+    /// Las reglas de comision por transporte salen del catalogo fijo del programa
+    /// (<see cref="HardcodedTransportCatalog"/>), no de la base local de cada maquina.
+    ///
+    /// Antes se leian de la SQLite de cada equipo y las copias divergieron: el 2026-09-02 una caja
+    /// tenia 7 unidades configuradas y la de desarrollo 16, asi que la misma unidad se cobraba
+    /// distinto segun desde donde se mirara. Al venir del programa, todas las maquinas calculan
+    /// igual. Cada renglon trae su vigencia, asi que un folio viejo sigue tomando la tarifa que
+    /// estaba vigente ese dia.
+    /// </summary>
+    private static IReadOnlyList<ImportedTransportCatalogRow> BuildConfiguredTransportCatalogRows() =>
+        HardcodedTransportCatalog.Entries
             .Select(x => new ImportedTransportCatalogRow(
                 x.Code,
                 x.Name,
                 x.CashRetentionPercent,
-                x.CardRetentionPercent,
+                HardcodedTransportCatalog.CardRetentionPercent,
                 x.CommissionPercent,
                 0m,
                 0m,
-                x.AmexRetentionPercent,
+                HardcodedTransportCatalog.AmexRetentionPercent,
                 x.EffectiveFrom,
                 x.EffectiveTo,
                 true,
                 x.PayoutAmount,
-                x.PaxKind))
+                string.Empty,
+                x.Extra))
             .ToArray();
-    }
 
     /// <summary>
     /// Normaliza el tipo de pax que viene de la operacion. En la base esta sucio: aparece como
@@ -3690,15 +3933,12 @@ public sealed class LocalPosRepository(LocalDatabase database)
             .ThenByDescending(row => row.EffectiveFrom ?? DateTime.MinValue)
             .ToArray();
 
-        var match = effectiveCatalog.FirstOrDefault(row =>
-            string.Equals(NormalizeTransportLookup(row.Type), key, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(NormalizeTransportLookup(row.Name), key, StringComparison.OrdinalIgnoreCase));
-
-        match ??= effectiveCatalog.FirstOrDefault(row =>
-            key.Contains(NormalizeTransportLookup(row.Type), StringComparison.OrdinalIgnoreCase)
-            || key.Contains(NormalizeTransportLookup(row.Name), StringComparison.OrdinalIgnoreCase)
-            || NormalizeTransportLookup(row.Type).Contains(key, StringComparison.OrdinalIgnoreCase)
-            || NormalizeTransportLookup(row.Name).Contains(key, StringComparison.OrdinalIgnoreCase));
+        // Se elige por puntaje y no por "el primero que contenga el texto". El contains suelto
+        // emparejaba unidades distintas (una regla de nombre corto se mete dentro de cualquier
+        // unidad mas larga) y, peor, una regla con clave o nombre vacio hacia match con TODO,
+        // porque "GUIA".Contains("") siempre es verdadero. Ademas el catalogo configurado gana
+        // sobre el del punto de venta cuando los dos alcanzan el mismo puntaje.
+        var match = SelectTransportRuleByScore(effectiveCatalog, key);
 
         if (match is null)
             return ImportedTransportInfo.Empty;
@@ -3710,7 +3950,142 @@ public sealed class LocalPosRepository(LocalDatabase database)
             match.Minimum,
             match.Maximum,
             CommissionPaymentRules.ResolveAmexRetention(match.AmexDiscount),
-            Math.Max(0m, match.PayoutAmount));
+            Math.Max(0m, match.PayoutAmount),
+            match.Extra);
+    }
+
+    /// <summary>
+    /// Puntaje minimo para aceptar una unidad. Debajo de esto se prefiere no emparejar: es mejor
+    /// que el folio quede sin regla (y salga en diagnosticos) que cobrarle la comision de otra
+    /// unidad parecida.
+    /// </summary>
+    private const int TransportMatchThreshold = 62;
+
+    /// <summary>
+    /// Elige la regla del catalogo que mejor describe la unidad capturada. El texto de la
+    /// operacion llega sucio ("TAXI  VERDE", "S/N", abreviaturas), asi que se puntea cada regla
+    /// por clave y por nombre y gana la de mayor puntaje.
+    ///
+    /// EL CATALOGO FIJO MANDA. Se busca primero SOLO entre las reglas del catalogo del sistema
+    /// (<see cref="HardcodedTransportCatalog"/>, las que traen Configured = true) y, si alguna
+    /// alcanza el umbral, esa gana aunque una del punto de venta puntee mas alto. El catalogo del
+    /// punto de venta solo se usa cuando la unidad no existe en el catalogo fijo.
+    ///
+    /// Sin esta regla el desempate dependia del puntaje y ganaba quien coincidiera letra por
+    /// letra: por eso "GUIAS" cobraba el 8 % del punto de venta en vez del 10 % configurado, y
+    /// "TURIBUS SA" tomaba el 10 % de TURIBUS ADO en vez del 20 % de TURIBUS SALMORAN.
+    /// </summary>
+    private static ImportedTransportCatalogRow? SelectTransportRuleByScore(
+        IReadOnlyList<ImportedTransportCatalogRow> effectiveCatalog,
+        string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return null;
+
+        return SelectBestByScore(effectiveCatalog.Where(row => row.Configured), key)
+            ?? SelectBestByScore(effectiveCatalog.Where(row => !row.Configured), key);
+    }
+
+    private static ImportedTransportCatalogRow? SelectBestByScore(
+        IEnumerable<ImportedTransportCatalogRow> catalog,
+        string key)
+    {
+        ImportedTransportCatalogRow? best = null;
+        var bestScore = 0;
+        // El catalogo ya viene ordenado por prioridad (pax, generica, vigencia mas reciente): al
+        // exigir puntaje ESTRICTAMENTE mayor, en un empate se queda el primero, que es el de
+        // mayor prioridad.
+        foreach (var row in catalog)
+        {
+            var score = Math.Max(
+                ScoreTransportCandidate(key, NormalizeTransportLookup(row.Type)),
+                ScoreTransportCandidate(key, NormalizeTransportLookup(row.Name)));
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = row;
+            }
+        }
+
+        return bestScore >= TransportMatchThreshold ? best : null;
+    }
+
+    /// <summary>
+    /// Que tan bien describe <paramref name="candidate"/> a la unidad capturada, de 0 a 100.
+    /// Claves de menos de tres letras no puntean: son las que producian emparejamientos absurdos.
+    /// </summary>
+    private static int ScoreTransportCandidate(string key, string candidate)
+    {
+        if (candidate.Length < 3 || key.Length < 3) return 0;
+        if (string.Equals(key, candidate, StringComparison.Ordinal)) return 100;
+
+        // Singular/plural ("GUIA" vs "GUIAS"): el catalogo del punto de venta y el de
+        // Configuracion de comisiones a veces difieren solo en esa "S". Sin esto, la version
+        // que coincide letra por letra saca 100 y la otra 90 (prefijo), y el 100 le gana a la
+        // prioridad de Configuracion aunque describan la misma unidad. Se tratan como el mismo
+        // puntaje maximo para que el desempate real lo decida el orden de prioridad (Configurado
+        // antes que POS), no una "S" de mas o de menos.
+        if (string.Equals(StripTrailingS(key), StripTrailingS(candidate), StringComparison.Ordinal))
+            return 100;
+
+        var shorter = key.Length <= candidate.Length ? key : candidate;
+        var longer = key.Length <= candidate.Length ? candidate : key;
+        var ratio = (double)shorter.Length / longer.Length;
+
+        // Uno contiene al otro completo, y la DIRECCION importa:
+        //
+        // a) El candidato contiene toda la clave ("TURIBUS SA" dentro de "TURIBUS SALMORAN"):
+        //    la regla explica todo lo que se capturo. Es el caso normal del nombre cortado --
+        //    la unidad se guarda recortada a 10 caracteres, asi que la captura casi siempre es
+        //    un pedazo del nombre real. Coincidencia fuerte.
+        //
+        // b) La clave contiene al candidato ("TRANS" dentro de "TRANSPORTA"): la regla solo
+        //    explica un pedazo de lo capturado y el resto queda suelto. Son los codigos cortos
+        //    y genericos del catalogo del POS (TRANS, TURIBUS, TAXI, VAN) que se colaban en
+        //    unidades ajenas: "Transporta" (VAN TRANSPORTADORAS, 10%) terminaba cobrando el
+        //    20% de TRANSCENDENCE solo porque comparte las cinco primeras letras. Coincidencia
+        //    debil: nunca debe ganarle a una regla que si explica la captura completa.
+        //
+        // Confirmado con datos reales el 2026-09-01 sobre las 81 unidades distintas capturadas.
+        if (candidate.Contains(key, StringComparison.Ordinal))
+            return 88 + (int)Math.Round(9 * ratio);
+
+        if (key.Contains(candidate, StringComparison.Ordinal))
+            return 58 + (int)Math.Round(30 * ratio);
+
+        // Errores de dedo: se acepta hasta ~25% de diferencia de letras.
+        var distance = LevenshteinDistance(key, candidate);
+        var similarity = 1.0 - ((double)distance / longer.Length);
+        return similarity >= 0.75 ? (int)Math.Round(similarity * 90) : 0;
+    }
+
+    /// <summary>
+    /// Quita una sola "S" final (plural simple). Sólo en palabras de más de 3 letras para no
+    /// mutilar claves cortas ("BUS", "CAS"). No es un stemmer completo, sólo cubre el caso real
+    /// confirmado (GUIA/GUIAS); "S" repetida o plurales irregulares no aplican aquí.
+    /// </summary>
+    private static string StripTrailingS(string value) =>
+        value.Length > 3 && value.EndsWith('S') ? value[..^1] : value;
+
+    private static int LevenshteinDistance(string left, string right)
+    {
+        var previous = new int[right.Length + 1];
+        var current = new int[right.Length + 1];
+        for (var j = 0; j <= right.Length; j++) previous[j] = j;
+
+        for (var i = 1; i <= left.Length; i++)
+        {
+            current[0] = i;
+            for (var j = 1; j <= right.Length; j++)
+            {
+                var cost = left[i - 1] == right[j - 1] ? 0 : 1;
+                current[j] = Math.Min(
+                    Math.Min(current[j - 1] + 1, previous[j] + 1),
+                    previous[j - 1] + cost);
+            }
+            (previous, current) = (current, previous);
+        }
+
+        return previous[right.Length];
     }
 
     private static bool IsTransportRuleEffective(ImportedTransportCatalogRow row, DateTime operationDate)
@@ -3739,6 +4114,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
         ["TAXOVERDE"] = "TAXIVERDENACIONAL",
         ["VANTRANSPOTADORA"] = "VANTRANSPORTADORAS",
         ["VANTRASNPOTADORA"] = "VANTRANSPORTADORAS",
+        // "TRAVER" por "TRAVEL": 12 folios el 2026-09-02. La distancia de letras contra
+        // "TRAVEL EXPERIENCE" es demasiada para el puntaje (la captura ademas llega cortada a 10
+        // caracteres), asi que sin alias se quedaban sin regla y caian al 10 % por omision.
+        ["TRAVEREXP"] = "TRAVELEXPERIENCE",
+        ["TRAVEREXPERIENCE"] = "TRAVELEXPERIENCE",
     };
 
     private static string ResolveTransportAlias(string normalizedKey) =>
@@ -3799,7 +4179,23 @@ public sealed class LocalPosRepository(LocalDatabase database)
             var controlPaid = group.Max(x => x.GroupCommissionPaid);
             var hasPaidDate = group.Any(x => !string.IsNullOrWhiteSpace(x.GroupCommissionPaidDate));
             var remaining = controlPaid > 0m ? controlPaid : hasPaidDate ? totalCommission : 0m;
-            foreach (var row in group.OrderByDescending(x => x.CommissionAmount))
+
+            // pago_comision guarda el NETO del folio: lo que se le entrego al taxista ya trae
+            // restado el ticket en negativo (el de venta mas alta cuando la dejada o el descuento
+            // fijo no alcanzo a cubrirse). Si el folio se pago, ese negativo quedo saldado, y lo
+            // pagado alcanza para cubrir completos los tickets positivos. Antes el negativo no
+            // se contaba: el folio pagado quedaba con un ticket PARCIAL y se podia volver a pagar.
+            var negatives = group.Where(x => x.CommissionAmount < 0m).ToArray();
+            if (remaining > 0m)
+            {
+                foreach (var row in negatives)
+                {
+                    row.PaidAmount = row.CommissionAmount;
+                    remaining -= row.CommissionAmount;
+                }
+            }
+
+            foreach (var row in group.Where(x => x.CommissionAmount >= 0m).OrderByDescending(x => x.CommissionAmount))
             {
                 row.PaidAmount = Math.Min(row.CommissionAmount, Math.Max(remaining, 0m));
                 remaining -= row.PaidAmount;
@@ -4051,7 +4447,12 @@ public sealed class LocalPosRepository(LocalDatabase database)
             row.PayoutTicket,
             row.CommissionAuthorizedDate,
             row.CommissionAuthorizedBy,
-            row.CommissionPaidBy);
+            row.CommissionPaidBy,
+            BuildRetentionBreakdown(row, row.SaleTotal, row.Payments),
+            row.TransportInfo.Extra.DescuentoFijoPorLlegada,
+            ResolveExtraPercentDeduction(row, row.CommissionableTotal > 0m ? row.CommissionableTotal : row.SaleTotal),
+            row.TransportInfo.Extra.DescuentoExtraPorcentaje,
+            row.BonusAmount);
     }
 
     private static LocalCommissionBrowserRow MapRelationCommissionRow(LocalRelation relation)
@@ -4385,7 +4786,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
         public DateTime Date { get; }
         public string DriverCode { get; }
         public string DriverName { get; }
-        public string TransportType { get; }
+        // Se puede reasignar: los renglones del mismo folio que llegan sin unidad heredan la
+        // del renglon que si la trae (ver InheritTransportAcrossTickets).
+        public string TransportType { get; set; }
         public decimal SaleTotal { get; }
         public decimal SaleStore { get; }
         public decimal SaleJewelry { get; }
@@ -4400,7 +4803,7 @@ public sealed class LocalPosRepository(LocalDatabase database)
         public string GroupCommissionPaidDate { get; }
         public TicketPaymentBreakdown Payments { get; }
         public StoreExpenseBreakdown Expenses { get; }
-        public ImportedTransportInfo TransportInfo { get; }
+        public ImportedTransportInfo TransportInfo { get; set; }
         public decimal CommissionableTotal { get; }
         public decimal PayoutDeduction { get; set; }
 
@@ -4414,6 +4817,9 @@ public sealed class LocalPosRepository(LocalDatabase database)
 
         /// <summary>Ticket del folio al que se le cargo la dejada completa (el de mayor venta).</summary>
         public string PayoutTicket { get; set; } = string.Empty;
+
+        /// <summary>Pesos que se suman a la comision de este ticket (BonoFijoPorLlegada).</summary>
+        public decimal BonusAmount { get; set; }
 
         /// <summary>
         /// Autorizacion de pago de comision. Vacio = no autorizado, y por lo tanto no se puede
@@ -4636,7 +5042,8 @@ public sealed class LocalPosRepository(LocalDatabase database)
         DateTime? EffectiveTo = null,
         bool Configured = false,
         decimal PayoutAmount = 0m,
-        string PaxKind = "");
+        string PaxKind = "",
+        HardcodedTransportCatalog.Extras? Extra = null);
     private enum PaymentKind
     {
         Cash,
@@ -4644,8 +5051,11 @@ public sealed class LocalPosRepository(LocalDatabase database)
         Amex
     }
 
-    private sealed record ImportedTransportInfo(decimal CashDiscount, decimal CardDiscount, decimal CommissionPercent, decimal Minimum, decimal Maximum, decimal AmexDiscount = 0m, decimal PayoutAmount = 0m)
+    private sealed record ImportedTransportInfo(decimal CashDiscount, decimal CardDiscount, decimal CommissionPercent, decimal Minimum, decimal Maximum, decimal AmexDiscount = 0m, decimal PayoutAmount = 0m, HardcodedTransportCatalog.Extras? ExtraRule = null)
     {
+        /// <summary>Campos extra de la unidad; nunca null (sin extras = todo apagado).</summary>
+        public HardcodedTransportCatalog.Extras Extra => ExtraRule ?? HardcodedTransportCatalog.Extras.Ninguno;
+
         public static ImportedTransportInfo Empty { get; } = new(0m, 0m, 0m, 0m, 0m);
     }
 

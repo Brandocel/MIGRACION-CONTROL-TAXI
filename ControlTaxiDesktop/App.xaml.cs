@@ -113,6 +113,60 @@ public partial class App : Application
             return;
         }
 
+        // Publica el cuadre de Plaza 28 en la API de Hostinger y se cierra. Lo llama el
+        // sincronizador cada ciclo, para que Hoka Solutions tenga el cuadre al dia sin depender
+        // de que alguien exporte el Excel: si nadie lo exporta, Hoka mostraria el dato viejo y
+        // nadie se daria cuenta.
+        //
+        // Va como bandera del ejecutable y no como programa aparte porque ControlTaxiDesktop.exe
+        // ya esta instalado en todas las maquinas de la tienda; un binario nuevo obligaria a
+        // rehacer el paquete y el instalador.
+        if (eventArgs.Args.Contains("--push-cuadre", StringComparer.OrdinalIgnoreCase))
+        {
+            var bitacora = new System.Text.StringBuilder();
+            var exito = false;
+
+            try
+            {
+                // Sin la credencial cifrada no hay SQL Server, y sin SQL Server no hay cuadre.
+                if (!Plaza28CredentialStore.TryApplyToEnvironment(out var errorCredencial))
+                    throw new InvalidOperationException("No se pudo leer la credencial cifrada de Plaza 28. " + errorCredencial);
+
+                var desde = ParseFechaArgumento(eventArgs.Args, "--desde=") ?? DateTime.Today;
+                var hasta = ParseFechaArgumento(eventArgs.Args, "--hasta=") ?? desde;
+
+                var database = new LocalDatabase();
+                await database.InitializeAsync();
+
+                var resultado = await new CuadreSnapshotService(database).BuildAndPushPlaza28Async(desde, hasta);
+                exito = resultado.Ok;
+
+                bitacora.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {desde:yyyy-MM-dd} a {hasta:yyyy-MM-dd} -> "
+                    + (resultado.Ok ? "OK" : "FALLO") + ": " + resultado.Mensaje
+                    + $" (resumen={resultado.FilasResumen}, dejadas={resultado.FilasDejadas})");
+            }
+            catch (Exception ex)
+            {
+                bitacora.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ERROR: {ex.Message}");
+            }
+
+            try
+            {
+                var carpetaBitacora = Path.Combine(AppContext.BaseDirectory, "Logs");
+                Directory.CreateDirectory(carpetaBitacora);
+                await File.AppendAllTextAsync(Path.Combine(carpetaBitacora, "push-cuadre.txt"), bitacora.ToString());
+            }
+            catch
+            {
+                // Si no se puede escribir la bitacora igual importa el codigo de salida.
+            }
+
+            Console.Write(bitacora.ToString());
+            Environment.ExitCode = exito ? 0 : 1;
+            Shutdown(Environment.ExitCode);
+            return;
+        }
+
         if (eventArgs.Args.Contains("--init-local-db", StringComparer.OrdinalIgnoreCase))
         {
             var database = new LocalDatabase();
@@ -253,6 +307,22 @@ public partial class App : Application
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Lee una fecha de los argumentos con el formato <c>--desde=2026-09-09</c>. Devuelve null si
+    /// el argumento no viene o no se entiende, para que quien llama use su valor por omision.
+    /// </summary>
+    private static DateTime? ParseFechaArgumento(string[] args, string prefijo)
+    {
+        var argumento = args.FirstOrDefault(x => x.StartsWith(prefijo, StringComparison.OrdinalIgnoreCase));
+        if (argumento is null)
+            return null;
+
+        var valor = argumento[prefijo.Length..].Trim().Trim('"');
+        return DateTime.TryParse(valor, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var fecha)
+            ? fecha.Date
+            : null;
     }
 
     private static void TryDeleteSelfTestDatabase(string path)
