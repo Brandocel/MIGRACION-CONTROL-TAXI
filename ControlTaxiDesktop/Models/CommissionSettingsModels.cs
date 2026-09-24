@@ -36,8 +36,22 @@ public sealed record CommissionSettingsRule(
     // Null means not configured; zero is an explicitly configured free payout.
     public decimal? CvPayoutOneToFourAdults { get; init; }
     public decimal? CvPayoutFiveOrMoreAdults { get; init; }
-    public string CvPayoutOneToFourDisplay => Category == "TRANSPORTE" && Branch == "CV" ? CvPayoutOneToFourAdults?.ToString("C2", CultureInfo.CurrentCulture) ?? "Pendiente" : string.Empty;
-    public string CvPayoutFiveOrMoreDisplay => Category == "TRANSPORTE" && Branch == "CV" ? CvPayoutFiveOrMoreAdults?.ToString("C2", CultureInfo.CurrentCulture) ?? "Pendiente" : string.Empty;
+    // Null means not configured; zero is an explicitly configured percentage.
+    public decimal? CvTastingPercent { get; init; }
+
+    public string CvPayoutOneToFourDisplay => Category == "TRANSPORTE" && Branch == "CV"
+    ? CvPayoutOneToFourAdults is decimal amount ? $"${amount:0.00}" : "Pendiente"
+    : string.Empty;
+
+    public string CvPayoutFiveOrMoreDisplay => Category == "TRANSPORTE" && Branch == "CV"
+        ? CvPayoutFiveOrMoreAdults is decimal amount ? $"${amount:0.00}" : "Pendiente"
+        : string.Empty;
+
+    public string CvTastingDisplay => Category == "TRANSPORTE" && Branch == "CV"
+        ? CvTastingPercent is decimal value
+            ? value.ToString("0.##", CultureInfo.InvariantCulture) + "%"
+            : "Pendiente"
+        : string.Empty;
     public string StatusText => Active ? "Activo" : "Inactivo";
     public string PayoutDisplay => PayoutAmount <= 0m
         ? "—"

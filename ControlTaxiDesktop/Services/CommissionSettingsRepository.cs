@@ -39,6 +39,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               PaxKind TEXT NOT NULL DEFAULT '',
               MonedaId INTEGER NOT NULL DEFAULT -1,
               Branch TEXT NOT NULL DEFAULT '',
+              CvPayoutOneToFourAdults REAL NULL CHECK (CvPayoutOneToFourAdults IS NULL OR CvPayoutOneToFourAdults >= 0),
+              CvPayoutFiveOrMoreAdults REAL NULL CHECK (CvPayoutFiveOrMoreAdults IS NULL OR CvPayoutFiveOrMoreAdults >= 0),
+              CvTastingPercent REAL NULL CHECK (CvTastingPercent IS NULL OR (CvTastingPercent >= 0 AND CvTastingPercent <= 100)),
               AppliesExpense INTEGER NOT NULL DEFAULT 1,
               Active INTEGER NOT NULL DEFAULT 1,
               EffectiveFrom TEXT NOT NULL,
@@ -104,6 +107,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         // Before seeding defaults, ensure migration of existing table to include Branch and updated UNIQUE
         await MigrateAddBranchAsync(connection);
         await MigrateCvPayoutBandsAsync(connection);
+        await MigrateCvTastingPercentAsync(connection);
     }
 
     // Explicit import only. No automatic seeding, overwrites or activation of commission percentages.
@@ -148,23 +152,35 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await transaction.CommitAsync();
     }
 
+    private static async Task MigrateCvTastingPercentAsync(SqliteConnection connection)
+    {
+        // Additive and nullable: existing rules remain valid and "not configured" stays
+        // distinguishable from an explicitly configured 0%.
+        await using var transaction = connection.BeginTransaction();
+        await using var inspect = connection.CreateCommand();
+        inspect.Transaction = transaction;
+        inspect.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CommissionSettingsRules') WHERE name='CvTastingPercent';";
+        if (Convert.ToInt64(await inspect.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 0)
+        {
+            await using var alter = connection.CreateCommand();
+            alter.Transaction = transaction;
+            alter.CommandText = "ALTER TABLE CommissionSettingsRules ADD COLUMN CvTastingPercent REAL NULL CHECK (CvTastingPercent IS NULL OR (CvTastingPercent >= 0 AND CvTastingPercent <= 100));";
+            await alter.ExecuteNonQueryAsync();
+        }
+        await transaction.CommitAsync();
+    }
+
     private static async Task MigrateAddBranchAsync(SqliteConnection connection)
     {
         // Verifica también la unicidad para reparar migraciones parciales.
         await using var info = connection.CreateCommand();
         info.CommandText = "PRAGMA table_info(\"CommissionSettingsRules\");";
-        var hasBranch = false;
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         await using (var reader = await info.ExecuteReaderAsync())
         {
-            while (await reader.ReadAsync())
-            {
-                if (string.Equals(reader.GetString(1), "Branch", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasBranch = true;
-                    break;
-                }
-            }
+            while (await reader.ReadAsync()) columns.Add(reader.GetString(1));
         }
+        var hasBranch = columns.Contains("Branch");
         await using var schema = connection.CreateCommand();
         schema.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='CommissionSettingsRules';";
         var tableSql = Convert.ToString(await schema.ExecuteScalarAsync()) ?? string.Empty;
@@ -199,6 +215,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               PaxKind TEXT NOT NULL DEFAULT '',
               MonedaId INTEGER NOT NULL DEFAULT -1,
               Branch TEXT NOT NULL DEFAULT '',
+              CvPayoutOneToFourAdults REAL NULL CHECK (CvPayoutOneToFourAdults IS NULL OR CvPayoutOneToFourAdults >= 0),
+              CvPayoutFiveOrMoreAdults REAL NULL CHECK (CvPayoutFiveOrMoreAdults IS NULL OR CvPayoutFiveOrMoreAdults >= 0),
+              CvTastingPercent REAL NULL CHECK (CvTastingPercent IS NULL OR (CvTastingPercent >= 0 AND CvTastingPercent <= 100)),
               AppliesExpense INTEGER NOT NULL DEFAULT 1,
               Active INTEGER NOT NULL DEFAULT 1,
               EffectiveFrom TEXT NOT NULL,
@@ -214,15 +233,16 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         // Copy existing data, setting Branch to empty string for migrated rows.
         await using var copy = connection.CreateCommand();
         copy.Transaction = transaction;
-        copy.CommandText = """
+        var branchExpression = hasBranch ? "Branch" : "''";
+        var smallPayoutExpression = columns.Contains("CvPayoutOneToFourAdults") ? "CvPayoutOneToFourAdults" : "NULL";
+        var largePayoutExpression = columns.Contains("CvPayoutFiveOrMoreAdults") ? "CvPayoutFiveOrMoreAdults" : "NULL";
+        var tastingExpression = columns.Contains("CvTastingPercent") ? "CvTastingPercent" : "NULL";
+        copy.CommandText = $"""
             INSERT INTO CommissionSettingsRules_new
-            (Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,PaymentKind,AppliesPayout,PayoutAmount,PaxKind,MonedaId,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes)
-            SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,PaymentKind,AppliesPayout,PayoutAmount,PaxKind,MonedaId,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes
+            (Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,PaymentKind,AppliesPayout,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults,CvTastingPercent,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes)
+            SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,PaymentKind,AppliesPayout,PayoutAmount,PaxKind,MonedaId,{branchExpression},{smallPayoutExpression},{largePayoutExpression},{tastingExpression},AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes
             FROM CommissionSettingsRules;
             """;
-        copy.CommandText = copy.CommandText.Replace("UpdatedBy,Notes)", "UpdatedBy,Notes,Branch)")
-            .Replace("UpdatedBy,Notes\n", "UpdatedBy,Notes," + (hasBranch ? "Branch" : "''") + "\n")
-            .Replace("UpdatedBy,Notes\r\n", "UpdatedBy,Notes," + (hasBranch ? "Branch" : "''") + "\r\n");
         await copy.ExecuteNonQueryAsync();
 
         await using var drop = connection.CreateCommand();
@@ -317,7 +337,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
         var stored = await ReadRulesAsync($"""
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults,CvTastingPercent
             FROM CommissionSettingsRules
             {where}
             ORDER BY Category, Name, EffectiveFrom DESC;
@@ -579,7 +599,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
                 PayoutAmount=$payoutAmount,
                 PaxKind=$paxKind,
                 MonedaId=$monedaId, Branch=$branch,
-                CvPayoutOneToFourAdults=$cvPayoutSmall, CvPayoutFiveOrMoreAdults=$cvPayoutLarge
+                CvPayoutOneToFourAdults=$cvPayoutSmall, CvPayoutFiveOrMoreAdults=$cvPayoutLarge,
+                CvTastingPercent=$cvTasting
             WHERE Id=$id;
             """;
         AddRuleParameters(command, rule, user);
@@ -785,9 +806,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         insert.CommandText = """
             INSERT INTO CommissionSettingsRules
             (Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults)
+             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults,CvTastingPercent)
             VALUES
-            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId,$branch,$cvPayoutSmall,$cvPayoutLarge);
+            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId,$branch,$cvPayoutSmall,$cvPayoutLarge,$cvTasting);
             """;
         AddRuleParameters(insert, rule, user);
         await insert.ExecuteNonQueryAsync();
@@ -1229,7 +1250,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         {
             Branch = reader.FieldCount > 20 ? Text(reader, 20) : string.Empty,
             CvPayoutOneToFourAdults = reader.FieldCount > 21 && !reader.IsDBNull(21) ? Decimal(reader, 21) : null,
-            CvPayoutFiveOrMoreAdults = reader.FieldCount > 22 && !reader.IsDBNull(22) ? Decimal(reader, 22) : null
+            CvPayoutFiveOrMoreAdults = reader.FieldCount > 22 && !reader.IsDBNull(22) ? Decimal(reader, 22) : null,
+            CvTastingPercent = reader.FieldCount > 23 && !reader.IsDBNull(23) ? Decimal(reader, 23) : null
         };
 
     private static void ValidateRule(CommissionSettingsRule rule, string reason)
@@ -1244,9 +1266,14 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         }
         if (rule.CvPayoutOneToFourAdults < 0m || rule.CvPayoutFiveOrMoreAdults < 0m)
             throw new InvalidOperationException("Las dejadas CV no pueden ser negativas.");
+        if (rule.CvTastingPercent is < 0m or > 100m)
+            throw new InvalidOperationException("Degustación debe estar entre 0 y 100 por ciento, o quedar sin configurar.");
         if ((rule.CvPayoutOneToFourAdults.HasValue || rule.CvPayoutFiveOrMoreAdults.HasValue)
             && !(rule.Category.Equals("TRANSPORTE", StringComparison.OrdinalIgnoreCase) && rule.Branch.Equals("CV", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("Las dejadas por adultos solo corresponden a TRANSPORTE de CV.");
+        if (rule.CvTastingPercent.HasValue
+            && !(rule.Category.Equals("TRANSPORTE", StringComparison.OrdinalIgnoreCase) && rule.Branch.Equals("CV", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Degustación solo corresponde a TRANSPORTE de CV.");
         if (rule.EffectiveTo is not null && rule.EffectiveTo.Value.Date < rule.EffectiveFrom.Date)
             throw new InvalidOperationException("La fecha fin no puede ser menor a la fecha inicio.");
     }
@@ -1284,7 +1311,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Transaction = transaction;
         command.CommandText = """
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults,CvTastingPercent
             FROM CommissionSettingsRules
             WHERE Id=$id;
             """;
@@ -1335,7 +1362,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
 
     private static string Snapshot(CommissionSettingsRule rule) =>
         $"{rule.Category}|{rule.Code}|{rule.Name}|C={rule.CommissionPercent:0.####}|E={rule.CashRetentionPercent:0.####}|T={rule.CardRetentionPercent:0.####}|A={rule.AmexRetentionPercent:0.####}|Pago={rule.PaymentKind}|Vig={rule.EffectiveRange}|Activo={rule.Active}|Dejada={rule.PayoutAmount:0.##}|Pax={rule.PaxKind}"
-        + (rule.Branch == "CV" ? $"|Dejada1a4={rule.CvPayoutOneToFourAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? "PENDIENTE"}|Dejada5mas={rule.CvPayoutFiveOrMoreAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? "PENDIENTE"}" : string.Empty);
+        + (rule.Branch == "CV" ? $"|Dejada1a4={rule.CvPayoutOneToFourAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? "PENDIENTE"}|Dejada5mas={rule.CvPayoutFiveOrMoreAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? "PENDIENTE"}|Degustacion={rule.CvTastingPercent?.ToString("0.####", CultureInfo.InvariantCulture) ?? "PENDIENTE"}" : string.Empty);
 
     private static bool IsPrepublicationTestRule(CommissionSettingsRule rule) =>
         string.Equals(NormalizeCode(rule.Code), "PRUEBA PREPUBLICACION", StringComparison.OrdinalIgnoreCase)
@@ -1355,6 +1382,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Parameters.AddWithValue("$payoutAmount", Math.Max(0m, rule.PayoutAmount));
         command.Parameters.AddWithValue("$cvPayoutSmall", (object?)rule.CvPayoutOneToFourAdults ?? DBNull.Value);
         command.Parameters.AddWithValue("$cvPayoutLarge", (object?)rule.CvPayoutFiveOrMoreAdults ?? DBNull.Value);
+        command.Parameters.AddWithValue("$cvTasting", (object?)rule.CvTastingPercent ?? DBNull.Value);
         command.Parameters.AddWithValue("$paxKind", rule.PaxKind.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$monedaId", rule.MonedaId);
         command.Parameters.AddWithValue("$expense", rule.AppliesExpense ? 1 : 0);

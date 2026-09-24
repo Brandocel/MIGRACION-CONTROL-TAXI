@@ -26,7 +26,7 @@ public partial class CommissionSettingsWindow : Window
         _branchCode = string.IsNullOrWhiteSpace(branchCode) ? string.Empty : branchCode.Trim().ToUpperInvariant();
         InitializeComponent();
         var isCv = _branchCode == "CV";
-        CvSmallPayoutColumn.Visibility = CvLargePayoutColumn.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
+        CvSmallPayoutColumn.Visibility = CvLargePayoutColumn.Visibility = CvTastingColumn.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
         LegacyPayoutColumn.Visibility = isCv ? Visibility.Collapsed : Visibility.Visible;
         SimAdultsPanel.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
         SimPayout.IsReadOnly = isCv;
@@ -270,6 +270,7 @@ public partial class CommissionSettingsWindow : Window
         EditPayoutAmount.Text = rule.PayoutAmount.ToString("0.##", CultureInfo.InvariantCulture);
         EditCvPayoutSmall.Text = rule.CvPayoutOneToFourAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
         EditCvPayoutLarge.Text = rule.CvPayoutFiveOrMoreAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
+        EditCvTasting.Text = rule.CvTastingPercent?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty;
         SetComboText(EditPaxKind, rule.PaxKind);
         EditMonedaId.Text = rule.MonedaId.ToString(CultureInfo.InvariantCulture);
         EditExpense.IsChecked = rule.AppliesExpense;
@@ -311,6 +312,7 @@ public partial class CommissionSettingsWindow : Window
         EditPayoutAmount.Text = "0";
         EditCvPayoutSmall.Clear();
         EditCvPayoutLarge.Clear();
+        EditCvTasting.Clear();
         EditPaxKind.SelectedIndex = 0;
         EditMonedaId.Text = "-1";
         EditExpense.IsChecked = true;
@@ -341,7 +343,7 @@ public partial class CommissionSettingsWindow : Window
             SaveRuleButton.IsEnabled = false;
             NewRuleButton.IsEnabled = false;
             EditorMessageText = "Guardando configuración...";
-            var previous = RulesGrid.SelectedItem as CommissionSettingsRule;
+            var previous = _editingId > 0 ? RulesGrid.SelectedItem as CommissionSettingsRule : null;
             var rule = new CommissionSettingsRule(
                 _editingId,
                 SelectedComboText(EditCategory),
@@ -366,7 +368,8 @@ public partial class CommissionSettingsWindow : Window
             {
                 Branch = SelectedComboText(EditCategory) == "TRANSPORTE" ? _branchCode : string.Empty,
                 CvPayoutOneToFourAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutSmall.Text, "Dejada 1–4 adultos") : null,
-                CvPayoutFiveOrMoreAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutLarge.Text, "Dejada 5 o más") : null
+                CvPayoutFiveOrMoreAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutLarge.Text, "Dejada 5 o más") : null,
+                CvTastingPercent = IsCvTransportEditor ? OptionalPercent(EditCvTasting.Text, "Degustación") : null
             };
 
             if (previous is not null && previous.Active && !rule.Active)
@@ -387,7 +390,7 @@ public partial class CommissionSettingsWindow : Window
                 ? $"Vas a corregir esta regla (no se crea otra):\n\n{rule.Name}\n\n{previousText}\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el cambio o No para cancelar."
                 : $"Vas a dar de alta:\n\n{rule.Name}\n\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el alta o No para cancelar.";
             if (IsCvTransportEditor)
-                message += $"\nDejada 1–4 adultos: {previous?.CvPayoutOneToFourDisplay ?? "Pendiente"} -> {rule.CvPayoutOneToFourDisplay}\nDejada 5 o más: {previous?.CvPayoutFiveOrMoreDisplay ?? "Pendiente"} -> {rule.CvPayoutFiveOrMoreDisplay}";
+                message += $"\nDegustación: {previous?.CvTastingDisplay ?? "Pendiente"} -> {rule.CvTastingDisplay}\nDejada 1–4 adultos: {previous?.CvPayoutOneToFourDisplay ?? "Pendiente"} -> {rule.CvPayoutOneToFourDisplay}\nDejada 5 o más: {previous?.CvPayoutFiveOrMoreDisplay ?? "Pendiente"} -> {rule.CvPayoutFiveOrMoreDisplay}";
             if (MessageBox.Show(this, message, isEdit ? "Confirmar corrección de comisión" : "Confirmar alta de comisión", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
@@ -424,8 +427,10 @@ public partial class CommissionSettingsWindow : Window
     {
         if (CvPayoutEditor is null || EditCategory is null) return;
         CvPayoutEditor.Visibility = IsCvTransportEditor ? Visibility.Visible : Visibility.Collapsed;
+        CvTastingEditor.Visibility = IsCvTransportEditor ? Visibility.Visible : Visibility.Collapsed;
         EditPayoutAmount.Visibility = LegacyPayoutLabel.Visibility = IsCvTransportEditor ? Visibility.Collapsed : Visibility.Visible;
         EditCvPayoutSmall.IsEnabled = EditCvPayoutLarge.IsEnabled = _canEdit;
+        EditCvTasting.IsEnabled = _canEdit;
     }
 
     private static decimal? OptionalMoney(string text, string label)
@@ -434,6 +439,18 @@ public partial class CommissionSettingsWindow : Window
         if (!decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount < 0m)
             throw new InvalidOperationException($"{label}: escribe un importe válido no negativo, o déjalo vacío si está pendiente.");
         return amount;
+    }
+
+    private static decimal? OptionalPercent(string text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var trimmed = text.Trim();
+        if (!decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+            && !decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.CurrentCulture, out value))
+            throw new InvalidOperationException($"{label}: escribe un porcentaje válido entre 0 y 100, o déjalo vacío si está pendiente.");
+        if (value < 0m || value > 100m)
+            throw new InvalidOperationException($"{label}: el porcentaje debe estar entre 0 y 100, o quedar vacío si está pendiente.");
+        return value;
     }
 
     private int? ReadSimulatorAdults()

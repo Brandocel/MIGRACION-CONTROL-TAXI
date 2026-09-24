@@ -213,6 +213,7 @@
                 <DataGridTextColumn Header="Efectivo" Binding="{Binding CashRetentionPercent, StringFormat={}{0:0.##}%}" Width="80*" MinWidth="62"/>
                 <DataGridTextColumn Header="Tarjeta" Binding="{Binding CardRetentionPercent, StringFormat={}{0:0.##}%}" Width="80*" MinWidth="60"/>
                 <DataGridTextColumn Header="AMEX" Binding="{Binding AmexRetentionPercent, StringFormat={}{0:0.##}%}" Width="75*" MinWidth="58"/>
+                <DataGridTextColumn x:Name="CvTastingColumn" Header="Degustación %" Binding="{Binding CvTastingDisplay}" Width="105" Visibility="Collapsed"/>
                 <DataGridTextColumn x:Name="LegacyPayoutColumn" Header="Dejada" Binding="{Binding PayoutDisplay}" Width="85*" MinWidth="64"/>
                 <DataGridTextColumn x:Name="CvSmallPayoutColumn" Header="Dejada 1–4 adultos" Binding="{Binding CvPayoutOneToFourDisplay}" Width="145" Visibility="Collapsed"/>
                 <DataGridTextColumn x:Name="CvLargePayoutColumn" Header="Dejada 5 o más" Binding="{Binding CvPayoutFiveOrMoreDisplay}" Width="130" Visibility="Collapsed"/>
@@ -466,6 +467,10 @@
                 <StackPanel Margin="6,0,0,10">
                   <TextBlock Text="AMEX %" Style="{StaticResource SquareInputLabel}"/>
                   <TextBox x:Name="EditAmex" Style="{StaticResource SquareInputBox}" ToolTip="Porcentaje que se descuenta en pagos AMEX."/>
+                </StackPanel>
+                <StackPanel x:Name="CvTastingEditor" Margin="0,0,6,10" Visibility="Collapsed">
+                  <TextBlock Text="Degustación %" Style="{StaticResource SquareInputLabel}"/>
+                  <TextBox x:Name="EditCvTasting" Style="{StaticResource SquareInputBox}" ToolTip="Porcentaje independiente para TRANSPORTE de CV. Vacío significa pendiente; 0 significa 0% configurado."/>
                 </StackPanel>
               </UniformGrid>
 
