@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
@@ -1896,61 +1896,29 @@ public static class CascoOperationsDataService
         if (!CascoCommissionRuleService.IsCascoCommissionEnvironment(branch, branch.Code))
             return rows.ToList();
 
-        var service = new CascoCommissionRuleService();
-        var generated = await LoadGeneratedCommissionsAsync(branch, sqlPassword, rows, cancellationToken);
-        var rules = await service.LoadActiveRulesAsync(branch, sqlPassword, cancellationToken);
-        if (rules.Count == 0)
+        var database = new LocalDatabase();
+        await database.InitializeAsync();
+        var settings = new CommissionSettingsRepository(database);
+        var result = new List<LocalRelation>();
+        foreach (var row in rows)
         {
-            return rows.Select(row =>
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!DateTime.TryParse(row.DateText, out var operationDate))
             {
-                if (TryGetGeneratedCommission(generated, row, out var generatedAmount, out var generatedPaid, out var generatedStatus))
-                    return row with { Commission = generatedAmount, CommissionPaid = generatedPaid, CommissionStatus = generatedStatus, OrigenComision = "Calculada" };
-
-                var venta = row.Sale;
-                if (venta <= 0m)
-                    return row with { Commission = 0m, CommissionStatus = "SIN COMISION", OrigenComision = "Respaldo" };
-
-                var amount = CascoCommissionRuleService.CalculateDefaultCommission(venta);
-                return row with
-                {
-                    Commission = amount,
-                    CommissionStatus = ResolveCommissionStatus(amount, row.CommissionPaid),
-                    OrigenComision = "Respaldo"
-                };
-            }).ToList();
-        }
-
-        return rows.Select(row =>
-        {
-            if (TryGetGeneratedCommission(generated, row, out var generatedAmount, out var generatedPaid, out var generatedStatus))
-                return row with { Commission = generatedAmount, CommissionPaid = generatedPaid, CommissionStatus = generatedStatus, OrigenComision = "Calculada" };
-
-            var venta = row.Sale;
-            if (venta <= 0m)
-                return row with { Commission = 0m, CommissionStatus = "SIN COMISION", OrigenComision = "Respaldo" };
-
-            var proveedor = CascoCommissionRuleService.NormalizeProvider(row.TransportType);
-            var conTarjeta = CascoCommissionRuleService.IsCardLikePayment(row.PaymentMethod, row.CardAmount);
-            var match = service.ResolveRule(rules, proveedor, row.TransportType, conTarjeta, venta);
-            if (match.IsAmbiguous)
-            {
-                return row with { Commission = 0m, CommissionStatus = "REGLA AMBIGUA", OrigenComision = "Respaldo" };
+                result.Add(row with { Commission = 0m, CommissionStatus = "SIN FECHA VALIDA", OrigenComision = "SIN_CONFIGURACION" });
+                continue;
             }
-
-            // La dejada si viaja en el renglon; gasto y degustacion se capturan al generar la
-            // comision, asi que aqui van en cero. Antes no se pasaba nada y TAXIS/VANS salia sin
-            // descontar la dejada que el Excel si descuenta.
-            var amount = CascoCommissionRuleService.ResolveCommissionAmount(match, venta, row.Payout ?? 0m);
-
-            return row with
+            var simulation = await settings.SimulateAsync(new CommissionSimulationInput(operationDate, row.TransportType,
+                row.Sale, row.Sale, row.PaymentMethod, 0m, 0m, 0m, row.Payout ?? 0m, 0m, string.Empty), "CV");
+            result.Add(row with
             {
-                Commission = amount,
-                CommissionStatus = amount > 0m ? ResolveCommissionStatus(amount, row.CommissionPaid) : "SIN COMISION",
-                OrigenComision = "Respaldo"
-            };
-        }).ToList();
+                Commission = simulation.FinalCommission,
+                CommissionStatus = simulation.Configured ? ResolveCommissionStatus(simulation.FinalCommission, row.CommissionPaid) : "FALTA REGLA CV",
+                OrigenComision = simulation.Source
+            });
+        }
+        return result;
     }
-
     private static async Task<Dictionary<string, GeneratedCommissionRow>> LoadGeneratedCommissionsAsync(
         BranchConfiguration branch,
         string sqlPassword,

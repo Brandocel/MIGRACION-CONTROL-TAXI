@@ -47,6 +47,8 @@ public sealed class BranchConfigurationService
     };
 
     private static readonly Lazy<Dictionary<string, BranchConfiguration>> LoadedBranches = new(LoadBranches);
+    // Ruta del fichero de configuración cargado (si existe). Puede ser branches.local.json o branches.production.json
+    private static string? LoadedConfigPath;
 
     public BranchConfiguration GetBranch(string code)
     {
@@ -61,33 +63,84 @@ public sealed class BranchConfigurationService
     private static Dictionary<string, BranchConfiguration> LoadBranches()
     {
         var branches = new Dictionary<string, BranchConfiguration>(DefaultBranches, StringComparer.OrdinalIgnoreCase);
-        var configPath = ResolveBranchConfigPath();
-        if (string.IsNullOrWhiteSpace(configPath) || !File.Exists(configPath))
-            return branches;
-
-        using var document = JsonDocument.Parse(File.ReadAllText(configPath));
-        if (!document.RootElement.TryGetProperty("Branches", out var branchArray) || branchArray.ValueKind != JsonValueKind.Array)
-            return branches;
-
-        foreach (var item in branchArray.EnumerateArray())
+        // Load production config first (if present), then apply local override (branches.local.json)
+        var candidates = EnumerateBranchConfigCandidates().Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        // production path: first candidate whose filename is branches.production.json
+        var productionPath = candidates.FirstOrDefault(p => string.Equals(Path.GetFileName(p), "branches.production.json", StringComparison.OrdinalIgnoreCase) && File.Exists(p));
+        if (!string.IsNullOrWhiteSpace(productionPath))
         {
-            var code = ReadString(item, "Code");
-            if (string.IsNullOrWhiteSpace(code))
-                continue;
-
-            branches[code] = new BranchConfiguration(
-                Code: code,
-                Name: ReadString(item, "Name"),
-                SqlServer: ReadString(item, "SqlServer"),
-                Database: ReadString(item, "Database"),
-                SiteName: ReadString(item, "SiteName"),
-                ApiBaseUrl: ReadString(item, "ApiBaseUrl"),
-                IsReadOnly: ReadBool(item, "IsReadOnly"))
+            try
             {
-                CompuadmoDatabase = ReadString(item, "CompuadmoDatabase"),
-                JoyeriaDatabase = ReadString(item, "JoyeriaDatabase"),
-                SqlUser = string.IsNullOrWhiteSpace(ReadString(item, "SqlUser")) ? "sa" : ReadString(item, "SqlUser")
-            };
+                using var doc = JsonDocument.Parse(File.ReadAllText(productionPath));
+                if (doc.RootElement.TryGetProperty("Branches", out var prodArray) && prodArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in prodArray.EnumerateArray())
+                    {
+                        var code = ReadString(item, "Code");
+                        if (string.IsNullOrWhiteSpace(code))
+                            continue;
+
+                        branches[code] = new BranchConfiguration(
+                            Code: code,
+                            Name: ReadString(item, "Name"),
+                            SqlServer: ReadString(item, "SqlServer"),
+                            Database: ReadString(item, "Database"),
+                            SiteName: ReadString(item, "SiteName"),
+                            ApiBaseUrl: ReadString(item, "ApiBaseUrl"),
+                            IsReadOnly: ReadBool(item, "IsReadOnly"))
+                        {
+                            CompuadmoDatabase = ReadString(item, "CompuadmoDatabase"),
+                            JoyeriaDatabase = ReadString(item, "JoyeriaDatabase"),
+                            SqlUser = string.IsNullOrWhiteSpace(ReadString(item, "SqlUser")) ? "sa" : ReadString(item, "SqlUser")
+                        };
+                    }
+                }
+                LoadedConfigPath = productionPath;
+            }
+            catch
+            {
+                // ignore parse errors and continue with defaults
+            }
+        }
+
+        // local override: apply only entries present in branches.local.json (e.g. CV) on top of production/default
+        var localPath = candidates.FirstOrDefault(p => string.Equals(Path.GetFileName(p), "branches.local.json", StringComparison.OrdinalIgnoreCase) && File.Exists(p));
+        if (!string.IsNullOrWhiteSpace(localPath))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(localPath));
+                if (doc.RootElement.TryGetProperty("Branches", out var localArray) && localArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in localArray.EnumerateArray())
+                    {
+                        var code = ReadString(item, "Code");
+                        if (string.IsNullOrWhiteSpace(code))
+                            continue;
+
+                        // overlay/replace only the specified branches
+                        branches[code] = new BranchConfiguration(
+                            Code: code,
+                            Name: ReadString(item, "Name"),
+                            SqlServer: ReadString(item, "SqlServer"),
+                            Database: ReadString(item, "Database"),
+                            SiteName: ReadString(item, "SiteName"),
+                            ApiBaseUrl: ReadString(item, "ApiBaseUrl"),
+                            IsReadOnly: ReadBool(item, "IsReadOnly"))
+                        {
+                            CompuadmoDatabase = ReadString(item, "CompuadmoDatabase"),
+                            JoyeriaDatabase = ReadString(item, "JoyeriaDatabase"),
+                            SqlUser = string.IsNullOrWhiteSpace(ReadString(item, "SqlUser")) ? "sa" : ReadString(item, "SqlUser")
+                        };
+                    }
+                }
+                // mark that a local override was applied
+                LoadedConfigPath = localPath;
+            }
+            catch
+            {
+                // ignore parse errors
+            }
         }
 
         return branches;
@@ -105,6 +158,16 @@ public sealed class BranchConfigurationService
 
     private static IEnumerable<string> EnumerateBranchConfigCandidates()
     {
+        // Prefer a local override file for development/testing that does NOT modify
+        // the production configuration. If branches.local.json exists it will
+        // override branches.production.json.
+        // Check for a local override both in the running output folder and in the
+        // workspace root. The project copies ..\branches.local.json to the
+        // output folder for Debug builds, but when running from dotnet the
+        // workspace file may be the authoritative source. Include both.
+        yield return Path.Combine(AppContext.BaseDirectory, "branches.local.json");
+        yield return Path.Combine(Environment.CurrentDirectory, "branches.local.json");
+
         yield return Path.Combine(AppContext.BaseDirectory, "branches.production.json");
         yield return Path.Combine(Environment.CurrentDirectory, "branches.production.json");
 
@@ -114,9 +177,9 @@ public sealed class BranchConfigurationService
             yield return Path.Combine(current.FullName, "branches.production.json");
         }
 
-        var workspaceRoot = FindWorkspaceRoot();
-        if (!string.IsNullOrWhiteSpace(workspaceRoot))
-            yield return Path.Combine(workspaceRoot, "branches.production.json");
+        var wr2 = FindWorkspaceRoot();
+        if (!string.IsNullOrWhiteSpace(wr2))
+            yield return Path.Combine(wr2, "branches.production.json");
     }
 
     private static string? FindWorkspaceRoot()
@@ -149,5 +212,16 @@ public sealed class BranchConfigurationService
             JsonValueKind.False => false,
             _ => false
         };
+    }
+
+    // Devuelve la ruta del fichero de configuración aplicada actualmente, o null si no se aplicó ninguno.
+    public string? GetLoadedConfigPath() => LoadedConfigPath;
+
+    // Indica si se está usando el override local (branches.local.json) en lugar de la configuración de producción.
+    public bool IsLocalOverrideActive()
+    {
+        if (string.IsNullOrWhiteSpace(LoadedConfigPath))
+            return false;
+        return string.Equals(Path.GetFileName(LoadedConfigPath), "branches.local.json", StringComparison.OrdinalIgnoreCase);
     }
 }

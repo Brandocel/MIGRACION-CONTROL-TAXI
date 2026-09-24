@@ -2,7 +2,7 @@ using ControlTaxiDesktop.Models;
 
 namespace ControlTaxiDesktop.Services;
 
-public sealed class CommissionConfigurationResolver(CommissionSettingsRepository settings)
+public sealed class CommissionConfigurationResolver(CommissionSettingsRepository settings, string sessionBranch)
 {
     public async Task InitializeAsync()
     {
@@ -19,10 +19,21 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
     public async Task<CommissionResolvedRule> ResolveTransportAsync(string? transport, DateTime operationDate, decimal catalogCommission = 0m, decimal catalogCash = 0m, decimal catalogCard = 0m, decimal catalogAmex = 0m)
     {
         var text = Clean(transport);
-        var rule = (await settings.GetRulesAsync("TRANSPORTE", text, true, operationDate)).FirstOrDefault();
+        // Obtain branch from settings caller: the repository will filter by session branch when provided.
+        var rules = await settings.GetRulesAsync("TRANSPORTE", text, true, operationDate, sessionBranch);
+        var isCv = string.Equals(sessionBranch.Trim(), "CV", StringComparison.OrdinalIgnoreCase);
+        var matches = rules.Where(r => string.Equals(r.Code, text, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(r.Name, text, StringComparison.OrdinalIgnoreCase)).ToArray();
+        var rule = isCv ? (matches.Length == 1 ? matches[0] : null) : rules.FirstOrDefault();
         if (rule is not null)
         {
             return new CommissionResolvedRule("TRANSPORTE", rule.Code, rule.Name, rule.CommissionPercent, rule.CashRetentionPercent, rule.CardRetentionPercent, rule.AmexRetentionPercent, "CONFIGURACION_LOCAL", rule.EffectiveFrom, rule.EffectiveTo, true, string.Empty);
+        }
+        // If session branch is CV, do NOT fallback to fixed catalog or percent: signal missing configuration
+        if (isCv)
+        {
+            await settings.LogDiagnosticAsync("FALTA", "TRANSPORTE", text, "Falta regla configurada para este transporte en Casco Viejo.", "Configurar regla en Configuracion de Comisiones (sucursal CV).", "MISSING_RULE_CV");
+            return new CommissionResolvedRule("TRANSPORTE", text, text, 0m, 0m, 0m, 0m, "SIN_CONFIGURACION", DateTime.MinValue, null, false, "Falta regla para sucursal CV");
         }
 
         var normalizedCatalog = CommissionPaymentRules.NormalizePercent(catalogCommission);
@@ -58,13 +69,18 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
     public async Task<CommissionSimulationResult> SimulateAsync(CommissionSimulationInput input)
     {
         var date = input.Date.Date;
-        var transport = await ResolveTransportAsync(input.TransportCodeOrName, date);
-        var payment = await ResolvePaymentAsync(input.PaymentMethod, date);
+        var transport = await ResolveTransportAsync(input.TransportCodeOrName, date, 0m, 0m, 0m, 0m);
+        var isCv = string.Equals(sessionBranch.Trim(), "CV", StringComparison.OrdinalIgnoreCase);
+        if (isCv && !transport.Configured)
+            return new CommissionSimulationResult(transport.Name, transport.Source, "Sin vigencia", 0m, 0m, 0m, input.Payout, input.Expense, 0m,
+                "Falta una regla CV vigente y única para este transporte en SQLite. No se calculó comisión ni se aplicaron porcentajes de respaldo.", false);
+        var payment = isCv ? transport : await ResolvePaymentAsync(input.PaymentMethod, date);
         var sale = input.Subtotal > 0m ? input.Subtotal : input.Sale;
         var cash = input.Cash;
         var card = input.Card;
         var amex = input.Amex;
-        var kind = payment.AmexRetentionPercent > 0m ? "AMEX" : payment.CardRetentionPercent > 0m ? "TARJETA_NORMAL" : "EFECTIVO";
+        var kind = isCv ? (CommissionPaymentRules.IsAmexPayment(input.PaymentMethod) ? "AMEX" : CommissionPaymentRules.IsCardPayment(input.PaymentMethod) ? "TARJETA_NORMAL" : "EFECTIVO")
+            : payment.AmexRetentionPercent > 0m ? "AMEX" : payment.CardRetentionPercent > 0m ? "TARJETA_NORMAL" : "EFECTIVO";
         if (cash + card + amex <= 0m)
         {
             if (kind == "AMEX") amex = sale;
@@ -76,7 +92,17 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
         var retained = cash * (payment.CashRetentionPercent / 100m)
             + card * (payment.CardRetentionPercent / 100m)
             + amex * (payment.AmexRetentionPercent / 100m);
-        var baseAmount = Math.Max(0m, sale - retained - input.Payout - input.Expense);
+        var payout = input.Payout;
+        var expense = input.Expense;
+        if (isCv)
+        {
+            var rule = (await settings.GetRulesAsync("TRANSPORTE", input.TransportCodeOrName, true, date, "CV"))
+                .Single(r => string.Equals(r.Code, input.TransportCodeOrName.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(r.Name, input.TransportCodeOrName.Trim(), StringComparison.OrdinalIgnoreCase));
+            payout = rule.AppliesPayout ? payout : 0m;
+            expense = rule.AppliesExpense ? expense : 0m;
+        }
+        var baseAmount = Math.Max(0m, sale - retained - payout - expense);
         var final = Math.Max(0m, decimal.Truncate(baseAmount * (transport.CommissionPercent / 100m)));
         var explanation = $"""
             Regla encontrada: {transport.Name}
@@ -87,8 +113,8 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
             Pago = {input.PaymentMethod} ({kind})
             Retencion = {retentionPercent:0.##}% ({retained:C2})
             Base = venta - retencion - dejada - gasto = {baseAmount:C2}
-            Dejada = {input.Payout:C2}
-            Gasto = {input.Expense:C2}
+            Dejada aplicada = {payout:C2}
+            Gasto aplicado = {expense:C2}
             Porcentaje comision = {transport.CommissionPercent:0.##}%
             Regla redondeo = truncar decimales
             Resultado = {final:C2}

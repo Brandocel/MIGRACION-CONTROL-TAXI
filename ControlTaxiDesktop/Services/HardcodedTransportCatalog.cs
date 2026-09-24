@@ -198,7 +198,9 @@ public static class HardcodedTransportCatalog
                 string.IsNullOrEmpty(entry.Extra?.Describir())
                     ? "Catalogo unico del sistema. Igual en todas las maquinas."
                     : "Catalogo unico del sistema. " + entry.Extra!.Describir(),
-                entry.PayoutAmount));
+                entry.PayoutAmount,
+                string.Empty,
+                -1));
         }
         return result;
     }

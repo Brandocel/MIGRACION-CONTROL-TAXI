@@ -9,13 +9,15 @@ public sealed class LocalPosRepository(LocalDatabase database)
 {
     private readonly LocalSqlServerSource? _sqlSource = LocalSqlServerSource.TryLoad();
     private readonly CommissionSettingsRepository _commissionSettings = new(database);
-    private readonly CommissionConfigurationResolver _commissionResolver = new(new CommissionSettingsRepository(database));
+    // Resolver will be constructed with session branch at runtime when initializing
+    private CommissionConfigurationResolver? _commissionResolver;
     private bool _commissionSettingsLoaded;
     private bool IsPlaza28SqlMode => _sqlSource is not null;
 
     private async Task EnsureCommissionSettingsLoadedAsync()
     {
         if (_commissionSettingsLoaded) return;
+        _commissionResolver ??= new CommissionConfigurationResolver(_commissionSettings, string.Empty);
         await _commissionResolver.InitializeAsync();
         _commissionSettingsLoaded = true;
     }

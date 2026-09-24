@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using ControlTaxiDesktop.Models;
@@ -29,6 +29,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               PayoutAmount REAL NOT NULL DEFAULT 0,
               PaxKind TEXT NOT NULL DEFAULT '',
               MonedaId INTEGER NOT NULL DEFAULT -1,
+              Branch TEXT NOT NULL DEFAULT '',
               AppliesExpense INTEGER NOT NULL DEFAULT 1,
               Active INTEGER NOT NULL DEFAULT 1,
               EffectiveFrom TEXT NOT NULL,
@@ -36,7 +37,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
               UpdatedAt TEXT NOT NULL,
               UpdatedBy TEXT NOT NULL DEFAULT '',
               Notes TEXT NOT NULL DEFAULT '',
-              UNIQUE(Category, Code, EffectiveFrom)
+              UNIQUE(Category, Code, EffectiveFrom, Branch)
             );
             -- Reglas globales de comision (aplican a todos los transportes por igual), a
             -- diferencia de CommissionSettingsRules que va por transporte/forma de pago.
@@ -91,9 +92,108 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "EffectiveTo", "TEXT NOT NULL DEFAULT ''");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "Machine", "TEXT NOT NULL DEFAULT ''");
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "Branch", "TEXT NOT NULL DEFAULT ''");
+        // Before seeding defaults, ensure migration of existing table to include Branch and updated UNIQUE
+        await MigrateAddBranchAsync(connection);
         await SeedDefaultsAsync(connection);
         await SeedPayoutTariffsAsync(connection);
         await FixKnownWrongRatesAsync(connection);
+    }
+
+    private static async Task MigrateAddBranchAsync(SqliteConnection connection)
+    {
+        // Verifica también la unicidad para reparar migraciones parciales.
+        await using var info = connection.CreateCommand();
+        info.CommandText = "PRAGMA table_info(\"CommissionSettingsRules\");";
+        var hasBranch = false;
+        await using (var reader = await info.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                if (string.Equals(reader.GetString(1), "Branch", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasBranch = true;
+                    break;
+                }
+            }
+        }
+        await using var schema = connection.CreateCommand();
+        schema.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='CommissionSettingsRules';";
+        var tableSql = Convert.ToString(await schema.ExecuteScalarAsync()) ?? string.Empty;
+        var normalized = new string(tableSql.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        if (hasBranch && normalized.Contains("UNIQUE(Category,Code,EffectiveFrom,Branch)", StringComparison.OrdinalIgnoreCase)) return;
+        var indexes = new List<string>();
+        await using (var indexQuery = connection.CreateCommand())
+        {
+            indexQuery.CommandText = "SELECT sql FROM sqlite_master WHERE tbl_name='CommissionSettingsRules' AND type IN ('index','trigger') AND sql IS NOT NULL;";
+            await using var reader = await indexQuery.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) indexes.Add(reader.GetString(0));
+        }
+
+        // Create new table with Branch column and UNIQUE including Branch, copy data, preserve indexes
+        await using var transaction = connection.BeginTransaction();
+
+        await using var create = connection.CreateCommand();
+        create.Transaction = transaction;
+        create.CommandText = """
+            CREATE TABLE CommissionSettingsRules_new (
+              Id INTEGER PRIMARY KEY AUTOINCREMENT,
+              Category TEXT NOT NULL,
+              Code TEXT NOT NULL,
+              Name TEXT NOT NULL,
+              CommissionPercent REAL NOT NULL DEFAULT 0,
+              CashRetentionPercent REAL NOT NULL DEFAULT 0,
+              CardRetentionPercent REAL NOT NULL DEFAULT 0,
+              AmexRetentionPercent REAL NOT NULL DEFAULT 0,
+              PaymentKind TEXT NOT NULL DEFAULT '',
+              AppliesPayout INTEGER NOT NULL DEFAULT 1,
+              PayoutAmount REAL NOT NULL DEFAULT 0,
+              PaxKind TEXT NOT NULL DEFAULT '',
+              MonedaId INTEGER NOT NULL DEFAULT -1,
+              Branch TEXT NOT NULL DEFAULT '',
+              AppliesExpense INTEGER NOT NULL DEFAULT 1,
+              Active INTEGER NOT NULL DEFAULT 1,
+              EffectiveFrom TEXT NOT NULL,
+              EffectiveTo TEXT NULL,
+              UpdatedAt TEXT NOT NULL,
+              UpdatedBy TEXT NOT NULL DEFAULT '',
+              Notes TEXT NOT NULL DEFAULT '',
+              UNIQUE(Category, Code, EffectiveFrom, Branch)
+            );
+            """;
+        await create.ExecuteNonQueryAsync();
+
+        // Copy existing data, setting Branch to empty string for migrated rows.
+        await using var copy = connection.CreateCommand();
+        copy.Transaction = transaction;
+        copy.CommandText = """
+            INSERT INTO CommissionSettingsRules_new
+            (Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,PaymentKind,AppliesPayout,PayoutAmount,PaxKind,MonedaId,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes)
+            SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,PaymentKind,AppliesPayout,PayoutAmount,PaxKind,MonedaId,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes
+            FROM CommissionSettingsRules;
+            """;
+        copy.CommandText = copy.CommandText.Replace("UpdatedBy,Notes)", "UpdatedBy,Notes,Branch)")
+            .Replace("UpdatedBy,Notes\n", "UpdatedBy,Notes," + (hasBranch ? "Branch" : "''") + "\n")
+            .Replace("UpdatedBy,Notes\r\n", "UpdatedBy,Notes," + (hasBranch ? "Branch" : "''") + "\r\n");
+        await copy.ExecuteNonQueryAsync();
+
+        await using var drop = connection.CreateCommand();
+        drop.Transaction = transaction;
+        drop.CommandText = "DROP TABLE CommissionSettingsRules;";
+        await drop.ExecuteNonQueryAsync();
+
+        await using var rename = connection.CreateCommand();
+        rename.Transaction = transaction;
+        rename.CommandText = "ALTER TABLE CommissionSettingsRules_new RENAME TO CommissionSettingsRules;";
+        await rename.ExecuteNonQueryAsync();
+
+        foreach (var sql in indexes)
+        {
+            await using var restore = connection.CreateCommand();
+            restore.Transaction = transaction;
+            restore.CommandText = sql;
+            await restore.ExecuteNonQueryAsync();
+        }
+        await transaction.CommitAsync();
     }
 
     /// <summary>
@@ -112,10 +212,10 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await using var dedupe = connection.CreateCommand();
         dedupe.CommandText = """
             DELETE FROM CommissionSettingsRules
-            WHERE Category='TRANSPORTE'
+            WHERE Category='TRANSPORTE' AND Branch=''
               AND Id NOT IN (
                 SELECT MIN(Id) FROM CommissionSettingsRules
-                WHERE Category='TRANSPORTE'
+                WHERE Category='TRANSPORTE' AND Branch=''
                 GROUP BY UPPER(TRIM(Name)), EffectiveFrom
               );
             """;
@@ -125,7 +225,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         fix.CommandText = """
             UPDATE CommissionSettingsRules
             SET CommissionPercent = 10, UpdatedAt = $updatedAt
-            WHERE Category='TRANSPORTE'
+            WHERE Category='TRANSPORTE' AND Branch=''
               AND UPPER(TRIM(Name)) = 'VAN TRANSPORTADORAS'
               AND CommissionPercent = 20
               AND UpdatedBy = 'MIGRACION';
@@ -134,7 +234,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await fix.ExecuteNonQueryAsync();
     }
 
-    public async Task<IReadOnlyList<CommissionSettingsRule>> GetRulesAsync(string? category = null, string? search = null, bool? active = null, DateTime? date = null)
+    // Added optional sessionBranch parameter at the end for branch-scoped reads. Keep existing signature compatible
+    public async Task<IReadOnlyList<CommissionSettingsRule>> GetRulesAsync(string? category = null, string? search = null, bool? active = null, DateTime? date = null, string sessionBranch = "")
     {
         await InitializeAsync();
         var filters = new List<string>();
@@ -167,23 +268,21 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
         var stored = await ReadRulesAsync($"""
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch
             FROM CommissionSettingsRules
             {where}
             ORDER BY Category, Name, EffectiveFrom DESC;
             """, parameters.ToArray());
-
-        // Las comisiones por transporte ya no salen de la base de cada maquina: son el catalogo
-        // fijo del programa (HardcodedTransportCatalog), igual en todos los equipos. Se sustituyen
-        // aqui, en la lectura, para que la tabla, el simulador y el Excel salgan todos de la misma
-        // fuente y no haya forma de ver una cosa en pantalla y otra en el calculo.
+        // CV usa exclusivamente SQLite; Plaza 28 conserva el catálogo fijo.
         var wantsTransport = string.IsNullOrWhiteSpace(category)
             || string.Equals(category.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase);
         if (!wantsTransport) return stored;
 
-        return stored
-            .Where(x => !string.Equals(x.Category, TransportCategory, StringComparison.OrdinalIgnoreCase))
-            .Concat(FilterFixedTransportRules(search, active, date))
+        var branchIsCv = string.Equals(sessionBranch.Trim(), "CV", StringComparison.OrdinalIgnoreCase);
+        var result = stored.Where(x => !string.Equals(x.Category, TransportCategory, StringComparison.OrdinalIgnoreCase));
+        return result.Concat(branchIsCv
+                ? stored.Where(x => x.Category == TransportCategory && string.Equals(x.Branch, "CV", StringComparison.OrdinalIgnoreCase))
+                : FilterFixedTransportRules(search, active, date))
             .OrderBy(x => x.Category, StringComparer.Ordinal)
             .ThenBy(x => x.Name, StringComparer.Ordinal)
             .ThenByDescending(x => x.EffectiveFrom)
@@ -294,18 +393,15 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await command.ExecuteNonQueryAsync();
     }
 
-    public async Task<CommissionSettingsSummary> GetSummaryAsync()
+    public async Task<CommissionSettingsSummary> GetSummaryAsync(string sessionBranch = "")
     {
-        await InitializeAsync();
+        var rules = await GetRulesAsync(sessionBranch: sessionBranch);
         await using var connection = database.Open();
-        var active = await ScalarAsync(connection, "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Active=1;");
-        var transports = await ScalarAsync(connection, "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='TRANSPORTE';");
-        var payments = await ScalarAsync(connection, "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='FORMA_PAGO';");
-        var expiring = await ScalarAsync(connection, "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Active=1 AND EffectiveTo IS NOT NULL AND EffectiveTo BETWEEN date('now') AND date('now', '+30 day');");
         var recent = await ScalarAsync(connection, "SELECT COUNT(*) FROM CommissionSettingsAudit WHERE Date >= datetime('now', '-7 day');");
-        return new CommissionSettingsSummary((int)active, (int)transports, (int)payments, (int)expiring, (int)recent);
+        return new CommissionSettingsSummary(rules.Count(x => x.Active), rules.Count(x => x.Category == TransportCategory),
+            rules.Count(x => x.Category == "FORMA_PAGO"),
+            rules.Count(x => x.Active && x.EffectiveTo >= DateTime.Today && x.EffectiveTo <= DateTime.Today.AddDays(30)), (int)recent);
     }
-
     public async Task<IReadOnlyList<CommissionSettingsAuditRow>> GetAuditAsync()
     {
         await InitializeAsync();
@@ -340,11 +436,22 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await InitializeAsync();
         if (!canEdit)
             throw new UnauthorizedAccessException("El usuario no tiene permiso para editar configuración de comisiones.");
-        EnsureCategoryIsEditable(rule);
+        // Only allow editing/creating TRANSPORTE from CV branch. If Branch not provided, treat as global edit disallowed.
+        if (string.Equals(rule.Category?.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.Equals(rule.Branch, "CV", StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Solo es posible crear o editar reglas de TRANSPORTE desde la sucursal CV.");
+        }
+        else
+        {
+            EnsureCategoryIsEditable(rule);
+        }
         ValidateRule(rule, reason);
         await using var connection = database.Open();
         await using var transaction = connection.BeginTransaction();
         var current = rule.Id > 0 ? await GetRuleByIdAsync(connection, transaction, rule.Id) : null;
+        if (rule.Id > 0 && (current is null || !string.Equals(current.Branch, rule.Branch, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("La regla no existe en la sucursal indicada.");
         await EnsureNoOverlappingRuleAsync(connection, transaction, rule);
 
         if (rule.Id > 0 && current is not null)
@@ -377,7 +484,16 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await InitializeAsync();
         if (!canEdit)
             throw new UnauthorizedAccessException("El usuario no tiene permiso para editar configuración de comisiones.");
-        EnsureCategoryIsEditable(rule);
+        // Only allow editing TRANSPORTE from CV branch
+        if (string.Equals(rule.Category?.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.Equals(rule.Branch, "CV", StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Solo es posible crear o editar reglas de TRANSPORTE desde la sucursal CV.");
+        }
+        else
+        {
+            EnsureCategoryIsEditable(rule);
+        }
         if (rule.Id <= 0)
             throw new InvalidOperationException("Solo se puede corregir una regla que ya existe. Usa Nueva regla para dar de alta.");
         ValidateRule(rule, reason);
@@ -386,6 +502,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await using var transaction = connection.BeginTransaction();
         var current = await GetRuleByIdAsync(connection, transaction, rule.Id)
             ?? throw new InvalidOperationException("No se encontro la regla seleccionada.");
+        if (!string.Equals(current.Branch, rule.Branch, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("No se puede cambiar la sucursal de una regla existente.");
         // La consulta de traslape ya excluye la propia regla (Id <> $id).
         await EnsureNoOverlappingRuleAsync(connection, transaction, rule);
 
@@ -411,7 +529,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
                 Notes=$notes,
                 PayoutAmount=$payoutAmount,
                 PaxKind=$paxKind,
-                MonedaId=$monedaId
+                MonedaId=$monedaId, Branch=$branch
             WHERE Id=$id;
             """;
         AddRuleParameters(command, rule, user);
@@ -464,15 +582,15 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await transaction.CommitAsync();
     }
 
-    public async Task<CommissionSimulationResult> SimulateAsync(CommissionSimulationInput input)
+    public async Task<CommissionSimulationResult> SimulateAsync(CommissionSimulationInput input, string sessionBranch = "")
     {
         await InitializeAsync();
-        return await new CommissionConfigurationResolver(this).SimulateAsync(input);
+        return await new CommissionConfigurationResolver(this, sessionBranch).SimulateAsync(input);
     }
 
-    public async Task ExportCatalogCsvAsync(string path)
+    public async Task ExportCatalogCsvAsync(string path, string sessionBranch = "")
     {
-        var rows = await GetRulesAsync();
+        var rows = await GetRulesAsync(sessionBranch: sessionBranch);
         var builder = new StringBuilder();
         builder.AppendLine("Categoria,Clave,Nombre,Comision %,Efectivo %,Tarjeta %,AMEX %,Tipo pago,Vigencia,Estado,Actualizado,Usuario,Notas");
         foreach (var row in rows)
@@ -488,9 +606,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await File.WriteAllTextAsync(path, builder.ToString(), Encoding.UTF8);
     }
 
-    public async Task ExportCatalogExcelAsync(string path)
+    public async Task ExportCatalogExcelAsync(string path, string sessionBranch = "")
     {
-        var rows = await GetRulesAsync();
+        var rows = await GetRulesAsync(sessionBranch: sessionBranch);
         var sheetRows = rows.Select(row => new
         {
             Categoria = row.Category,
@@ -617,9 +735,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         insert.CommandText = """
             INSERT INTO CommissionSettingsRules
             (Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId)
+             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch)
             VALUES
-            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId);
+            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId,$branch);
             """;
         AddRuleParameters(insert, rule, user);
         await insert.ExecuteNonQueryAsync();
@@ -745,7 +863,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         var existentes = new List<(long Id, string Nombre, decimal Dejada)>();
         await using (var lectura = connection.CreateCommand())
         {
-            lectura.CommandText = "SELECT Id, Name, PayoutAmount FROM CommissionSettingsRules WHERE Category = 'TRANSPORTE';";
+            lectura.CommandText = "SELECT Id, Name, PayoutAmount FROM CommissionSettingsRules WHERE Category = 'TRANSPORTE' AND Branch='';";
             await using var reader = await lectura.ExecuteReaderAsync();
             while (await reader.ReadAsync())
                 existentes.Add((reader.GetInt64(0), Text(reader, 1), Decimal(reader, 2)));
@@ -940,7 +1058,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.CommandText = """
             SELECT UPPER(TRIM(Name)) || '  (x' || COUNT(*) || ')'
             FROM CommissionSettingsRules
-            WHERE Category='TRANSPORTE'
+            WHERE Category='TRANSPORTE' AND Branch=''
             GROUP BY UPPER(TRIM(Name)), EffectiveFrom
             HAVING COUNT(*) > 1
             ORDER BY 1;
@@ -959,10 +1077,10 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await using var command = connection.CreateCommand();
         command.CommandText = """
             DELETE FROM CommissionSettingsRules
-            WHERE Category='TRANSPORTE'
+            WHERE Category='TRANSPORTE' AND Branch=''
               AND Id NOT IN (
                 SELECT MIN(Id) FROM CommissionSettingsRules
-                WHERE Category='TRANSPORTE'
+                WHERE Category='TRANSPORTE' AND Branch=''
                 GROUP BY UPPER(TRIM(Name)), EffectiveFrom
               );
             """;
@@ -982,7 +1100,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT 1 FROM CommissionSettingsRules
-            WHERE Category='TRANSPORTE' AND UPPER(TRIM(Name))=UPPER($name)
+            WHERE Category='TRANSPORTE' AND Branch='' AND UPPER(TRIM(Name))=UPPER($name)
             LIMIT 1;
             """;
         command.Parameters.AddWithValue("$name", normalized);
@@ -1057,7 +1175,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         Text(reader, 16),
         reader.FieldCount > 17 ? Decimal(reader, 17) : 0m,
         reader.FieldCount > 18 ? Text(reader, 18) : string.Empty,
-        reader.FieldCount > 19 && !reader.IsDBNull(19) ? Convert.ToInt32(reader.GetValue(19), CultureInfo.InvariantCulture) : -1);
+        reader.FieldCount > 19 && !reader.IsDBNull(19) ? Convert.ToInt32(reader.GetValue(19), CultureInfo.InvariantCulture) : -1)
+        { Branch = reader.FieldCount > 20 ? Text(reader, 20) : string.Empty };
 
     private static void ValidateRule(CommissionSettingsRule rule, string reason)
     {
@@ -1082,7 +1201,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
             FROM CommissionSettingsRules
             WHERE Id <> $id
               AND Category=$category
-              AND Code=$code
+              AND Code=$code AND Branch=$branch COLLATE NOCASE
               AND Active=1
               AND $active=1
               AND EffectiveFrom <= COALESCE($to, '9999-12-31')
@@ -1090,6 +1209,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
             """;
         command.Parameters.AddWithValue("$id", rule.Id);
         command.Parameters.AddWithValue("$category", rule.Category.Trim().ToUpperInvariant());
+        command.Parameters.AddWithValue("$branch", rule.Branch.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$code", NormalizeCode(rule.Code));
         command.Parameters.AddWithValue("$active", rule.Active ? 1 : 0);
         command.Parameters.AddWithValue("$from", rule.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
@@ -1105,7 +1225,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Transaction = transaction;
         command.CommandText = """
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch
             FROM CommissionSettingsRules
             WHERE Id=$id;
             """;
@@ -1139,7 +1259,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
             command.Parameters.AddWithValue("$from", current.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             command.Parameters.AddWithValue("$to", current.EffectiveTo?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty);
             command.Parameters.AddWithValue("$machine", Environment.MachineName);
-            command.Parameters.AddWithValue("$branch", string.Empty);
+            // La sucursal auditada pertenece a la regla, no al entorno del proceso.
+            var branchValue = current.Branch;
+            command.Parameters.AddWithValue("$branch", branchValue);
             await command.ExecuteNonQueryAsync();
         }
     }
@@ -1174,6 +1296,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Parameters.AddWithValue("$paxKind", rule.PaxKind.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$monedaId", rule.MonedaId);
         command.Parameters.AddWithValue("$expense", rule.AppliesExpense ? 1 : 0);
+        command.Parameters.AddWithValue("$branch", rule.Branch.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$active", rule.Active ? 1 : 0);
         command.Parameters.AddWithValue("$from", rule.EffectiveFrom.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         command.Parameters.AddWithValue("$to", rule.EffectiveTo?.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? (object)DBNull.Value);

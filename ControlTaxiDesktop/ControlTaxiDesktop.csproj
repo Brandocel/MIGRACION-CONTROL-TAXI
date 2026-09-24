@@ -39,6 +39,11 @@
     </Resource>
   </ItemGroup>
   <ItemGroup>
+    <!-- Local branches override for Debug only: copied to output directory when building Debug.
+         This file must NOT be included in Release/publish. -->
+    <None Include="..\branches.local.json" Condition=" '$(Configuration)' == 'Debug' ">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <!-- Sincronizador SyncTaxi: se copia junto al ejecutable para que el
          Desktop lo lance al arrancar y traiga los datos de Hostinger a la base configurada. -->
     <!-- sync.local.config.json es la configuracion de la maquina de desarrollo

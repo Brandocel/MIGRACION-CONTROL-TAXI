@@ -68,6 +68,127 @@ public partial class App : Application
             return;
         }
 
+        // Diagnostic: print branch config and effective DB targets without opening connections.
+        if (eventArgs.Args.Contains("--diag-branches", StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var branches = new BranchConfigurationService();
+                // Force loading of branch configs so LoadedConfigPath is populated
+                branches.GetAllBranches();
+                var loaded = branches.GetLoadedConfigPath();
+                var isLocal = branches.IsLocalOverrideActive();
+                var database = new LocalDatabase(true);
+                // Do not initialize or open any DB files
+                var repo = new LocalUserRepository(database);
+                var cv = repo.GetBranchConnectionInfo("CV");
+                var p28 = repo.GetBranchConnectionInfo("P28");
+
+                // Gather where we will look for branches.local.json (same order as BranchConfigurationService)
+                var appBase = AppContext.BaseDirectory;
+                string? workspaceRootLocal = null;
+                try
+                {
+                    var current = new DirectoryInfo(AppContext.BaseDirectory);
+                    while (current is not null)
+                    {
+                        if (File.Exists(Path.Combine(current.FullName, "CONTROL TAXI.sln")))
+                        {
+                            workspaceRootLocal = current.FullName;
+                            break;
+                        }
+                        current = current.Parent;
+                    }
+                }
+                catch
+                {
+                    workspaceRootLocal = null;
+                }
+
+                var localCandidates = new List<string>
+                {
+                    Path.Combine(appBase, "branches.local.json"),
+                    Path.Combine(Environment.CurrentDirectory, "branches.local.json")
+                };
+                if (!string.IsNullOrWhiteSpace(workspaceRootLocal))
+                    localCandidates.Add(Path.Combine(workspaceRootLocal, "branches.local.json"));
+
+                var firstLocal = localCandidates.FirstOrDefault(File.Exists);
+                var localExists = firstLocal is null ? "false" : "true";
+                string localReadError = string.Empty;
+                if (firstLocal is not null)
+                {
+                    try
+                    {
+                        var text = File.ReadAllText(firstLocal);
+                        using var doc = System.Text.Json.JsonDocument.Parse(text);
+                        // no-op: parsing succeeded
+                    }
+                    catch (Exception ex)
+                    {
+                        localReadError = ex.Message;
+                    }
+                }
+
+                var lines = new List<string>();
+                // Prepend AppContext.BaseDirectory and local candidate info
+                lines.Add("AppContext.BaseDirectory: " + appBase);
+                lines.Add("branches.local.json candidate: " + (firstLocal ?? "(none)"));
+                lines.Add("branches.local.json exists: " + localExists);
+                lines.Add(string.IsNullOrWhiteSpace(localReadError) ? "branches.local.json read error: (none)" : "branches.local.json read error: " + localReadError);
+
+                // Then keep the original seven lines (loaded, isLocal, cv server/db, p28 server/db)
+                lines.Add(loaded ?? "(none)");
+                lines.Add(isLocal ? "true" : "false");
+                lines.Add(cv.DataSource ?? string.Empty);
+                lines.Add(cv.InitialCatalog ?? string.Empty);
+                lines.Add(p28.DataSource ?? string.Empty);
+                lines.Add(p28.InitialCatalog ?? string.Empty);
+                var message = string.Join('\n', lines);
+
+                // Print to console first so automated runs capture the exact text,
+                // then show a MessageBox with the same text for interactive inspection.
+                Console.WriteLine(message);
+                MessageBox.Show(message, "Diagnóstico sucursales", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Detect presence of CV credentials (without revealing them).
+                // Use TryLoad to detect an existing casco.credentials.dat without creating folders.
+                var cvHasCred = false;
+                try
+                {
+                    if (CascoCredentialStore.TryLoad(out var cred, out var _ ) && cred is not null
+                        && !string.IsNullOrWhiteSpace(cred.SqlUser)
+                        && !string.IsNullOrWhiteSpace(cred.SqlPassword))
+                    {
+                        cvHasCred = true;
+                    }
+                    else
+                    {
+                        // Fallback: require both env vars present
+                        var envUser = Environment.GetEnvironmentVariable("CASCO_SQL_USER");
+                        var envPass = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD");
+                        if (!string.IsNullOrWhiteSpace(envUser) && !string.IsNullOrWhiteSpace(envPass))
+                            cvHasCred = true;
+                    }
+                }
+                catch
+                {
+                    cvHasCred = false;
+                }
+
+                Console.WriteLine(cvHasCred ? "yes" : "no");
+                MessageBox.Show(message + "\n" + (cvHasCred ? "yes" : "no"), "Diagnóstico sucursales", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(ex.ToString());
+                Environment.Exit(2);
+            }
+
+            Shutdown(0);
+            return;
+        }
+
         // Limpia transportes duplicados del catalogo de comisiones y deja el resultado en
         // Logs\limpiar-catalogo.txt. Se agrego como flag y no como script de base de datos
         // porque las maquinas donde se instala no tienen sqlite3, y esto hay que correrlo una
@@ -241,19 +362,24 @@ public partial class App : Application
         {
             var branchService = new BranchConfigurationService();
             var cascoBranch = branchService.GetBranch("CV");
+            // Try to apply any saved credential. If missing or invalid, show the setup window so the
+            // user can Test and Save a new credential. Do NOT abort startup immediately: allow the
+            // user to provide credentials interactively (important when running under F5).
             if (!CascoCredentialStore.TryApplyToEnvironment(out var credentialError))
             {
                 var setupWindow = new CascoConnectionSetupWindow(cascoBranch);
                 var configured = setupWindow.ShowDialog();
-                if (configured != true || !CascoCredentialStore.TryApplyToEnvironment(out credentialError))
+                if (configured == true)
                 {
-                    MessageBox.Show(
-                        "No se completo la configuracion de Casco Viejo." + Environment.NewLine + credentialError,
-                        "Control Taxi",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                    Shutdown(0);
-                    return;
+                    // If user saved new credential, ensure it's applied. If Apply still fails, show a
+                    // warning but continue startup so the app can show the login and allow retry.
+                    CascoCredentialStore.TryApplyToEnvironment(out credentialError);
+                }
+                else
+                {
+                    // User cancelled setup: warn but continue startup so they can still use the app
+                    // (some modules may not require Casco). Do not shutdown here to allow interactive
+                    // development with F5.
                 }
             }
         }

@@ -115,6 +115,42 @@ public partial class UserAdminWindow : Window
                 return;
             }
 
+            // Antes de guardar, en pruebas locales verificamos el destino efectivo de CV.
+            var normalizedBranch = NormalizeBranchCode(branchCode);
+            if (string.Equals(normalizedBranch, "CV", StringComparison.OrdinalIgnoreCase))
+            {
+#if DEBUG
+                // En Debug: bloquear guardado si NO existe el override local
+                if (!_branches.IsLocalOverrideActive())
+                {
+                    WebDialogWindow.Show(this, "En modo Debug el guardado de usuarios CV está bloqueado hasta que exista branches.local.json activo.", "Control Taxi", "!");
+                    return;
+                }
+#endif
+                // Si existe override local, comprobar el servidor/base esperados.
+                if (_branches.IsLocalOverrideActive())
+                {
+                    try
+                    {
+                        var info = _users.GetBranchConnectionInfo("CV");
+                        var server = info.DataSource ?? string.Empty;
+                        var database = info.InitialCatalog ?? string.Empty;
+                        WebDialogWindow.Show(this, $"Conexión efectiva para CV: {server} / {database}", "Control Taxi", "i");
+                        if (!string.Equals(server, @".\SQLEXPRESS", StringComparison.OrdinalIgnoreCase)
+                            || !string.Equals(database, "mkt", StringComparison.OrdinalIgnoreCase))
+                        {
+                            WebDialogWindow.Show(this, "En esta prueba local solo se permite guardar usuarios CV cuando CV apunta a .\\SQLEXPRESS y base 'mkt'. No se guardará.", "Control Taxi", "!");
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WebDialogWindow.Show(this, "No se pudo determinar la conexión efectiva para CV: " + ex.Message, "Control Taxi", "!");
+                        return;
+                    }
+                }
+            }
+
             await _users.SaveUserAsync(userName, UserPassword.Password, role, status, branchCode, permissions, _branchCode);
             UserPassword.Clear();
             await RefreshAsync();

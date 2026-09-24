@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 
 namespace ControlTaxiDesktop.Models;
 
@@ -32,6 +32,7 @@ public sealed record CommissionSettingsRule(
     // amarrada a ninguna moneda.
     int MonedaId = -1)
 {
+    public string Branch { get; init; } = string.Empty;
     public string StatusText => Active ? "Activo" : "Inactivo";
     public string PayoutDisplay => PayoutAmount <= 0m
         ? "—"

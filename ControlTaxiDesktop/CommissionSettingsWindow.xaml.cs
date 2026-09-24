@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,11 +16,14 @@ public partial class CommissionSettingsWindow : Window
     private long _editingId;
     private bool _isSaving;
 
-    public CommissionSettingsWindow(LocalDatabase database, string user, bool canEdit)
+    private readonly string _branchCode;
+
+    public CommissionSettingsWindow(LocalDatabase database, string user, bool canEdit, string branchCode)
     {
         _settings = new CommissionSettingsRepository(database);
         _user = string.IsNullOrWhiteSpace(user) ? Environment.UserName : user;
         _canEdit = canEdit;
+        _branchCode = string.IsNullOrWhiteSpace(branchCode) ? string.Empty : branchCode.Trim().ToUpperInvariant();
         InitializeComponent();
         SimDate.SelectedDate = DateTime.Today;
         VigencyFilter.SelectedDate = DateTime.Today;
@@ -35,6 +38,7 @@ public partial class CommissionSettingsWindow : Window
             await RefreshAllAsync();
             SearchBox.Focus();
         };
+        // NewRule enablement for TRANSPORTE will be checked at NewRule click time using _branchCode.
     }
 
     /// <summary>
@@ -131,9 +135,13 @@ public partial class CommissionSettingsWindow : Window
     {
         var transportItem = SimTransport.SelectedItem;
         var paymentItem = SimPayment.SelectedItem;
-        SimTransport.ItemsSource = (await _settings.GetRulesAsync("TRANSPORTE", active: true))
-            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
-        SimPayment.ItemsSource = (await _settings.GetRulesAsync("FORMA_PAGO", active: true))
+        // Filter transport rules by session branch: if branch is CV show only CV rules.
+        var allTransports = await _settings.GetRulesAsync("TRANSPORTE", active: true, date: null, sessionBranch: _branchCode);
+        var transports = allTransports;
+        SimTransport.ItemsSource = transports
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        SimPayment.ItemsSource = (await _settings.GetRulesAsync("FORMA_PAGO", active: true, date: null, sessionBranch: _branchCode))
             .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
         SimTransport.SelectedItem = transportItem;
         SimPayment.SelectedItem = paymentItem;
@@ -141,7 +149,7 @@ public partial class CommissionSettingsWindow : Window
 
     private async Task RefreshSummaryAsync()
     {
-        var summary = await _settings.GetSummaryAsync();
+        var summary = await _settings.GetSummaryAsync(_branchCode);
         var diagnostics = await _settings.GetDiagnosticsAsync();
         ActiveRulesCard.Text = summary.ActiveRules.ToString("N0", CultureInfo.CurrentCulture);
         TransportRulesCard.Text = summary.TransportRules.ToString("N0", CultureInfo.CurrentCulture);
@@ -157,7 +165,7 @@ public partial class CommissionSettingsWindow : Window
             CategoryCode(SelectedComboText(CategoryFilter)),
             SearchBox.Text,
             ActiveFilter(status),
-            DateFilter(status));
+            DateFilter(status), _branchCode);
 
         if (IsExpiringFilter(status))
         {
@@ -365,6 +373,8 @@ public partial class CommissionSettingsWindow : Window
             if (MessageBox.Show(this, message, isEdit ? "Confirmar corrección de comisión" : "Confirmar alta de comisión", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
+            // Attach current session branch to the rule using branch passed to the window (_branchCode).
+            rule = rule with { Branch = rule.Category == "TRANSPORTE" ? _branchCode : string.Empty };
             if (isEdit)
                 await _settings.UpdateRuleAsync(rule, _user, EditReason.Text, _canEdit);
             else
@@ -403,7 +413,7 @@ public partial class CommissionSettingsWindow : Window
                 0m,
                 Number(SimPayout.Text),
                 Number(SimExpense.Text),
-                string.Empty));
+                string.Empty), _branchCode);
             SimulationResult.Text =
                 $"Venta: {Number(SimSale.Text):C2}\n"
                 + $"Forma de pago: {SimPayment.Text}\n"
@@ -414,7 +424,7 @@ public partial class CommissionSettingsWindow : Window
                 + "¿Cómo se calculó?\n"
                 + result.Explanation
                 + Environment.NewLine
-                + (result.Configured ? "Estado: regla configurada." : "Estado: Esta regla usa un valor de respaldo. Conviene configurarla antes de liquidar.");
+                + (result.Configured ? "Estado: regla configurada." : "Estado: falta configuración válida; revisa el detalle antes de liquidar.");
         }
         catch (Exception ex)
         {
@@ -432,7 +442,7 @@ public partial class CommissionSettingsWindow : Window
                 FileName = "catalogo_comisiones.csv"
             };
             if (dialog.ShowDialog(this) != true) return;
-            await _settings.ExportCatalogCsvAsync(dialog.FileName);
+            await _settings.ExportCatalogCsvAsync(dialog.FileName, _branchCode);
             MessageBox.Show(this, "El catálogo CSV se exportó correctamente.", "Control Taxi", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -451,7 +461,7 @@ public partial class CommissionSettingsWindow : Window
                 FileName = "catalogo_comisiones.xls"
             };
             if (dialog.ShowDialog(this) != true) return;
-            await _settings.ExportCatalogExcelAsync(dialog.FileName);
+            await _settings.ExportCatalogExcelAsync(dialog.FileName, _branchCode);
             MessageBox.Show(this, "El catálogo se exportó a Excel correctamente.", "Control Taxi", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
