@@ -93,13 +93,22 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
             + card * (payment.CardRetentionPercent / 100m)
             + amex * (payment.AmexRetentionPercent / 100m);
         var payout = input.Payout;
+        var selectedPayout = input.Payout;
+        var payoutDetail = string.Empty;
         var expense = input.Expense;
         if (isCv)
         {
             var rule = (await settings.GetRulesAsync("TRANSPORTE", input.TransportCodeOrName, true, date, "CV"))
                 .Single(r => string.Equals(r.Code, input.TransportCodeOrName.Trim(), StringComparison.OrdinalIgnoreCase)
                     || string.Equals(r.Name, input.TransportCodeOrName.Trim(), StringComparison.OrdinalIgnoreCase));
-            payout = rule.AppliesPayout ? payout : 0m;
+            var selection = CascoPayoutRules.Select(rule, input.AdultCount);
+            if (selection.Amount is null)
+                return new CommissionSimulationResult(transport.Name, "DATOS_PENDIENTES_CV", FormatVigency(transport),
+                    transport.CommissionPercent, retentionPercent, 0m, 0m, input.Expense, 0m,
+                    selection.Detail + " No se calculó comisión.", false);
+            selectedPayout = selection.Amount.Value;
+            payoutDetail = selection.Detail;
+            payout = rule.AppliesPayout ? selectedPayout : 0m;
             expense = rule.AppliesExpense ? expense : 0m;
         }
         var baseAmount = Math.Max(0m, sale - retained - payout - expense);
@@ -113,13 +122,14 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
             Pago = {input.PaymentMethod} ({kind})
             Retencion = {retentionPercent:0.##}% ({retained:C2})
             Base = venta - retencion - dejada - gasto = {baseAmount:C2}
+            {payoutDetail}
             Dejada aplicada = {payout:C2}
             Gasto aplicado = {expense:C2}
             Porcentaje comision = {transport.CommissionPercent:0.##}%
             Regla redondeo = truncar decimales
             Resultado = {final:C2}
             """;
-        return new CommissionSimulationResult(transport.Name, transport.Source, FormatVigency(transport), transport.CommissionPercent, retentionPercent, baseAmount, input.Payout, input.Expense, final, explanation, transport.Configured && payment.Configured);
+        return new CommissionSimulationResult(transport.Name, transport.Source, FormatVigency(transport), transport.CommissionPercent, retentionPercent, baseAmount, selectedPayout, input.Expense, final, explanation, transport.Configured && payment.Configured);
     }
 
     public static string FormatVigency(CommissionResolvedRule rule) =>

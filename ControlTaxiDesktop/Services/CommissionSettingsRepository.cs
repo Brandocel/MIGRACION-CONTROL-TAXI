@@ -12,6 +12,15 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
 
     public async Task InitializeAsync()
     {
+        await InitializeSchemaAsync();
+        await using var connection = database.Open();
+        await SeedDefaultsAsync(connection);
+        await SeedPayoutTariffsAsync(connection);
+        await FixKnownWrongRatesAsync(connection);
+    }
+
+    public async Task InitializeSchemaAsync()
+    {
         await using var connection = database.Open();
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -94,9 +103,49 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await EnsureColumnAsync(connection, "CommissionSettingsAudit", "Branch", "TEXT NOT NULL DEFAULT ''");
         // Before seeding defaults, ensure migration of existing table to include Branch and updated UNIQUE
         await MigrateAddBranchAsync(connection);
-        await SeedDefaultsAsync(connection);
-        await SeedPayoutTariffsAsync(connection);
-        await FixKnownWrongRatesAsync(connection);
+        await MigrateCvPayoutBandsAsync(connection);
+    }
+
+    // Explicit import only. No automatic seeding, overwrites or activation of commission percentages.
+    public async Task SaveCvPayoutDraftAsync(CommissionSettingsRule rule, string user, string reason)
+    {
+        if (rule.Branch != "CV" || rule.Category != "TRANSPORTE" || rule.Active || rule.Id != 0
+            || rule.CommissionPercent != 0m || rule.CashRetentionPercent != 0m
+            || rule.CardRetentionPercent != 0m || rule.AmexRetentionPercent != 0m)
+            throw new InvalidOperationException("La carga de dejadas requiere una ficha CV nueva e inactiva, con porcentajes pendientes.");
+        ValidateRule(rule, reason);
+        await InitializeSchemaAsync();
+        await using var connection = database.Open();
+        await using var transaction = connection.BeginTransaction();
+        await using var existing = connection.CreateCommand();
+        existing.Transaction = transaction;
+        existing.CommandText = "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='TRANSPORTE' AND Branch='CV' COLLATE NOCASE AND (Code=$code COLLATE NOCASE OR Name=$name COLLATE NOCASE);";
+        existing.Parameters.AddWithValue("$code", rule.Code);
+        existing.Parameters.AddWithValue("$name", rule.Name);
+        if (Convert.ToInt64(await existing.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0)
+            throw new InvalidOperationException("Ya existe una regla CV con ese código o nombre. No se sobrescriben reglas ni históricos; hay que seleccionar una vigencia explícitamente.");
+        await InsertRuleAsync(connection, transaction, rule, user);
+        await WriteAuditAsync(connection, transaction, null, rule, user, reason);
+        await transaction.CommitAsync();
+    }
+
+    private static async Task MigrateCvPayoutBandsAsync(SqliteConnection connection)
+    {
+        // Additive, transactional migration: never derive these amounts from P28/legacy rates.
+        await using var transaction = connection.BeginTransaction();
+        foreach (var column in new[] { "CvPayoutOneToFourAdults", "CvPayoutFiveOrMoreAdults" })
+        {
+            await using var inspect = connection.CreateCommand();
+            inspect.Transaction = transaction;
+            inspect.CommandText = "SELECT COUNT(*) FROM pragma_table_info('CommissionSettingsRules') WHERE name=$column;";
+            inspect.Parameters.AddWithValue("$column", column);
+            if (Convert.ToInt64(await inspect.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0) continue;
+            await using var alter = connection.CreateCommand();
+            alter.Transaction = transaction;
+            alter.CommandText = $"ALTER TABLE CommissionSettingsRules ADD COLUMN {column} REAL NULL CHECK ({column} IS NULL OR {column} >= 0);";
+            await alter.ExecuteNonQueryAsync();
+        }
+        await transaction.CommitAsync();
     }
 
     private static async Task MigrateAddBranchAsync(SqliteConnection connection)
@@ -268,7 +317,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
         var stored = await ReadRulesAsync($"""
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults
             FROM CommissionSettingsRules
             {where}
             ORDER BY Category, Name, EffectiveFrom DESC;
@@ -529,7 +578,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
                 Notes=$notes,
                 PayoutAmount=$payoutAmount,
                 PaxKind=$paxKind,
-                MonedaId=$monedaId, Branch=$branch
+                MonedaId=$monedaId, Branch=$branch,
+                CvPayoutOneToFourAdults=$cvPayoutSmall, CvPayoutFiveOrMoreAdults=$cvPayoutLarge
             WHERE Id=$id;
             """;
         AddRuleParameters(command, rule, user);
@@ -735,9 +785,9 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         insert.CommandText = """
             INSERT INTO CommissionSettingsRules
             (Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch)
+             PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults)
             VALUES
-            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId,$branch);
+            ($category,$code,$name,$commission,$cash,$card,$amex,$paymentKind,$payout,$expense,$active,$from,$to,$updatedAt,$updatedBy,$notes,$payoutAmount,$paxKind,$monedaId,$branch,$cvPayoutSmall,$cvPayoutLarge);
             """;
         AddRuleParameters(insert, rule, user);
         await insert.ExecuteNonQueryAsync();
@@ -1176,7 +1226,11 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         reader.FieldCount > 17 ? Decimal(reader, 17) : 0m,
         reader.FieldCount > 18 ? Text(reader, 18) : string.Empty,
         reader.FieldCount > 19 && !reader.IsDBNull(19) ? Convert.ToInt32(reader.GetValue(19), CultureInfo.InvariantCulture) : -1)
-        { Branch = reader.FieldCount > 20 ? Text(reader, 20) : string.Empty };
+        {
+            Branch = reader.FieldCount > 20 ? Text(reader, 20) : string.Empty,
+            CvPayoutOneToFourAdults = reader.FieldCount > 21 && !reader.IsDBNull(21) ? Decimal(reader, 21) : null,
+            CvPayoutFiveOrMoreAdults = reader.FieldCount > 22 && !reader.IsDBNull(22) ? Decimal(reader, 22) : null
+        };
 
     private static void ValidateRule(CommissionSettingsRule rule, string reason)
     {
@@ -1188,6 +1242,11 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         {
             if (value < 0m || value > 100m) throw new InvalidOperationException("Los porcentajes deben estar entre 0 y 100.");
         }
+        if (rule.CvPayoutOneToFourAdults < 0m || rule.CvPayoutFiveOrMoreAdults < 0m)
+            throw new InvalidOperationException("Las dejadas CV no pueden ser negativas.");
+        if ((rule.CvPayoutOneToFourAdults.HasValue || rule.CvPayoutFiveOrMoreAdults.HasValue)
+            && !(rule.Category.Equals("TRANSPORTE", StringComparison.OrdinalIgnoreCase) && rule.Branch.Equals("CV", StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("Las dejadas por adultos solo corresponden a TRANSPORTE de CV.");
         if (rule.EffectiveTo is not null && rule.EffectiveTo.Value.Date < rule.EffectiveFrom.Date)
             throw new InvalidOperationException("La fecha fin no puede ser menor a la fecha inicio.");
     }
@@ -1225,7 +1284,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Transaction = transaction;
         command.CommandText = """
             SELECT Id,Category,Code,Name,CommissionPercent,CashRetentionPercent,CardRetentionPercent,AmexRetentionPercent,
-                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch
+                   PaymentKind,AppliesPayout,AppliesExpense,Active,EffectiveFrom,EffectiveTo,UpdatedAt,UpdatedBy,Notes,PayoutAmount,PaxKind,MonedaId,Branch,CvPayoutOneToFourAdults,CvPayoutFiveOrMoreAdults
             FROM CommissionSettingsRules
             WHERE Id=$id;
             """;
@@ -1275,7 +1334,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
     }
 
     private static string Snapshot(CommissionSettingsRule rule) =>
-        $"{rule.Category}|{rule.Code}|{rule.Name}|C={rule.CommissionPercent:0.####}|E={rule.CashRetentionPercent:0.####}|T={rule.CardRetentionPercent:0.####}|A={rule.AmexRetentionPercent:0.####}|Pago={rule.PaymentKind}|Vig={rule.EffectiveRange}|Activo={rule.Active}|Dejada={rule.PayoutAmount:0.##}|Pax={rule.PaxKind}";
+        $"{rule.Category}|{rule.Code}|{rule.Name}|C={rule.CommissionPercent:0.####}|E={rule.CashRetentionPercent:0.####}|T={rule.CardRetentionPercent:0.####}|A={rule.AmexRetentionPercent:0.####}|Pago={rule.PaymentKind}|Vig={rule.EffectiveRange}|Activo={rule.Active}|Dejada={rule.PayoutAmount:0.##}|Pax={rule.PaxKind}"
+        + (rule.Branch == "CV" ? $"|Dejada1a4={rule.CvPayoutOneToFourAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? "PENDIENTE"}|Dejada5mas={rule.CvPayoutFiveOrMoreAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? "PENDIENTE"}" : string.Empty);
 
     private static bool IsPrepublicationTestRule(CommissionSettingsRule rule) =>
         string.Equals(NormalizeCode(rule.Code), "PRUEBA PREPUBLICACION", StringComparison.OrdinalIgnoreCase)
@@ -1293,6 +1353,8 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         command.Parameters.AddWithValue("$paymentKind", rule.PaymentKind.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$payout", rule.AppliesPayout ? 1 : 0);
         command.Parameters.AddWithValue("$payoutAmount", Math.Max(0m, rule.PayoutAmount));
+        command.Parameters.AddWithValue("$cvPayoutSmall", (object?)rule.CvPayoutOneToFourAdults ?? DBNull.Value);
+        command.Parameters.AddWithValue("$cvPayoutLarge", (object?)rule.CvPayoutFiveOrMoreAdults ?? DBNull.Value);
         command.Parameters.AddWithValue("$paxKind", rule.PaxKind.Trim().ToUpperInvariant());
         command.Parameters.AddWithValue("$monedaId", rule.MonedaId);
         command.Parameters.AddWithValue("$expense", rule.AppliesExpense ? 1 : 0);

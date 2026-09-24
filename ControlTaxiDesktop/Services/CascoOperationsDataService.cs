@@ -1697,7 +1697,8 @@ public static class CascoOperationsDataService
                 AdultPassengers: adultCount,
                 YouthPassengers: youthCount,
                 ChildPassengers: minorCount,
-                SellerBadges: sellerBadgesText));
+                SellerBadges: sellerBadgesText)
+            { CommissionAdultCount = CascoPayoutRules.ReadAdultCount(sourceRow.DetailJson) });
         }
 
         return MergeRelationRowsByOperation(result);
@@ -1733,6 +1734,7 @@ public static class CascoOperationsDataService
                     PayoutDate = FirstNonEmpty(items.Select(item => item.PayoutDate)),
                     Passengers = items.Select(item => item.Passengers).DefaultIfEmpty(first.Passengers).Max(),
                     AdultPassengers = items.Select(item => item.AdultPassengers).DefaultIfEmpty(first.AdultPassengers).Max(),
+                    CommissionAdultCount = CascoPayoutRules.ConsistentAdults(items.Select(item => item.CommissionAdultCount)),
                     YouthPassengers = items.Select(item => item.YouthPassengers).DefaultIfEmpty(first.YouthPassengers).Max(),
                     ChildPassengers = items.Select(item => item.ChildPassengers).DefaultIfEmpty(first.ChildPassengers).Max(),
                     TotalAmount = items.Select(item => item.TotalAmount).DefaultIfEmpty(first.TotalAmount).Max(),
@@ -1908,12 +1910,12 @@ public static class CascoOperationsDataService
                 result.Add(row with { Commission = 0m, CommissionStatus = "SIN FECHA VALIDA", OrigenComision = "SIN_CONFIGURACION" });
                 continue;
             }
-            var simulation = await settings.SimulateAsync(new CommissionSimulationInput(operationDate, row.TransportType,
-                row.Sale, row.Sale, row.PaymentMethod, 0m, 0m, 0m, row.Payout ?? 0m, 0m, string.Empty), "CV");
+            var simulation = await settings.SimulateAsync(CascoPayoutRules.FromRelation(row, operationDate), "CV");
             result.Add(row with
             {
                 Commission = simulation.FinalCommission,
-                CommissionStatus = simulation.Configured ? ResolveCommissionStatus(simulation.FinalCommission, row.CommissionPaid) : "FALTA REGLA CV",
+                CommissionStatus = simulation.Configured ? ResolveCommissionStatus(simulation.FinalCommission, row.CommissionPaid) : simulation.Explanation,
+                CommissionCalculationDetail = simulation.Explanation,
                 OrigenComision = simulation.Source
             });
         }

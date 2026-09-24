@@ -33,6 +33,11 @@ public sealed record CommissionSettingsRule(
     int MonedaId = -1)
 {
     public string Branch { get; init; } = string.Empty;
+    // Null means not configured; zero is an explicitly configured free payout.
+    public decimal? CvPayoutOneToFourAdults { get; init; }
+    public decimal? CvPayoutFiveOrMoreAdults { get; init; }
+    public string CvPayoutOneToFourDisplay => Category == "TRANSPORTE" && Branch == "CV" ? CvPayoutOneToFourAdults?.ToString("C2", CultureInfo.CurrentCulture) ?? "Pendiente" : string.Empty;
+    public string CvPayoutFiveOrMoreDisplay => Category == "TRANSPORTE" && Branch == "CV" ? CvPayoutFiveOrMoreAdults?.ToString("C2", CultureInfo.CurrentCulture) ?? "Pendiente" : string.Empty;
     public string StatusText => Active ? "Activo" : "Inactivo";
     public string PayoutDisplay => PayoutAmount <= 0m
         ? "—"
@@ -74,7 +79,8 @@ public sealed record CommissionSimulationInput(
     decimal Amex,
     decimal Payout,
     decimal Expense,
-    string OperationType);
+    string OperationType,
+    int? AdultCount = null);
 
 public sealed record CommissionSimulationResult(
     string RuleName,

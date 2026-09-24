@@ -67,14 +67,14 @@ var fixedRules = HardcodedTransportCatalog.AsRules().OrderBy(r => r.Code).ToArra
 var p28 = (await settings.GetRulesAsync("TRANSPORTE", sessionBranch: "P28")).OrderBy(r => r.Code).ToArray();
 Assert(p28.SequenceEqual(fixedRules), "P28 fixed catalog unchanged, without SQLite duplicates");
 var date = new DateTime(2026, 9, 24);
-var input = new CommissionSimulationInput(date, "PHASE1-CV", 1000m, 1000m, "Efectivo", 0m, 0m, 0m, 100m, 20m, "");
+var input = new CommissionSimulationInput(date, "PHASE1-CV", 1000m, 1000m, "Efectivo", 0m, 0m, 0m, 100m, 20m, "", AdultCount: 2);
 var missing = await settings.SimulateAsync(input, "CV");
 Assert(!missing.Configured && missing.FinalCommission == 0 && missing.Source == "SIN_CONFIGURACION", "Missing CV rule produces no fallback");
 var resolver = new CommissionConfigurationResolver(settings, "CV");
 var fallback = await resolver.ResolveTransportAsync("MAJESTIC", date, 99m, 99m, 99m, 99m);
 Assert(!fallback.Configured && fallback.CommissionPercent == 0 && fallback.CardRetentionPercent == 0, "CV ignores supplied legacy percentages");
 var rule = new CommissionSettingsRule(0, "TRANSPORTE", "PHASE1-CV", "PHASE1-CV", 13m, 2m, 7m, 11m, "", true, true, true,
-    date.AddDays(-1), date.AddDays(1), "", "CHECK", "isolated fixture") { Branch = "CV" };
+    date.AddDays(-1), date.AddDays(1), "", "CHECK", "isolated fixture") { Branch = "CV", CvPayoutOneToFourAdults = 100m, CvPayoutFiveOrMoreAdults = 100m };
 await settings.SaveRuleAsync(rule, "CHECK", "Isolated CV fixture", true);
 rule = (await settings.GetRulesAsync("TRANSPORTE", "PHASE1-CV", sessionBranch: "CV")).Single();
 Assert(rule.Branch == "CV", "Create persists CV branch");

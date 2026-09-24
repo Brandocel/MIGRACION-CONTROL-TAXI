@@ -25,6 +25,13 @@ public partial class CommissionSettingsWindow : Window
         _canEdit = canEdit;
         _branchCode = string.IsNullOrWhiteSpace(branchCode) ? string.Empty : branchCode.Trim().ToUpperInvariant();
         InitializeComponent();
+        var isCv = _branchCode == "CV";
+        CvSmallPayoutColumn.Visibility = CvLargePayoutColumn.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
+        LegacyPayoutColumn.Visibility = isCv ? Visibility.Collapsed : Visibility.Visible;
+        SimAdultsPanel.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
+        SimPayout.IsReadOnly = isCv;
+        if (isCv) SimPayoutLabel.Text = "DEJADA SEGÚN ADULTOS (CALCULADA)";
+        UpdateCvPayoutEditor();
         SimDate.SelectedDate = DateTime.Today;
         VigencyFilter.SelectedDate = DateTime.Today;
         EditFrom.SelectedDate = DateTime.Today;
@@ -261,6 +268,8 @@ public partial class CommissionSettingsWindow : Window
         SetComboText(EditPaymentKind, rule.PaymentKind);
         EditPayout.IsChecked = rule.AppliesPayout;
         EditPayoutAmount.Text = rule.PayoutAmount.ToString("0.##", CultureInfo.InvariantCulture);
+        EditCvPayoutSmall.Text = rule.CvPayoutOneToFourAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
+        EditCvPayoutLarge.Text = rule.CvPayoutFiveOrMoreAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
         SetComboText(EditPaxKind, rule.PaxKind);
         EditMonedaId.Text = rule.MonedaId.ToString(CultureInfo.InvariantCulture);
         EditExpense.IsChecked = rule.AppliesExpense;
@@ -300,6 +309,8 @@ public partial class CommissionSettingsWindow : Window
         SetComboText(EditPaymentKind, string.Empty);
         EditPayout.IsChecked = true;
         EditPayoutAmount.Text = "0";
+        EditCvPayoutSmall.Clear();
+        EditCvPayoutLarge.Clear();
         EditPaxKind.SelectedIndex = 0;
         EditMonedaId.Text = "-1";
         EditExpense.IsChecked = true;
@@ -351,7 +362,12 @@ public partial class CommissionSettingsWindow : Window
                 EditNotes.Text,
                 Money(EditPayoutAmount.Text, "Dejada"),
                 SelectedComboText(EditPaxKind),
-                Entero(EditMonedaId.Text));
+                Entero(EditMonedaId.Text))
+            {
+                Branch = SelectedComboText(EditCategory) == "TRANSPORTE" ? _branchCode : string.Empty,
+                CvPayoutOneToFourAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutSmall.Text, "Dejada 1–4 adultos") : null,
+                CvPayoutFiveOrMoreAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutLarge.Text, "Dejada 5 o más") : null
+            };
 
             if (previous is not null && previous.Active && !rule.Active)
             {
@@ -370,6 +386,8 @@ public partial class CommissionSettingsWindow : Window
             var message = isEdit
                 ? $"Vas a corregir esta regla (no se crea otra):\n\n{rule.Name}\n\n{previousText}\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el cambio o No para cancelar."
                 : $"Vas a dar de alta:\n\n{rule.Name}\n\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el alta o No para cancelar.";
+            if (IsCvTransportEditor)
+                message += $"\nDejada 1–4 adultos: {previous?.CvPayoutOneToFourDisplay ?? "Pendiente"} -> {rule.CvPayoutOneToFourDisplay}\nDejada 5 o más: {previous?.CvPayoutFiveOrMoreDisplay ?? "Pendiente"} -> {rule.CvPayoutFiveOrMoreDisplay}";
             if (MessageBox.Show(this, message, isEdit ? "Confirmar corrección de comisión" : "Confirmar alta de comisión", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
@@ -398,6 +416,34 @@ public partial class CommissionSettingsWindow : Window
         }
     }
 
+    private bool IsCvTransportEditor => _branchCode == "CV" && SelectedComboText(EditCategory) == "TRANSPORTE";
+
+    private void EditCategory_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateCvPayoutEditor();
+
+    private void UpdateCvPayoutEditor()
+    {
+        if (CvPayoutEditor is null || EditCategory is null) return;
+        CvPayoutEditor.Visibility = IsCvTransportEditor ? Visibility.Visible : Visibility.Collapsed;
+        EditPayoutAmount.Visibility = LegacyPayoutLabel.Visibility = IsCvTransportEditor ? Visibility.Collapsed : Visibility.Visible;
+        EditCvPayoutSmall.IsEnabled = EditCvPayoutLarge.IsEnabled = _canEdit;
+    }
+
+    private static decimal? OptionalMoney(string text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (!decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount < 0m)
+            throw new InvalidOperationException($"{label}: escribe un importe válido no negativo, o déjalo vacío si está pendiente.");
+        return amount;
+    }
+
+    private int? ReadSimulatorAdults()
+    {
+        if (string.IsNullOrWhiteSpace(SimAdults.Text)) return null;
+        if (!int.TryParse(SimAdults.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var adults))
+            throw new InvalidOperationException("Adultos debe ser un número entero no negativo; no se calcula con PAX total.");
+        return adults;
+    }
+
     private async void Simulate_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -411,9 +457,10 @@ public partial class CommissionSettingsWindow : Window
                 0m,
                 0m,
                 0m,
-                Number(SimPayout.Text),
+                _branchCode == "CV" ? 0m : Number(SimPayout.Text),
                 Number(SimExpense.Text),
-                string.Empty), _branchCode);
+                string.Empty, _branchCode == "CV" ? ReadSimulatorAdults() : null), _branchCode);
+            if (_branchCode == "CV") SimPayout.Text = result.Configured ? result.Payout.ToString("0.##", CultureInfo.InvariantCulture) : "Pendiente";
             SimulationResult.Text =
                 $"Venta: {Number(SimSale.Text):C2}\n"
                 + $"Forma de pago: {SimPayment.Text}\n"
@@ -540,6 +587,7 @@ public partial class CommissionSettingsWindow : Window
         SimPayment.SelectedIndex = -1;
         SimPayment.Text = "MERCADO PAGO";
         SimPayout.Text = "0";
+        SimAdults.Clear();
         SimExpense.Text = "0";
         SimulationResult.Text = "Listo para una nueva prueba.";
     }
@@ -591,6 +639,7 @@ public partial class CommissionSettingsWindow : Window
         SimSale.Text = "1335";
         SimSubtotal.Text = "0";
         SimPayout.Text = "0";
+        SimAdults.Clear();
         SimExpense.Text = "0";
     }
 

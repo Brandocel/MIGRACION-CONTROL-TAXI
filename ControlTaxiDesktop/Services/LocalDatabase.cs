@@ -9,6 +9,7 @@ public sealed class LocalDatabase
     private readonly bool _forceTestDatabase;
     private readonly string _dataDirectory;
     private string? _resolvedProductionPath;
+    private readonly string? _explicitDatabasePath;
 
     public string ProductionPath => Path.Combine(_dataDirectory, "ControlTaxi.db");
     public string TestPath => Path.Combine(_dataDirectory, "ControlTaxi.prueba.db");
@@ -23,10 +24,19 @@ public sealed class LocalDatabase
             : Path.Combine(AppContext.BaseDirectory, "DatosLocal");
     }
 
+    // Maintenance tools select an existing SQLite explicitly, with no production-path discovery.
+    public LocalDatabase(string existingDatabasePath)
+    {
+        var path = Path.GetFullPath(existingDatabasePath);
+        if (!File.Exists(path)) throw new FileNotFoundException("No existe la base SQLite indicada.", path);
+        _explicitDatabasePath = _resolvedProductionPath = path;
+        _dataDirectory = Path.GetDirectoryName(path)!;
+    }
+
     public async Task InitializeAsync()
     {
         Directory.CreateDirectory(_dataDirectory);
-        _resolvedProductionPath = _forceTestDatabase ? null : ResolveProductionPath() ?? ProductionPath;
+        _resolvedProductionPath = _explicitDatabasePath ?? (_forceTestDatabase ? null : ResolveProductionPath() ?? ProductionPath);
         IsTestDatabase = _forceTestDatabase;
         await using var connection = Open();
         await using var command = connection.CreateCommand();

@@ -144,8 +144,8 @@ public sealed class CascoCommissionRuleService
         summary ??= new CascoSalesDataProvider.CascoOperationSaleSummary(0m, 0m, Array.Empty<string>(), string.Empty, string.Empty);
 
         var provider = new CascoReadOnlyDataProvider(branch);
-        var sourceRow = (await provider.GetDetailedRecordsByOriginalFolioAsync(sqlPassword, cleanFolio, cancellationToken))
-            .FirstOrDefault();
+        var sourceRows = await provider.GetDetailedRecordsByOriginalFolioAsync(sqlPassword, cleanFolio, cancellationToken);
+        var sourceRow = sourceRows.FirstOrDefault();
 
         var ventaCompuadmo = summary.Compuadmo;
         var ventaJoyeria = summary.Joyeria;
@@ -158,8 +158,8 @@ public sealed class CascoCommissionRuleService
         await database.InitializeAsync();
         var settings = new CommissionSettingsRepository(database);
         var dateValid = DateTime.TryParse(sourceRow?.OperationDate, out var operationDate);
-        var input = new CommissionSimulationInput(operationDate, transporte, ventaTotal, ventaTotal,
-            paymentMethod, 0m, 0m, 0m, payoutOverride ?? 0m, (gastoOverride ?? 0m) + (degustacionOverride ?? 0m), string.Empty);
+        var input = CascoPayoutRules.FromRecords(sourceRows, operationDate, transporte, ventaTotal,
+            paymentMethod, payoutOverride ?? 0m, (gastoOverride ?? 0m) + (degustacionOverride ?? 0m));
         var simulation = dateValid
             ? await settings.SimulateAsync(input, "CV")
             : new CommissionSimulationResult(transporte, "SIN_CONFIGURACION", "Sin fecha", 0m, 0m, 0m, 0m, 0m, 0m,
@@ -174,7 +174,7 @@ public sealed class CascoCommissionRuleService
         var vendorAmount = 0m;
         var sportAmount = 0m;
         var commissionAmount = simulation.FinalCommission;
-        var detail = simulation.Explanation;
+        var detail = "Adultos tomados del registro guardado (detalle_json.adultCount). " + simulation.Explanation;
         return new CascoCommissionPreview(
             branch.Code,
             branch.SqlServer,
