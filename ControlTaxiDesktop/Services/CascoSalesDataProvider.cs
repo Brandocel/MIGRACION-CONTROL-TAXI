@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
@@ -152,7 +152,7 @@ public sealed class CascoSalesDataProvider
             {
                 DataSource = _sqlServer,
                 InitialCatalog = _compuadmoDatabase,
-                UserID = "sa",
+                UserID = CascoSqlIdentity.ResolveUser(),
                 Password = sqlPassword,
                 TrustServerCertificate = true,
                 Encrypt = false
@@ -184,7 +184,7 @@ public sealed class CascoSalesDataProvider
             {
                 DataSource = _sqlServer,
                 InitialCatalog = _joyeriaDatabase,
-                UserID = "sa",
+                UserID = CascoSqlIdentity.ResolveUser(),
                 Password = sqlPassword,
                 TrustServerCertificate = true,
                 Encrypt = false
@@ -284,7 +284,7 @@ public sealed class CascoSalesDataProvider
         {
             DataSource = _sqlServer,
             InitialCatalog = database,
-            UserID = "sa",
+            UserID = CascoSqlIdentity.ResolveUser(),
             Password = sqlPassword,
             TrustServerCertificate = true,
             Encrypt = false

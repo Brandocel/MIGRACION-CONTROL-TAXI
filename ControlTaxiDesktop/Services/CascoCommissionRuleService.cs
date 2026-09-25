@@ -339,7 +339,7 @@ public sealed class CascoCommissionRuleService
         {
             DataSource = branch.SqlServer,
             InitialCatalog = branch.Database,
-            UserID = string.IsNullOrWhiteSpace(branch.SqlUser) ? "sa" : branch.SqlUser,
+            UserID = CascoSqlIdentity.ResolveUser(branch),
             Password = sqlPassword,
             TrustServerCertificate = true,
             Encrypt = false,

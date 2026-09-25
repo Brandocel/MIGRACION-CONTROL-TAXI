@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:ControlTaxiDesktop.Converters"
         xmlns:behaviors="clr-namespace:ControlTaxiDesktop.Behaviors"
+        xmlns:services="clr-namespace:ControlTaxiDesktop.Services"
         Title="Control Taxi - Operacion local"
         Width="1240"
         Height="720"
@@ -1259,9 +1260,12 @@
                 <Border Background="White" BorderBrush="#D9E6F6" BorderThickness="1" CornerRadius="0">
                   <!-- behaviors:DataGridDragScroll.Enabled: se recorre la tabla manteniendo
                        presionado el boton izquierdo, igual que en Comisiones. -->
+                  <!-- Margen derecho: la barra de desplazamiento vertical se montaba encima de
+                       la ultima columna y cortaba los botones de accion. -->
                   <DataGrid x:Name="RelationsGrid" IsReadOnly="True" AutoGenerateColumns="False"
+                            Margin="0,0,4,0"
                             behaviors:DataGridDragScroll.Enabled="True"
-                            RowHeight="112" SelectionMode="Single" SelectionUnit="FullRow"
+                            RowHeight="124" SelectionMode="Single" SelectionUnit="FullRow"
                             MinHeight="400" AlternationCount="2"
                             HeadersVisibility="Column"
                             GridLinesVisibility="None"
@@ -1391,6 +1395,7 @@
                           <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                           </Grid.RowDefinitions>
                           <Button Grid.Row="0" Grid.Column="0" Content="EDITAR"   Style="{StaticResource RelationGridActionButton}" HorizontalAlignment="Stretch" Click="LoadRelation_Click"/>
                           <Button Grid.Row="0" Grid.Column="1" Content="VENTA"    Style="{StaticResource RelationGridActionButton}" HorizontalAlignment="Stretch" Click="RelationSale_Click"/>
@@ -1398,6 +1403,11 @@
                                   Visibility="{Binding PayoutStatus, Converter={StaticResource PaidStatusVisibilityConverter}}"/>
                           <Button Grid.Row="1" Grid.Column="1" Content="IMPRIMIR" Style="{StaticResource RelationGridActionButton}" HorizontalAlignment="Stretch" Click="RelationPrint_Click"
                                   Visibility="{Binding PayoutStatus, Converter={StaticResource PaidStatusVisibilityConverter}, ConverterParameter=PaidOnly}"/>
+                          <!-- Solo Casco Viejo: ahi no hay gafetes fisicos y el mismo numero se
+                               imprime con codigo de barras. La bandera se prende al abrir la
+                               ventana, antes de que la tabla dibuje sus renglones. -->
+                          <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Content="GAFETES" Style="{StaticResource RelationGridActionButton}" HorizontalAlignment="Stretch" Click="RelationBadges_Click"
+                                  Visibility="{Binding Source={x:Static services:BranchUiFlags.BadgePrintingVisibility}}"/>
                         </Grid>
                       </DataTemplate></DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

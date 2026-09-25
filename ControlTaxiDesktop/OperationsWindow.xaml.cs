@@ -126,6 +126,8 @@ public partial class OperationsWindow : Window
             Interval = TimeSpan.FromMilliseconds(260)
         };
         _relationSearchDebounceTimer.Tick += RelationSearchDebounceTimer_Tick;
+        // Antes de cargar el XAML: los botones de la tabla la leen al dibujar cada renglon.
+        BranchUiFlags.SetBadgePrinting(string.Equals(_branchCode, "CV", StringComparison.OrdinalIgnoreCase));
         InitializeComponent();
         ApplyWindowBounds();
         SizeChanged += (_, _) => UpdateAdaptiveActionPanels();
@@ -1775,6 +1777,81 @@ public partial class OperationsWindow : Window
             preview.ShowDialog();
         });
     }
+    /// <summary>
+    /// Imprime los gafetes del viaje con su codigo de barras (Casco Viejo).
+    ///
+    /// En Casco no hay gafetes fisicos: el numero que amarra al vendedor con el conductor se
+    /// imprime en papel y se lee con el mismo escaner. No se inventa ningun numero, se imprime el
+    /// que ya trae capturado el viaje, asi que imprimir dos veces no cambia nada en la base.
+    /// </summary>
+    private void RelationBadges_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not LocalRelation relation) return;
+        _ = RunAsync(async () =>
+        {
+            var detailed = await GetRelationDetailsAsync(relation);
+            var tickets = BuildRelationBadgeTickets(detailed);
+            if (tickets.Count == 0)
+            {
+                WebDialogWindow.Show(
+                    this,
+                    "Este viaje no tiene gafetes capturados, así que no hay nada que imprimir."
+                    + Environment.NewLine + Environment.NewLine
+                    + "Captura el vendedor y su gafete en el viaje (botón EDITAR) y vuelve a intentar.",
+                    "Sin gafetes",
+                    "!");
+                return;
+            }
+
+            var sucursal = CurrentBranchDisplayName();
+            var preview = new BadgeTicketPreviewWindow(
+                () => BadgeTicketBuilder.Build(tickets, sucursal),
+                tickets.Count == 1
+                    ? "1 talón listo para imprimir."
+                    : $"{tickets.Count:N0} talones listos para imprimir. Cada vendedor se lleva el suyo.");
+            if (CanOwnChildWindow())
+                preview.Owner = this;
+            preview.ShowDialog();
+        });
+    }
+
+    /// <summary>
+    /// Arma un talon por cada gafete del viaje. Si el viaje no trae vendedores capturados pero si
+    /// el gafete del taxista, se imprime ese: es el mismo numero que se escanea en la tienda.
+    /// </summary>
+    private static IReadOnlyList<BadgeTicket> BuildRelationBadgeTickets(LocalRelation relation)
+    {
+        var pares = BadgeTicketBuilder.ParseSellerBadges(relation.SellerBadges);
+        if (pares.Count == 0)
+        {
+            // Sin captura de vendedores se usan los gafetes del viaje. Vienen TODOS en un solo
+            // campo, separados por coma ("207, 258, 251"), asi que hay que partirlos: de otro
+            // modo saldria un unico talon con un codigo de barras que no existe.
+            // En Casco el nombre del vendedor llega en el campo del taxista, asi que si la
+            // columna de vendedor viene vacia se usa ese, y el talon no sale sin nombre.
+            var vendedor = !string.IsNullOrWhiteSpace(relation.Vendor) ? relation.Vendor : relation.Driver ?? string.Empty;
+            pares = BadgeSelectionWorkflow.SplitScanValues(relation.Badge)
+                .Select(Code128Barcode.Sanitize)
+                .Where(gafete => gafete.Length > 0)
+                .Select(gafete => (vendedor, gafete))
+                .ToList();
+            if (pares.Count == 0) return [];
+        }
+
+        return pares
+            .Select(par => new BadgeTicket(
+                par.Gafete,
+                par.Vendedor,
+                relation.Driver ?? string.Empty,
+                string.IsNullOrWhiteSpace(relation.Unit) ? relation.TransportType : $"{relation.TransportType} {relation.Unit}".Trim(),
+                relation.AppFolio,
+                relation.OperationFolio,
+                relation.DateText,
+                relation.Hotel,
+                relation.Passengers))
+            .ToArray();
+    }
+
     private void LoadRelationIntoForm(LocalRelation relation)
     {
         _loadedRelationForm = relation;

@@ -1,0 +1,23 @@
+﻿<Window x:Class="ControlTaxiDesktop.BadgeTicketPreviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Gafetes del viaje"
+        Width="430"
+        Height="680"
+        MinWidth="360"
+        MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        Background="#DDECF7">
+  <Grid Margin="16">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <TextBlock x:Name="HeaderText" Grid.Row="0" FontSize="12" FontWeight="Bold" Foreground="#153677" TextWrapping="Wrap" Margin="0,0,0,10"
+               Text="Talones listos para imprimir. Cada vendedor se lleva el suyo."/>
+    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#C9D8EC" BorderThickness="1" Padding="10">
+      <FlowDocumentScrollViewer x:Name="TicketViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+    </Border>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,0">
+      <Button Content="IMPRIMIR" Style="{StaticResource WebActionSaveButton}" Click="Print_Click"/>
+      <Button Content="CERRAR" Style="{StaticResource WebActionRedButton}" Click="Close_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

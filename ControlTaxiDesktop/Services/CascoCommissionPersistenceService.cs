@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data;
 using System.Globalization;
 using System.Linq;
@@ -412,7 +412,7 @@ public sealed class CascoCommissionPersistenceService
         {
             DataSource = branch.SqlServer,
             InitialCatalog = branch.Database,
-            UserID = string.IsNullOrWhiteSpace(branch.SqlUser) ? "sa" : branch.SqlUser,
+            UserID = CascoSqlIdentity.ResolveUser(branch),
             Password = sqlPassword,
             TrustServerCertificate = true,
             Encrypt = false,

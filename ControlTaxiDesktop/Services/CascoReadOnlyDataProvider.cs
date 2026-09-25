@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -189,7 +189,7 @@ public sealed class CascoReadOnlyDataProvider
         {
             DataSource = _configuration.SqlServer,
             InitialCatalog = _configuration.Database,
-            UserID = "sa",
+            UserID = CascoSqlIdentity.ResolveUser(_configuration),
             Password = sqlPassword,
             TrustServerCertificate = true,
             Encrypt = false,

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data;
 using System.Globalization;
 using System.Threading;
@@ -163,7 +163,7 @@ public sealed class CascoPosSaleLinkService
         {
             DataSource = server,
             InitialCatalog = database,
-            UserID = "sa",
+            UserID = CascoSqlIdentity.ResolveUser(),
             Password = password,
             TrustServerCertificate = true,
             Encrypt = false,

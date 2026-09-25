@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -637,7 +637,7 @@ public sealed class CascoBadgeProvider
         {
             DataSource = _configuration.SqlServer,
             InitialCatalog = _configuration.Database,
-            UserID = "sa",
+            UserID = CascoSqlIdentity.ResolveUser(_configuration),
             Password = sqlPassword,
             TrustServerCertificate = true,
             Encrypt = false,
