@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace ControlTaxiDesktop.Models;
 
@@ -35,6 +35,12 @@ public sealed record LocalExpense(long Id, DateTime Date, string Folio, string C
 public sealed record LocalRelation(long Id, string AppFolio, string OperationFolio, string PosFolio, string Badge, string Driver, string Vendor, decimal? Payout, string Notes, string Source = "", string SourceUser = "", string DateText = "", string Hotel = "", string Origin = "", string Site = "", string Destination = "", string Unit = "", string Plates = "", string Phone = "", string Nationality = "", string TransportType = "", decimal Sale = 0m, decimal Commission = 0m, decimal CommissionPaid = 0m, string PaymentMethod = "", string PayoutStatus = "", string CommissionStatus = "", string PayoutTicket = "", string TaxistaId = "", string PayoutUser = "", string PayoutDate = "", decimal PayoutPaid = 0m, int Passengers = 0, string SaleDetail = "", string Currency = "", string RemotePaymentMethod = "", string PaymentsJson = "", decimal TotalAmount = 0m, decimal CashAmount = 0m, decimal CardAmount = 0m, decimal DollarsAmount = 0m, decimal ExchangeRate = 0m, string OrigenComision = "", int AdultPassengers = 0, int YouthPassengers = 0, int ChildPassengers = 0, int NoShowCount = 0, string SellerBadges = "")
 {
     public int? CommissionAdultCount { get; init; }
+
+    /// <summary>
+    /// Cuanto de la venta fue de joyeria. Se guarda aparte del total porque la degustacion del
+    /// Excel depende solo de esa parte: en joyeria siempre se quita, en la otra tienda no.
+    /// </summary>
+    public decimal JewelrySale { get; init; }
     public string CommissionCalculationDetail { get; init; } = string.Empty;
 
     public string DisplayLocalFolio => string.IsNullOrWhiteSpace(OperationFolio) ? AppFolio : OperationFolio;

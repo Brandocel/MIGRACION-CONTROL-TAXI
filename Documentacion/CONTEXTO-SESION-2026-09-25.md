@@ -143,7 +143,19 @@ Se corrigió de paso el empate de nombres: UBER tiene regla propia y a la vez no
 TAXIS/VANS, así que empataban las dos y salía "regla ambigua". Ahora el nombre exacto manda sobre
 el normalizado.
 
-## 7. Pendientes
+## 7. La degustación de joyería se descuenta en los dos lados
+
+La tabla de viajes y la pantalla de comisiones calculaban distinto el mismo viaje: la segunda
+descontaba la degustación de joyería y la primera no. Ahora el viaje guarda cuánto de la venta fue
+de joyería (`LocalRelation.JewelrySale`) y las dos usan el mismo tabulador.
+
+Ojo con los datos de prueba: en Casco la **venta no vive en el viaje**, vive en el ticket de
+compuadmo o joyería, y el campo `total` de `AppMovilRegistro` es la **dejada**. Unos viajes de
+prueba sin ticket salían con venta $0 y comisión $0, que parecía una falla del cálculo y no lo era.
+Por eso `C:\CASCO PRUEBA\crear-ventas-de-prueba.sql` crea los tickets, y los viajes de prueba
+ahora llevan folio numérico (90001, 90002, 90003), que es como se amarran con la venta.
+
+## 8. Pendientes
 
 1. Probar en la máquina de Casco: la importación corre sola la primera vez, hay que confirmar que
    trae las 14 reglas y que las comisiones salen iguales a las de hoy.

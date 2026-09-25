@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using ControlTaxiDesktop.Models;
 
@@ -46,9 +46,14 @@ public static class CascoPayoutRules
         return distinct.Length == 1 ? distinct[0] : null;
     }
 
-    public static CommissionSimulationInput FromRelation(LocalRelation row, DateTime date) =>
-        new(date, row.TransportType, row.Sale, row.Sale, row.PaymentMethod,
-            0m, 0m, 0m, row.Payout ?? 0m, 0m, string.Empty, row.CommissionAdultCount);
+    public static CommissionSimulationInput FromRelation(LocalRelation row, DateTime date)
+    {
+        // La degustacion de joyeria se descuenta sola, igual que al generar la comision, para que
+        // la tabla y la pantalla de comisiones no muestren dos importes distintos del mismo viaje.
+        var (degustacion, _) = HardcodedCascoCommissionCatalog.ResolveJewelryTasting(row.JewelrySale);
+        return new(date, row.TransportType, row.Sale, row.Sale, row.PaymentMethod,
+            0m, 0m, 0m, row.Payout ?? 0m, degustacion, string.Empty, row.CommissionAdultCount);
+    }
 
     public static CommissionSimulationInput FromRecords(IReadOnlyList<CascoAppRecordDetail> rows, DateTime date,
         string transport, decimal sale, string payment, decimal payout, decimal expense) =>

@@ -1878,6 +1878,7 @@ public static class CascoOperationsDataService
                 Vendor = effectiveVendor,
                 PaymentMethod = effectivePaymentMethod,
                 Sale = remisionSale,
+                JewelrySale = summary.Joyeria,
                 SaleDetail = saleDetailParts.Count == 0 ? row.SaleDetail : string.Join(" | ", saleDetailParts),
                 TotalAmount = remisionSale
             });
