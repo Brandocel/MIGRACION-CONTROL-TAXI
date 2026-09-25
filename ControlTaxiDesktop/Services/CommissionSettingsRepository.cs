@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IO;
 using System.Text;
 using ControlTaxiDesktop.Models;
@@ -108,51 +108,6 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await MigrateAddBranchAsync(connection);
         await MigrateCvPayoutBandsAsync(connection);
         await MigrateCvTastingPercentAsync(connection);
-    }
-
-    /// <summary>Dice si esta maquina ya tiene reglas de transporte de Casco capturadas.</summary>
-    public async Task<bool> HasCascoTransportRulesAsync()
-    {
-        await InitializeSchemaAsync();
-        await using var connection = database.Open();
-        await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='TRANSPORTE' AND Branch='CV' COLLATE NOCASE;";
-        return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) > 0;
-    }
-
-    /// <summary>
-    /// Mete reglas de transporte de Casco que vienen de SQL Server.
-    ///
-    /// Nunca pisa lo que ya existe: si un proveedor ya tiene regla en esta maquina, se salta. Asi
-    /// una importacion no puede borrar un ajuste hecho a mano por el operador. Todo queda en la
-    /// bitacora como cualquier alta.
-    /// </summary>
-    public async Task<int> ImportCascoTransportRulesAsync(IReadOnlyList<CommissionSettingsRule> rules, string user, string reason)
-    {
-        if (rules is null || rules.Count == 0) return 0;
-        await InitializeSchemaAsync();
-        await using var connection = database.Open();
-        await using var transaction = connection.BeginTransaction();
-        var imported = 0;
-        foreach (var rule in rules)
-        {
-            if (!string.Equals(rule.Category, TransportCategory, StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(rule.Branch, "CV", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("La importacion de Casco solo admite reglas de TRANSPORTE de la sucursal CV.");
-
-            await using var existing = connection.CreateCommand();
-            existing.Transaction = transaction;
-            existing.CommandText = "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='TRANSPORTE' AND Branch='CV' COLLATE NOCASE AND (Code=$code COLLATE NOCASE OR Name=$name COLLATE NOCASE);";
-            existing.Parameters.AddWithValue("$code", rule.Code);
-            existing.Parameters.AddWithValue("$name", rule.Name);
-            if (Convert.ToInt64(await existing.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0) continue;
-
-            await InsertRuleAsync(connection, transaction, rule with { Id = 0 }, user);
-            await WriteAuditAsync(connection, transaction, null, rule, user, reason);
-            imported++;
-        }
-        await transaction.CommitAsync();
-        return imported;
     }
 
     // Explicit import only. No automatic seeding, overwrites or activation of commission percentages.
@@ -392,10 +347,13 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
             || string.Equals(category.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase);
         if (!wantsTransport) return stored;
 
+        // Las comisiones por transporte NO salen de la base de cada maquina: son catalogo fijo del
+        // programa, uno para Plaza 28 y otro para Casco. Se sustituyen aqui, en la lectura, para
+        // que la tabla, el simulador, el Excel y el calculo salgan todos de la misma fuente.
         var branchIsCv = string.Equals(sessionBranch.Trim(), "CV", StringComparison.OrdinalIgnoreCase);
         var result = stored.Where(x => !string.Equals(x.Category, TransportCategory, StringComparison.OrdinalIgnoreCase));
         return result.Concat(branchIsCv
-                ? stored.Where(x => x.Category == TransportCategory && string.Equals(x.Branch, "CV", StringComparison.OrdinalIgnoreCase))
+                ? HardcodedCascoCommissionCatalog.BuildRules(date, search, active)
                 : FilterFixedTransportRules(search, active, date))
             .OrderBy(x => x.Category, StringComparer.Ordinal)
             .ThenBy(x => x.Name, StringComparer.Ordinal)
@@ -550,16 +508,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await InitializeAsync();
         if (!canEdit)
             throw new UnauthorizedAccessException("El usuario no tiene permiso para editar configuración de comisiones.");
-        // Only allow editing/creating TRANSPORTE from CV branch. If Branch not provided, treat as global edit disallowed.
-        if (string.Equals(rule.Category?.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase))
-        {
-            if (!string.Equals(rule.Branch, "CV", StringComparison.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("Solo es posible crear o editar reglas de TRANSPORTE desde la sucursal CV.");
-        }
-        else
-        {
-            EnsureCategoryIsEditable(rule);
-        }
+        EnsureCategoryIsEditable(rule);
         ValidateRule(rule, reason);
         await using var connection = database.Open();
         await using var transaction = connection.BeginTransaction();
@@ -598,16 +547,7 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await InitializeAsync();
         if (!canEdit)
             throw new UnauthorizedAccessException("El usuario no tiene permiso para editar configuración de comisiones.");
-        // Only allow editing TRANSPORTE from CV branch
-        if (string.Equals(rule.Category?.Trim(), TransportCategory, StringComparison.OrdinalIgnoreCase))
-        {
-            if (!string.Equals(rule.Branch, "CV", StringComparison.OrdinalIgnoreCase))
-                throw new UnauthorizedAccessException("Solo es posible crear o editar reglas de TRANSPORTE desde la sucursal CV.");
-        }
-        else
-        {
-            EnsureCategoryIsEditable(rule);
-        }
+        EnsureCategoryIsEditable(rule);
         if (rule.Id <= 0)
             throw new InvalidOperationException("Solo se puede corregir una regla que ya existe. Usa Nueva regla para dar de alta.");
         ValidateRule(rule, reason);

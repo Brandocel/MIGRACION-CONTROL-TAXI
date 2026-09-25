@@ -161,7 +161,7 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
             }
 
             expense = rule.AppliesExpense ? expense : 0m;
-            (specialDiscount, specialDetail) = ResolveCascoSpecialDiscount(rule, sale);
+            (specialDiscount, specialDetail) = HardcodedCascoCommissionCatalog.ResolveSpecialDiscount(text, sale);
         }
         var baseAmount = Math.Max(0m, sale - retained - payout - expense - specialDiscount);
         // Plaza 28 trunca los centavos; Casco los redondea a dos decimales, que es como venia
@@ -196,12 +196,20 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
     public static CommissionSettingsRule[] MatchTransportRules(IReadOnlyList<CommissionSettingsRule> rules, string transport, bool isCasco)
     {
         var text = Clean(transport);
-        var normalized = isCasco ? CascoCommissionRuleService.NormalizeProvider(text) : text;
-        return rules.Where(rule =>
+
+        // Primero el nombre tal cual. Manda sobre el normalizado a proposito: UBER tiene su propia
+        // regla (dejada de $100) y a la vez normaliza a TAXIS/VANS; sin esta preferencia empataban
+        // las dos y el viaje salia como "regla ambigua".
+        var exact = rules.Where(rule =>
                 string.Equals(rule.Code, text, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(rule.Name, text, StringComparison.OrdinalIgnoreCase)
-                || (isCasco && (string.Equals(rule.Code, normalized, StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(rule.Name, normalized, StringComparison.OrdinalIgnoreCase))))
+                || string.Equals(rule.Name, text, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (exact.Length > 0 || !isCasco) return exact;
+
+        var normalized = CascoCommissionRuleService.NormalizeProvider(text);
+        return rules.Where(rule =>
+                string.Equals(rule.Code, normalized, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.Name, normalized, StringComparison.OrdinalIgnoreCase))
             .ToArray();
     }
 
@@ -209,23 +217,6 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
     public const decimal CascoFallbackPercent = 10m;
     public const string CascoFallbackSource = "RESPALDO_CV";
     public const string CascoAmbiguousSource = "REGLA_AMBIGUA_CV";
-
-    /// <summary>
-    /// Descuentos especiales de Casco que van pegados al proveedor y no a un porcentaje.
-    /// Hoy solo AVENTURAS MAYAS: desde $1,000 se quitan $100 por cada $1,000 de venta. Venia del
-    /// Excel del negocio y el motor anterior si lo descontaba; sin esto la comision de ese
-    /// proveedor sale mas alta de lo que el negocio paga.
-    /// </summary>
-    private static (decimal Amount, string Detail) ResolveCascoSpecialDiscount(CommissionSettingsRule rule, decimal sale)
-    {
-        var name = (rule.Name + " " + rule.Code).ToUpperInvariant();
-        if (!name.Contains("AVENTURAS MAYAS", StringComparison.Ordinal) || sale < 1000m)
-            return (0m, string.Empty);
-
-        var blocks = Math.Floor(sale / 1000m);
-        var amount = blocks * 100m;
-        return (amount, $"Descuento especial AVENTURAS MAYAS: {amount:C2} ($100 por cada $1,000).");
-    }
 
     public static string FormatVigency(CommissionResolvedRule rule) =>
         rule.EffectiveFrom == DateTime.MinValue

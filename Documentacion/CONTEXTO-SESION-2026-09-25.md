@@ -94,12 +94,63 @@ no queda ningun usuario de SQL escrito a mano.
 Despues de juntar se volvio a probar todo sobre la base local: los nueve casos de comision dan el
 mismo importe, y los tres viajes de prueba siguen sacando sus talones (3, 1 y 2 gafetes).
 
-## 6. Pendientes
+## 6. Las comisiones de Casco quedaron fijas en el programa, como Plaza 28
+
+Decisión del negocio el 25/09: las reglas de Casco dejan de vivir en la base de cada máquina y
+pasan a ser catálogo fijo del programa, igual que `HardcodedTransportCatalog` de Plaza 28. Así
+todas las máquinas cobran lo mismo desde el día que se instala, y ya no hace falta importar nada
+de SQL Server (se borró `CascoCommissionRuleImporter`).
+
+`Services/HardcodedCascoCommissionCatalog.cs` sale del Excel del negocio
+(`CALCULO DE COMISIONES, PTO MORELOS.xlsx`, hojas CASCO, DEJADA y DEGUSTACION):
+
+| Proveedor | Comisión | Retención | Dejada | Gasto | Dejada por adultos |
+| --- | --- | --- | --- | --- | --- |
+| BIKE CID | 10 % agencia | 19 % con tarjeta | sí | sí | $50 / $100 |
+| TAXIS/VANS | 10 % taxista | 19 % con tarjeta | sí | sí | $150 / $200 |
+| UBER | 10 % | 19 % con tarjeta | sí | sí | $100 siempre |
+| UBER + | 10 % | 19 % con tarjeta | sí | sí | $150 siempre |
+| CALLE | 0 % | 19 % con tarjeta | no | sí | — |
+| EXTREME | 10 % guía | 19 % con tarjeta | no | sí | — |
+| AVENTURAS MAYAS | 12 % (10 guía + 2 agencia) | 19 % con tarjeta | no | sí | — |
+| MAJESTIC | 12 % (8 guía + 4 agencia) | **19 % siempre** | no | sí | — |
+| VENTAS ENTRE TIENDAS | 50 % Matilde | 19 % con tarjeta | no | sí | — |
+
+Además: AVENTURAS MAYAS descuenta $100 por cada $1,000 de venta desde $1,000, y la **degustación
+de joyería se calcula sola** ($100 hasta $20,000 de venta de joyería, $200 de ahí en adelante),
+porque el Excel dice que en joyería siempre se quita. La de licores se sigue capturando: depende
+de si la venta trae algún artículo de licor, y eso el sistema no lo ve.
+
+CALLE queda en 0 % a propósito: en el Excel esa venta solo paga comisión de vendedor, que está
+fuera del alcance.
+
+**FARMACIAS quedó pendiente**: el Excel dice "20 % y/o 10 %" según si el medicamento es
+controlado, y falta que el negocio entregue la lista de controlados. Mientras tanto no tiene regla
+y cae en el respaldo del 10 %, que es como se venía calculando.
+
+Al ser catálogo fijo, la pantalla de Configuración de comisiones vuelve a mostrar las reglas de
+transporte como solo lectura, también en Casco.
+
+### Pruebas
+
+Quince casos sacados a mano del Excel, sobre una copia de la base real: BIKE CID, TAXIS/VANS,
+UBER, UBER +, EXTREME, MAJESTIC (con y sin tarjeta), AVENTURAS MAYAS (con y sin descuento
+especial), VENTAS ENTRE TIENDAS, CALLE, FARMACIAS por respaldo y un caso con gasto capturado.
+Todos cuadran, Plaza 28 sigue dando $100.00 en su caso de control, y los tres viajes de prueba
+siguen sacando sus talones de gafete.
+
+Se corrigió de paso el empate de nombres: UBER tiene regla propia y a la vez normaliza a
+TAXIS/VANS, así que empataban las dos y salía "regla ambigua". Ahora el nombre exacto manda sobre
+el normalizado.
+
+## 7. Pendientes
 
 1. Probar en la máquina de Casco: la importación corre sola la primera vez, hay que confirmar que
    trae las 14 reglas y que las comisiones salen iguales a las de hoy.
 2. Decidir si las reglas de Casco se quedan en SQLite (por máquina) o vuelven a compartirse. Hoy,
    si alguien edita una regla en una máquina, las demás no se enteran.
-3. La comisión deportiva (`ComisionDeportiva`) no la aplica el motor nuevo. Hoy todas las reglas la
-   traen vacía; si el negocio la usa, hay que agregarla.
+3. FARMACIAS: falta la lista de medicamentos controlados para saber cuándo va 20 % y cuándo 10 %.
+4. La comisión de vendedor y la deportiva (40/45 de meta, 30 %, 35 %, 50 %) siguen fuera.
+5. La hoja MATILDE del Excel: son otras 4 reglas, y falta definir cómo distingue el sistema una
+   venta de Matilde de una de Casco.
 4. Juntar esto con los gafetes impresos del 24/09, que tocan los mismos archivos.

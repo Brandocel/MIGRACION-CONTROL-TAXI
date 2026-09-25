@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
@@ -1901,10 +1901,6 @@ public static class CascoOperationsDataService
         var database = new LocalDatabase();
         await database.InitializeAsync();
         var settings = new CommissionSettingsRepository(database);
-        // Si esta maquina todavia no tiene las reglas de Casco, se traen de SQL Server. Si falla,
-        // se sigue: el calculo usara el respaldo y el viaje no se queda sin renglon.
-        await CascoCommissionRuleImporter.EnsureImportedAsync(settings, branch, sqlPassword, "SISTEMA", cancellationToken);
-
         // La comision ya generada y autorizada manda sobre cualquier recalculo: es el importe que
         // el negocio ya reviso y, en su caso, pago. Recalcularla haria que un pago hecho se viera
         // distinto en pantalla.

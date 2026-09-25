@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -157,12 +157,19 @@ public sealed class CascoCommissionRuleService
         var database = new SqliteDatabase();
         await database.InitializeAsync();
         var settings = new CommissionSettingsRepository(database);
-        // Primera vez en esta maquina: se traen las reglas de Casco desde SQL Server.
-        await CascoCommissionRuleImporter.EnsureImportedAsync(settings, branch, sqlPassword, "SISTEMA", cancellationToken);
-
         var dateValid = DateTime.TryParse(sourceRow?.OperationDate, out var operationDate);
+
+        // Degustacion: en joyeria el Excel dice que SIEMPRE se quita y el tabulador depende del
+        // monto, asi que se calcula sola. La de licores no: depende de si la venta trae algun
+        // articulo de licor, y eso el sistema no lo ve, por eso se sigue capturando. Si el
+        // operador ya tecleo un importe, manda el suyo.
+        var (degustacionJoyeria, degustacionDetalle) = HardcodedCascoCommissionCatalog.ResolveJewelryTasting(ventaJoyeria);
+        var degustacion = degustacionOverride ?? degustacionJoyeria;
+        if (degustacionOverride is not null)
+            degustacionDetalle = $"Degustacion capturada por el operador: {degustacionOverride.Value:C2}.";
+
         var input = CascoPayoutRules.FromRecords(sourceRows, operationDate, transporte, ventaTotal,
-            paymentMethod, payoutOverride ?? 0m, (gastoOverride ?? 0m) + (degustacionOverride ?? 0m));
+            paymentMethod, payoutOverride ?? 0m, (gastoOverride ?? 0m) + degustacion);
         var simulation = dateValid
             ? await settings.SimulateAsync(input, "CV")
             : new CommissionSimulationResult(transporte, "SIN_CONFIGURACION", "Sin fecha", 0m, 0m, 0m, 0m, 0m, 0m,
@@ -185,8 +192,10 @@ public sealed class CascoCommissionRuleService
         var sportAmount = 0m;
         var commissionAmount = simulation.FinalCommission;
         var detail = (rule is null
-            ? "Sin regla configurada para este proveedor. "
-            : "Adultos tomados del registro guardado (detalle_json.adultCount). ") + simulation.Explanation;
+            ? "Sin regla en el catalogo para este proveedor. "
+            : "Adultos tomados del registro guardado (detalle_json.adultCount). ")
+            + (string.IsNullOrWhiteSpace(degustacionDetalle) ? string.Empty : degustacionDetalle + " ")
+            + simulation.Explanation;
         return new CascoCommissionPreview(
             branch.Code,
             branch.SqlServer,
