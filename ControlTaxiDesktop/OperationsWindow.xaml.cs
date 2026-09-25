@@ -79,7 +79,7 @@ public partial class OperationsWindow : Window
     {
         _database = database;
         _operations = new LocalOperationsRepository(database);
-        _pos = new LocalPosRepository(database);
+        _pos = new LocalPosRepository(database, NormalizeBranchCode(branchCode));
         _branchCode = NormalizeBranchCode(branchCode);
         _cascoTripRecordsApi = new CascoTripRecordsApiService();
         _user = user;
@@ -1547,8 +1547,9 @@ public partial class OperationsWindow : Window
                 _user,
                 _windowCts.Token);
 
-            if (!commissionPreview.RuleFound
-                || commissionPreview.ReglaId is null or <= 0
+            if (!commissionPreview.RuleFound)
+                return "Comisión pendiente: " + commissionPreview.Detail;
+            if (commissionPreview.ReglaId is null or <= 0
                 || commissionPreview.VentaTotal <= 0m
                 || commissionPreview.ComisionCalculada <= 0m
                 || !string.Equals(commissionPreview.Estatus, "PENDIENTE", StringComparison.OrdinalIgnoreCase))
@@ -1749,7 +1750,8 @@ public partial class OperationsWindow : Window
                     + Environment.NewLine + $"Venta total: {preview.VentaTotal.ToString("C2", CultureInfo.CurrentCulture)}"
                     + Environment.NewLine + $"Transporte: {preview.TransporteOriginal}"
                     + Environment.NewLine + $"Regla encontrada: {(preview.RuleFound ? preview.Rule?.ReglaNombre : "NO")}"
-                    + Environment.NewLine + $"Comision: {preview.CommissionAmount.ToString("C2", CultureInfo.CurrentCulture)}",
+                    + Environment.NewLine + $"Comision: {preview.CommissionAmount.ToString("C2", CultureInfo.CurrentCulture)}"
+                    + Environment.NewLine + preview.Detail,
                     "Comisiones Casco",
                     "OK");
             });

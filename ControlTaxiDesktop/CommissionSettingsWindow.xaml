@@ -213,7 +213,10 @@
                 <DataGridTextColumn Header="Efectivo" Binding="{Binding CashRetentionPercent, StringFormat={}{0:0.##}%}" Width="80*" MinWidth="62"/>
                 <DataGridTextColumn Header="Tarjeta" Binding="{Binding CardRetentionPercent, StringFormat={}{0:0.##}%}" Width="80*" MinWidth="60"/>
                 <DataGridTextColumn Header="AMEX" Binding="{Binding AmexRetentionPercent, StringFormat={}{0:0.##}%}" Width="75*" MinWidth="58"/>
-                <DataGridTextColumn Header="Dejada" Binding="{Binding PayoutDisplay}" Width="85*" MinWidth="64"/>
+                <DataGridTextColumn x:Name="CvTastingColumn" Header="Degustación %" Binding="{Binding CvTastingDisplay}" Width="105" Visibility="Collapsed"/>
+                <DataGridTextColumn x:Name="LegacyPayoutColumn" Header="Dejada" Binding="{Binding PayoutDisplay}" Width="85*" MinWidth="64"/>
+                <DataGridTextColumn x:Name="CvSmallPayoutColumn" Header="Dejada 1–4 adultos" Binding="{Binding CvPayoutOneToFourDisplay}" Width="145" Visibility="Collapsed"/>
+                <DataGridTextColumn x:Name="CvLargePayoutColumn" Header="Dejada 5 o más" Binding="{Binding CvPayoutFiveOrMoreDisplay}" Width="130" Visibility="Collapsed"/>
                 <DataGridTextColumn Header="Tipo de pax" Binding="{Binding PaxKindDisplay}" Width="100*" MinWidth="76"/>
                 <DataGridTextColumn Header="N° moneda" Binding="{Binding MonedaDisplay}" Width="90*" MinWidth="70"/>
                 <DataGridTextColumn Header="Vigencia" Binding="{Binding EffectiveRange}" Width="135*" MinWidth="105"/>
@@ -284,7 +287,7 @@
             <ColumnDefinition Width="*"/>
           </Grid.ColumnDefinitions>
           <Border Grid.Column="0" Style="{StaticResource SquareFilterCard}" Margin="0">
-            <StackPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel>
               <TextBlock Text="PROBAR COMISIÓN" FontSize="12" FontWeight="Black" Foreground="#16326B"/>
               <TextBlock Text="Calcula una comision de prueba sin guardar ninguna venta." FontSize="11" Foreground="#6B7FA6" TextWrapping="Wrap" Margin="0,6,0,0"/>
 
@@ -294,7 +297,12 @@
               <TextBox x:Name="SimSale" Style="{StaticResource SquareInputBox}" MinHeight="40" ToolTip="Importe total de venta. Ejemplo: 1335." Text="0"/>
               <TextBlock Text="3. FORMA DE PAGO" Style="{StaticResource SquareFieldLabel}" Margin="0,14,0,8"/>
               <ComboBox x:Name="SimPayment" Style="{StaticResource SquareComboInput}" MinHeight="40" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" DisplayMemberPath="Name" TextSearch.TextPath="Name" ToolTip="Elige la forma de pago del catalogo o escribe para buscar."/>
-              <TextBlock Text="DEJADA (OPCIONAL)" Style="{StaticResource SquareFieldLabel}" Margin="0,14,0,8"/>
+              <StackPanel x:Name="SimAdultsPanel" Visibility="Collapsed">
+                <TextBlock Text="ADULTOS" Style="{StaticResource SquareFieldLabel}" Margin="0,14,0,8"/>
+                <TextBox x:Name="SimAdults" Style="{StaticResource SquareInputBox}" MinHeight="40" ToolTip="Número de adultos confirmado; no usar PAX total."/>
+                <TextBlock Text="No sumar jóvenes ni menores. Vacío o 0 requiere confirmar el dato o la decisión para esa operación." TextWrapping="Wrap" FontSize="11" Foreground="#6B7FA6" Margin="0,6,0,0"/>
+              </StackPanel>
+              <TextBlock x:Name="SimPayoutLabel" Text="DEJADA (OPCIONAL)" Style="{StaticResource SquareFieldLabel}" Margin="0,14,0,8"/>
               <TextBox x:Name="SimPayout" Style="{StaticResource SquareInputBox}" MinHeight="40" Text="0"/>
               <TextBlock Text="GASTO (OPCIONAL)" Style="{StaticResource SquareFieldLabel}" Margin="0,14,0,8"/>
               <TextBox x:Name="SimExpense" Style="{StaticResource SquareInputBox}" MinHeight="40" Text="0"/>
@@ -310,7 +318,7 @@
                 </Button>
                 <Button Content="LIMPIAR" Style="{StaticResource SquareSecondaryButton}" Margin="8,0,0,0" ToolTip="Restablece el simulador para iniciar otra prueba." Click="ClearSimulator_Click"/>
               </StackPanel>
-            </StackPanel>
+            </StackPanel></ScrollViewer>
           </Border>
           <GridSplitter Grid.Column="1" Width="14" HorizontalAlignment="Stretch" Background="Transparent" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns"/>
           <Border Grid.Column="2" Style="{StaticResource SquareFilterCard}" Margin="0">
@@ -434,7 +442,7 @@
 
               <TextBlock Text="INFORMACIÓN" Style="{StaticResource SquareSectionHeading}"/>
               <TextBlock Text="Categoría" Style="{StaticResource SquareInputLabel}"/>
-              <ComboBox x:Name="EditCategory" Style="{StaticResource SquareComboInput}" ToolTip="Tipo de regla: transporte, forma de pago, guia, joyeria, tequila, dejada o gasto." Margin="0,0,0,10">
+              <ComboBox x:Name="EditCategory" SelectionChanged="EditCategory_SelectionChanged" Style="{StaticResource SquareComboInput}" ToolTip="Tipo de regla: transporte, forma de pago, guia, joyeria, tequila, dejada o gasto." Margin="0,0,0,10">
                 <ComboBoxItem Content="TRANSPORTE"/><ComboBoxItem Content="FORMA_PAGO"/><ComboBoxItem Content="GENERAL"/><ComboBoxItem Content="GUIA"/><ComboBoxItem Content="JOYERIA"/><ComboBoxItem Content="TEQUILA"/><ComboBoxItem Content="DEJADA"/><ComboBoxItem Content="GASTO"/>
               </ComboBox>
               <TextBlock Text="Clave" Style="{StaticResource SquareInputLabel}"/>
@@ -460,11 +468,21 @@
                   <TextBlock Text="AMEX %" Style="{StaticResource SquareInputLabel}"/>
                   <TextBox x:Name="EditAmex" Style="{StaticResource SquareInputBox}" ToolTip="Porcentaje que se descuenta en pagos AMEX."/>
                 </StackPanel>
+                <StackPanel x:Name="CvTastingEditor" Margin="0,0,6,10" Visibility="Collapsed">
+                  <TextBlock Text="Degustación %" Style="{StaticResource SquareInputLabel}"/>
+                  <TextBox x:Name="EditCvTasting" Style="{StaticResource SquareInputBox}" ToolTip="Porcentaje independiente para TRANSPORTE de CV. Vacío significa pendiente; 0 significa 0% configurado."/>
+                </StackPanel>
               </UniformGrid>
 
               <TextBlock Text="TABULADOR" Style="{StaticResource SquareSectionHeading}"/>
-              <TextBlock Text="Dejada $" Style="{StaticResource SquareInputLabel}"/>
+              <TextBlock x:Name="LegacyPayoutLabel" Text="Dejada $" Style="{StaticResource SquareInputLabel}"/>
               <TextBox x:Name="EditPayoutAmount" Style="{StaticResource SquareInputBox}" ToolTip="Importe de dejada del tabulador para esta unidad. Deja 0 si no aplica." Margin="0,0,0,10"/>
+              <StackPanel x:Name="CvPayoutEditor" Visibility="Collapsed">
+                <TextBlock Text="Dejada 1–4 adultos" Style="{StaticResource SquareInputLabel}"/>
+                <TextBox x:Name="EditCvPayoutSmall" Style="{StaticResource SquareInputBox}" Margin="0,0,0,10" ToolTip="Importe para 1 a 4 adultos. Vacío significa pendiente; 0 significa sin cobro confirmado."/>
+                <TextBlock Text="Dejada 5 o más" Style="{StaticResource SquareInputLabel}"/>
+                <TextBox x:Name="EditCvPayoutLarge" Style="{StaticResource SquareInputBox}" Margin="0,0,0,10" ToolTip="Importe para 5 o más adultos. No se usa PAX total."/>
+              </StackPanel>
               <!-- Antes la etiqueta "Tipo de pax" quedaba pegada arriba del campo de
                    N° de moneda y el combo de pax aparecia despues, sin etiqueta. -->
               <TextBlock Text="Tipo de pax" Style="{StaticResource SquareInputLabel}"/>

@@ -39,6 +39,12 @@
     </Resource>
   </ItemGroup>
   <ItemGroup>
+    <!-- Local branches override for Debug only: copied to output directory when building Debug.
+         This file must NOT be included in Release/publish. El Exists es obligatorio: el
+         archivo no esta en el repositorio y sin el, el build de Debug truena con MSB3030. -->
+    <None Include="..\branches.local.json" Condition=" '$(Configuration)' == 'Debug' AND Exists('../branches.local.json') ">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <!-- Sincronizador SyncTaxi: se copia junto al ejecutable para que el
          Desktop lo lance al arrancar y traiga los datos de Hostinger a la base configurada. -->
     <!-- sync.local.config.json es la configuracion de la maquina de desarrollo

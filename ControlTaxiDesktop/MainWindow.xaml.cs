@@ -249,7 +249,7 @@ public partial class MainWindow : Window
         else if (module.Name is "Portal")
             ShowModule(new PortalWindow(_database, userName));
         else if (module.Name is "Configuracion de comisiones")
-            ShowModule(new CommissionSettingsWindow(_database, userName, _session.Permissions.Contains("ConfiguracionComisiones")));
+            ShowModule(new CommissionSettingsWindow(_database, userName, _session.Permissions.Contains("ConfiguracionComisiones"), branchCode));
         else if (module.Name is "Ventas" or "Comisiones" or "Cortes" or "Reportes")
             ShowModule(new PosWindow(_database, userName, branchCode, module.Name));
         else

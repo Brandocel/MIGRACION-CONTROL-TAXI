@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Data.SqlClient;
+using ControlTaxiDesktop.Models;
+using SqliteDatabase = ControlTaxiDesktop.Services.LocalDatabase;
 
 namespace ControlTaxiDesktop.Services;
 
@@ -65,8 +66,6 @@ public sealed class CascoCommissionRuleService
     public const string LocalDatabase = "mktCasco";
     public const string LocalCompuadmoDatabase = "compuadmoCasco";
     public const string LocalJoyeriaDatabase = "joyeriaCasco";
-    public const decimal DefaultCommissionRate = 0.10m;
-    private static readonly CascoCommissionCalculator Calculator = new();
 
     public static BranchConfiguration BuildLocalBranch() =>
         new(
@@ -145,8 +144,8 @@ public sealed class CascoCommissionRuleService
         summary ??= new CascoSalesDataProvider.CascoOperationSaleSummary(0m, 0m, Array.Empty<string>(), string.Empty, string.Empty);
 
         var provider = new CascoReadOnlyDataProvider(branch);
-        var sourceRow = (await provider.GetDetailedRecordsByOriginalFolioAsync(sqlPassword, cleanFolio, cancellationToken))
-            .FirstOrDefault();
+        var sourceRows = await provider.GetDetailedRecordsByOriginalFolioAsync(sqlPassword, cleanFolio, cancellationToken);
+        var sourceRow = sourceRows.FirstOrDefault();
 
         var ventaCompuadmo = summary.Compuadmo;
         var ventaJoyeria = summary.Joyeria;
@@ -155,38 +154,39 @@ public sealed class CascoCommissionRuleService
         var paymentMethod = FirstFilled(paymentMethodOverride, summary.PaymentDescription, sourceRow is null ? string.Empty : InferPaymentMethod(sourceRow));
         var conTarjeta = IsCardLikePayment(paymentMethod, sourceRow?.Card ?? 0m);
         var proveedor = NormalizeProvider(transporte);
-        var rules = await LoadActiveRulesAsync(branch, sqlPassword, cancellationToken);
-        var match = ResolveRule(rules, proveedor, transporte, conTarjeta, ventaTotal);
-        var rule = match.Rule;
+        var database = new SqliteDatabase();
+        await database.InitializeAsync();
+        var settings = new CommissionSettingsRepository(database);
+        // Primera vez en esta maquina: se traen las reglas de Casco desde SQL Server.
+        await CascoCommissionRuleImporter.EnsureImportedAsync(settings, branch, sqlPassword, "SISTEMA", cancellationToken);
 
-        var payout = payoutOverride ?? 0m;
-        var gasto = gastoOverride ?? 0m;
-        var degustacion = degustacionOverride ?? 0m;
-        var (agencyAmount, taxistaAmount, vendorAmount, sportAmount, commissionAmount) = CalculateAmounts(rule, ventaTotal, payout, gasto, degustacion);
-        if (rule is null && !match.IsAmbiguous)
-            commissionAmount = CalculateDefaultCommission(ventaTotal);
+        var dateValid = DateTime.TryParse(sourceRow?.OperationDate, out var operationDate);
+        var input = CascoPayoutRules.FromRecords(sourceRows, operationDate, transporte, ventaTotal,
+            paymentMethod, payoutOverride ?? 0m, (gastoOverride ?? 0m) + (degustacionOverride ?? 0m));
+        var simulation = dateValid
+            ? await settings.SimulateAsync(input, "CV")
+            : new CommissionSimulationResult(transporte, "SIN_CONFIGURACION", "Sin fecha", 0m, 0m, 0m, 0m, 0m, 0m,
+                "No se calculó comisión: falta una fecha de operación válida.", false);
 
-        var detail = match.IsAmbiguous
-            ? match.Detail
-            : rule is null
-            ? $"Sin regla activa para {proveedor}. Se aplica el 10 % de respaldo: {commissionAmount.ToString("0.00", CultureInfo.InvariantCulture)}."
-            : string.Join(" | ", new[]
-            {
-                $"Regla: {rule.ReglaNombre}",
-                $"Proveedor: {rule.Proveedor}",
-                $"Tipo: {rule.TipoServicio}",
-                $"Tarjeta: {(rule.ConTarjeta ? "SI" : "NO")}",
-                $"Venta: {ventaTotal.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Dejada: {payout.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Gasto: {gasto.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Degustacion: {degustacion.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Agencia: {agencyAmount.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Taxista: {taxistaAmount.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Vendedor: {vendorAmount.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Deportiva: {sportAmount.ToString("0.00", CultureInfo.InvariantCulture)}",
-                $"Comision final: {commissionAmount.ToString("0.00", CultureInfo.InvariantCulture)}"
-            });
-
+        // SingleOrDefault sobre el mismo empatado que usa el calculo: con Single, dos reglas
+        // vigentes o ninguna tiraban la pantalla con una excepcion en lugar de avisar.
+        var storedRule = simulation.Configured
+            ? CommissionConfigurationResolver.MatchTransportRules(
+                    await settings.GetRulesAsync("TRANSPORTE", string.Empty, true, operationDate, "CV"), transporte, true)
+                .SingleOrDefault()
+            : null;
+        var rule = storedRule is null
+            ? null
+            : new CascoCommissionRule(checked((int)storedRule.Id),
+                "CV", proveedor, transporte, conTarjeta, 0m, null, null, simulation.CommissionPercent / 100m, null, null, true, simulation.RuleName, false);
+        var agencyAmount = 0m;
+        var taxistaAmount = simulation.FinalCommission;
+        var vendorAmount = 0m;
+        var sportAmount = 0m;
+        var commissionAmount = simulation.FinalCommission;
+        var detail = (rule is null
+            ? "Sin regla configurada para este proveedor. "
+            : "Adultos tomados del registro guardado (detalle_json.adultCount). ") + simulation.Explanation;
         return new CascoCommissionPreview(
             branch.Code,
             branch.SqlServer,
@@ -199,7 +199,7 @@ public sealed class CascoCommissionRuleService
             proveedor,
             paymentMethod,
             conTarjeta,
-            rule is not null && !match.IsAmbiguous,
+            rule is not null,
             rule,
             agencyAmount,
             taxistaAmount,
@@ -208,238 +208,6 @@ public sealed class CascoCommissionRuleService
             commissionAmount,
             detail);
     }
-
-    public async Task<IReadOnlyList<CascoCommissionRule>> LoadActiveRulesAsync(
-        BranchConfiguration branch,
-        string sqlPassword,
-        CancellationToken cancellationToken = default)
-    {
-        await using var connection = await OpenMainConnectionAsync(branch, sqlPassword, cancellationToken);
-        await using (var existsCommand = new SqlCommand("SELECT OBJECT_ID(N'dbo.ControlTaxiComisiones', N'U');", connection))
-        {
-            var objectId = await existsCommand.ExecuteScalarAsync(cancellationToken);
-            if (objectId is null || objectId == DBNull.Value)
-                return Array.Empty<CascoCommissionRule>();
-        }
-
-        // Las banderas se agregaron el 19/09/2026. Van en un comando aparte porque SQL Server
-        // compila el lote completo antes de ejecutarlo: un ALTER y un SELECT a la columna nueva
-        // en el mismo lote falla con "nombre de columna no valido". NULL = comportamiento de
-        // antes, para que una regla vieja no cambie de calculo solo por existir la columna.
-        await using (var ensureColumns = new SqlCommand("""
-            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaRetencion') IS NULL
-                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaRetencion BIT NULL;
-            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaDejada') IS NULL
-                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaDejada BIT NULL;
-            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaGasto') IS NULL
-                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaGasto BIT NULL;
-            IF COL_LENGTH(N'dbo.ControlTaxiComisiones', N'AplicaDegustacion') IS NULL
-                ALTER TABLE dbo.ControlTaxiComisiones ADD AplicaDegustacion BIT NULL;
-            """, connection))
-        {
-            await ensureColumns.ExecuteNonQueryAsync(cancellationToken);
-        }
-
-        const string sql = """
-            SELECT
-                Id,
-                BranchCode,
-                Proveedor,
-                TipoServicio,
-                ConTarjeta,
-                VentaMinima,
-                VentaMaxima,
-                ComisionAgencia,
-                ComisionTaxista,
-                ComisionVendedor,
-                ComisionDeportiva,
-                Activo,
-                ReglaNombre,
-                RequiereValidacion,
-                CAST(COALESCE(AplicaRetencion, ConTarjeta) AS bit) AS AplicaRetencion,
-                CAST(COALESCE(AplicaDejada, 1) AS bit) AS AplicaDejada,
-                CAST(COALESCE(AplicaGasto, 1) AS bit) AS AplicaGasto,
-                CAST(COALESCE(AplicaDegustacion, 1) AS bit) AS AplicaDegustacion
-            FROM dbo.ControlTaxiComisiones
-            WHERE BranchCode = N'CV'
-              AND Activo = 1
-            ORDER BY Id;
-            """;
-
-        await using var command = new SqlCommand(sql, connection);
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var rows = new List<CascoCommissionRule>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            rows.Add(new CascoCommissionRule(
-                reader.GetInt32(0),
-                reader.GetString(1),
-                reader.GetString(2),
-                reader.GetString(3),
-                reader.GetBoolean(4),
-                reader.GetDecimal(5),
-                reader.IsDBNull(6) ? null : reader.GetDecimal(6),
-                reader.IsDBNull(7) ? null : reader.GetDecimal(7),
-                reader.IsDBNull(8) ? null : reader.GetDecimal(8),
-                reader.IsDBNull(9) ? null : reader.GetDecimal(9),
-                reader.IsDBNull(10) ? null : reader.GetDecimal(10),
-                reader.GetBoolean(11),
-                reader.GetString(12),
-                reader.GetBoolean(13),
-                reader.GetBoolean(14),
-                reader.GetBoolean(15),
-                reader.GetBoolean(16),
-                reader.GetBoolean(17)));
-        }
-
-        return rows;
-    }
-
-    public CascoCommissionRuleMatch ResolveRule(
-        IReadOnlyList<CascoCommissionRule> rules,
-        string proveedorNormalizado,
-        string tipoServicioOriginal,
-        bool conTarjeta,
-        decimal ventaTotal)
-    {
-        var candidates = rules
-            .Where(rule => string.Equals(rule.Proveedor, proveedorNormalizado, StringComparison.OrdinalIgnoreCase))
-            .Where(rule => rule.ConTarjeta == conTarjeta)
-            .Where(rule => ventaTotal >= rule.VentaMinima)
-            .Where(rule => !rule.VentaMaxima.HasValue || ventaTotal <= rule.VentaMaxima.Value)
-            .ToArray();
-
-        if (candidates.Length == 0)
-            return new CascoCommissionRuleMatch(null, false, "Sin regla activa para el proveedor/tipo de pago/rango de venta.");
-
-        var exactType = candidates
-            .Where(rule => string.Equals(rule.TipoServicio, tipoServicioOriginal, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-        var selectedPriority = exactType.Length > 0
-            ? exactType
-            : candidates
-                .Where(rule => string.Equals(rule.TipoServicio, "GENERAL", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-
-        if (selectedPriority.Length == 0)
-            return new CascoCommissionRuleMatch(null, false, "Sin regla exacta ni regla GENERAL activa para el transporte.");
-
-        if (selectedPriority.Length > 1)
-        {
-            var ids = string.Join(", ", selectedPriority.Select(rule => rule.Id.ToString(CultureInfo.InvariantCulture)));
-            return new CascoCommissionRuleMatch(null, true, $"REGLA AMBIGUA: coinciden las reglas {ids}.");
-        }
-
-        return new CascoCommissionRuleMatch(selectedPriority[0], false, string.Empty);
-    }
-
-    private static async Task<SqlConnection> OpenMainConnectionAsync(BranchConfiguration branch, string sqlPassword, CancellationToken cancellationToken)
-    {
-        var builder = new SqlConnectionStringBuilder
-        {
-            DataSource = branch.SqlServer,
-            InitialCatalog = branch.Database,
-            UserID = CascoSqlIdentity.ResolveUser(branch),
-            Password = sqlPassword,
-            TrustServerCertificate = true,
-            Encrypt = false,
-            ConnectTimeout = 30
-        };
-
-        var connection = new SqlConnection(builder.ConnectionString);
-        await connection.OpenAsync(cancellationToken);
-        return connection;
-    }
-
-    public static (decimal AgencyAmount, decimal TaxistaAmount, decimal VendorAmount, decimal SportAmount, decimal CommissionAmount) CalculateAmounts(
-        CascoCommissionRule? rule,
-        decimal ventaTotal,
-        decimal dejada = 0m,
-        decimal gasto = 0m,
-        decimal degustacion = 0m)
-    {
-        if (rule is null)
-            return (0m, 0m, 0m, 0m, 0m);
-
-        var sportAmount = rule.ComisionDeportiva ?? 0m;
-        var agencyAmount = rule.ComisionAgencia is decimal agencia
-            ? CalculateRuleAmount(ventaTotal, dejada, gasto, degustacion, agencia, "Agencia", rule).ImporteComision
-            : 0m;
-        var taxistaAmount = rule.ComisionTaxista is decimal taxista
-            ? CalculateRuleAmount(ventaTotal, dejada, gasto, degustacion, taxista, "Taxi/Guia", rule).ImporteComision
-            : 0m;
-        var vendorAmount = rule.ComisionVendedor is decimal vendedor
-            ? CalculateRuleAmount(ventaTotal, dejada, gasto, degustacion, vendedor, "Vendedor", rule).ImporteComision
-            : 0m;
-        var commissionAmount = agencyAmount + taxistaAmount + vendorAmount + sportAmount;
-
-        return (agencyAmount, taxistaAmount, vendorAmount, sportAmount, commissionAmount);
-    }
-
-    public static CascoCommissionCalculationResult CalculateRuleAmount(
-        decimal ventaTotal,
-        decimal dejada,
-        decimal gasto,
-        decimal degustacion,
-        decimal porcentajeComision,
-        string tipoComision,
-        CascoCommissionRule? rule = null)
-    {
-        var (specialDiscount, specialDescription) = CalculateSpecialDiscount(rule, ventaTotal);
-        // Sin regla se conserva el calculo anterior: retencion y los tres descuentos siempre.
-        var aplicaRetencion = rule?.AplicaRetencion ?? true;
-        var aplicaDejada = rule?.AplicaDejada ?? true;
-        var aplicaGasto = rule?.AplicaGasto ?? true;
-        var aplicaDegustacion = rule?.AplicaDegustacion ?? true;
-        return Calculator.Calculate(new CascoCommissionCalculationInput(
-            ventaTotal,
-            aplicaDejada ? Math.Max(dejada, 0m) : 0m,
-            aplicaGasto ? Math.Max(gasto, 0m) : 0m,
-            aplicaDegustacion ? Math.Max(degustacion, 0m) : 0m,
-            aplicaRetencion ? CascoCommissionCalculator.DefaultDiscountRate : 0m,
-            porcentajeComision,
-            tipoComision,
-            specialDiscount,
-            specialDescription));
-    }
-
-    private static (decimal Amount, string Description) CalculateSpecialDiscount(CascoCommissionRule? rule, decimal ventaTotal)
-    {
-        if (rule is null)
-            return (0m, string.Empty);
-
-        if (string.Equals(rule.Proveedor, "AVENTURAS MAYAS", StringComparison.OrdinalIgnoreCase) && ventaTotal >= 1000m)
-        {
-            var blocks = Math.Floor(ventaTotal / 1000m);
-            return (blocks * 100m, "Bloques $100 por cada $1,000");
-        }
-
-        return (0m, string.Empty);
-    }
-
-    /// <summary>
-    /// Comision de un registro ya resuelto contra las reglas. Si ninguna regla aplica se usa el
-    /// 10 % de respaldo -- el mismo numero que Casco mostraba antes de tener reglas activas --
-    /// en lugar de cero. Asi una unidad que todavia no se configura (FARMACIAS quedo pendiente
-    /// el 19/09/2026) sigue cobrando como siempre, en vez de desaparecer en cuanto se activan
-    /// las demas.
-    /// </summary>
-    public static decimal ResolveCommissionAmount(
-        CascoCommissionRuleMatch match,
-        decimal ventaTotal,
-        decimal dejada = 0m,
-        decimal gasto = 0m,
-        decimal degustacion = 0m)
-    {
-        if (match.IsAmbiguous)
-            return 0m;
-        return match.Rule is null
-            ? CalculateDefaultCommission(ventaTotal)
-            : CalculateAmounts(match.Rule, ventaTotal, dejada, gasto, degustacion).CommissionAmount;
-    }
-
-    public static decimal CalculateDefaultCommission(decimal ventaTotal) =>
-        ventaTotal <= 0m ? 0m : Decimal.Round(ventaTotal * DefaultCommissionRate, 2, MidpointRounding.AwayFromZero);
 
     public static bool IsCardLikePayment(string? paymentMethod, decimal cardAmount)
     {

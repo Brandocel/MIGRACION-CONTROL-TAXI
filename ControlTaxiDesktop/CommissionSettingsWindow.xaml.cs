@@ -16,12 +16,22 @@ public partial class CommissionSettingsWindow : Window
     private long _editingId;
     private bool _isSaving;
 
-    public CommissionSettingsWindow(LocalDatabase database, string user, bool canEdit)
+    private readonly string _branchCode;
+
+    public CommissionSettingsWindow(LocalDatabase database, string user, bool canEdit, string branchCode)
     {
         _settings = new CommissionSettingsRepository(database);
         _user = string.IsNullOrWhiteSpace(user) ? Environment.UserName : user;
         _canEdit = canEdit;
+        _branchCode = string.IsNullOrWhiteSpace(branchCode) ? string.Empty : branchCode.Trim().ToUpperInvariant();
         InitializeComponent();
+        var isCv = _branchCode == "CV";
+        CvSmallPayoutColumn.Visibility = CvLargePayoutColumn.Visibility = CvTastingColumn.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
+        LegacyPayoutColumn.Visibility = isCv ? Visibility.Collapsed : Visibility.Visible;
+        SimAdultsPanel.Visibility = isCv ? Visibility.Visible : Visibility.Collapsed;
+        SimPayout.IsReadOnly = isCv;
+        if (isCv) SimPayoutLabel.Text = "DEJADA SEGÚN ADULTOS (CALCULADA)";
+        UpdateCvPayoutEditor();
         SimDate.SelectedDate = DateTime.Today;
         VigencyFilter.SelectedDate = DateTime.Today;
         EditFrom.SelectedDate = DateTime.Today;
@@ -32,9 +42,34 @@ public partial class CommissionSettingsWindow : Window
         RetireTestRuleButton.IsEnabled = _canEdit;
         Loaded += async (_, _) =>
         {
+            await ImportCascoRulesIfMissingAsync();
             await RefreshAllAsync();
             SearchBox.Focus();
         };
+        // NewRule enablement for TRANSPORTE will be checked at NewRule click time using _branchCode.
+    }
+
+    /// <summary>
+    /// En Casco las reglas viven en la base local. Si esta maquina todavia no las tiene, se traen
+    /// de SQL Server (dbo.ControlTaxiComisiones) para que el operador no vea la pantalla vacia ni
+    /// tenga que capturar a mano lo que el negocio ya confirmo.
+    /// </summary>
+    private async Task ImportCascoRulesIfMissingAsync()
+    {
+        if (_branchCode != "CV") return;
+        try
+        {
+            var password = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD");
+            if (string.IsNullOrWhiteSpace(password)) return;
+            var branch = new BranchConfigurationService().GetBranch("CV");
+            var outcome = await CascoCommissionRuleImporter.EnsureImportedAsync(_settings, branch, password, _user);
+            if (outcome.Ran && outcome.Imported > 0)
+                EditorMessageText = outcome.Detail;
+        }
+        catch
+        {
+            // La pantalla abre igual: sin importacion solo se ve lo que ya hay capturado.
+        }
     }
 
     /// <summary>
@@ -131,9 +166,13 @@ public partial class CommissionSettingsWindow : Window
     {
         var transportItem = SimTransport.SelectedItem;
         var paymentItem = SimPayment.SelectedItem;
-        SimTransport.ItemsSource = (await _settings.GetRulesAsync("TRANSPORTE", active: true))
-            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
-        SimPayment.ItemsSource = (await _settings.GetRulesAsync("FORMA_PAGO", active: true))
+        // Filter transport rules by session branch: if branch is CV show only CV rules.
+        var allTransports = await _settings.GetRulesAsync("TRANSPORTE", active: true, date: null, sessionBranch: _branchCode);
+        var transports = allTransports;
+        SimTransport.ItemsSource = transports
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        SimPayment.ItemsSource = (await _settings.GetRulesAsync("FORMA_PAGO", active: true, date: null, sessionBranch: _branchCode))
             .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
         SimTransport.SelectedItem = transportItem;
         SimPayment.SelectedItem = paymentItem;
@@ -141,7 +180,7 @@ public partial class CommissionSettingsWindow : Window
 
     private async Task RefreshSummaryAsync()
     {
-        var summary = await _settings.GetSummaryAsync();
+        var summary = await _settings.GetSummaryAsync(_branchCode);
         var diagnostics = await _settings.GetDiagnosticsAsync();
         ActiveRulesCard.Text = summary.ActiveRules.ToString("N0", CultureInfo.CurrentCulture);
         TransportRulesCard.Text = summary.TransportRules.ToString("N0", CultureInfo.CurrentCulture);
@@ -157,7 +196,7 @@ public partial class CommissionSettingsWindow : Window
             CategoryCode(SelectedComboText(CategoryFilter)),
             SearchBox.Text,
             ActiveFilter(status),
-            DateFilter(status));
+            DateFilter(status), _branchCode);
 
         if (IsExpiringFilter(status))
         {
@@ -253,6 +292,9 @@ public partial class CommissionSettingsWindow : Window
         SetComboText(EditPaymentKind, rule.PaymentKind);
         EditPayout.IsChecked = rule.AppliesPayout;
         EditPayoutAmount.Text = rule.PayoutAmount.ToString("0.##", CultureInfo.InvariantCulture);
+        EditCvPayoutSmall.Text = rule.CvPayoutOneToFourAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
+        EditCvPayoutLarge.Text = rule.CvPayoutFiveOrMoreAdults?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
+        EditCvTasting.Text = rule.CvTastingPercent?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty;
         SetComboText(EditPaxKind, rule.PaxKind);
         EditMonedaId.Text = rule.MonedaId.ToString(CultureInfo.InvariantCulture);
         EditExpense.IsChecked = rule.AppliesExpense;
@@ -292,6 +334,9 @@ public partial class CommissionSettingsWindow : Window
         SetComboText(EditPaymentKind, string.Empty);
         EditPayout.IsChecked = true;
         EditPayoutAmount.Text = "0";
+        EditCvPayoutSmall.Clear();
+        EditCvPayoutLarge.Clear();
+        EditCvTasting.Clear();
         EditPaxKind.SelectedIndex = 0;
         EditMonedaId.Text = "-1";
         EditExpense.IsChecked = true;
@@ -322,7 +367,7 @@ public partial class CommissionSettingsWindow : Window
             SaveRuleButton.IsEnabled = false;
             NewRuleButton.IsEnabled = false;
             EditorMessageText = "Guardando configuración...";
-            var previous = RulesGrid.SelectedItem as CommissionSettingsRule;
+            var previous = _editingId > 0 ? RulesGrid.SelectedItem as CommissionSettingsRule : null;
             var rule = new CommissionSettingsRule(
                 _editingId,
                 SelectedComboText(EditCategory),
@@ -343,7 +388,13 @@ public partial class CommissionSettingsWindow : Window
                 EditNotes.Text,
                 Money(EditPayoutAmount.Text, "Dejada"),
                 SelectedComboText(EditPaxKind),
-                Entero(EditMonedaId.Text));
+                Entero(EditMonedaId.Text))
+            {
+                Branch = SelectedComboText(EditCategory) == "TRANSPORTE" ? _branchCode : string.Empty,
+                CvPayoutOneToFourAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutSmall.Text, "Dejada 1–4 adultos") : null,
+                CvPayoutFiveOrMoreAdults = IsCvTransportEditor ? OptionalMoney(EditCvPayoutLarge.Text, "Dejada 5 o más") : null,
+                CvTastingPercent = IsCvTransportEditor ? OptionalPercent(EditCvTasting.Text, "Degustación") : null
+            };
 
             if (previous is not null && previous.Active && !rule.Active)
             {
@@ -362,9 +413,13 @@ public partial class CommissionSettingsWindow : Window
             var message = isEdit
                 ? $"Vas a corregir esta regla (no se crea otra):\n\n{rule.Name}\n\n{previousText}\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el cambio o No para cancelar."
                 : $"Vas a dar de alta:\n\n{rule.Name}\n\nVigencia: {rule.EffectiveRange}\nMotivo: {EditReason.Text.Trim()}\n\nSelecciona Sí para confirmar el alta o No para cancelar.";
+            if (IsCvTransportEditor)
+                message += $"\nDegustación: {previous?.CvTastingDisplay ?? "Pendiente"} -> {rule.CvTastingDisplay}\nDejada 1–4 adultos: {previous?.CvPayoutOneToFourDisplay ?? "Pendiente"} -> {rule.CvPayoutOneToFourDisplay}\nDejada 5 o más: {previous?.CvPayoutFiveOrMoreDisplay ?? "Pendiente"} -> {rule.CvPayoutFiveOrMoreDisplay}";
             if (MessageBox.Show(this, message, isEdit ? "Confirmar corrección de comisión" : "Confirmar alta de comisión", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
+            // Attach current session branch to the rule using branch passed to the window (_branchCode).
+            rule = rule with { Branch = rule.Category == "TRANSPORTE" ? _branchCode : string.Empty };
             if (isEdit)
                 await _settings.UpdateRuleAsync(rule, _user, EditReason.Text, _canEdit);
             else
@@ -388,6 +443,48 @@ public partial class CommissionSettingsWindow : Window
         }
     }
 
+    private bool IsCvTransportEditor => _branchCode == "CV" && SelectedComboText(EditCategory) == "TRANSPORTE";
+
+    private void EditCategory_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateCvPayoutEditor();
+
+    private void UpdateCvPayoutEditor()
+    {
+        if (CvPayoutEditor is null || EditCategory is null) return;
+        CvPayoutEditor.Visibility = IsCvTransportEditor ? Visibility.Visible : Visibility.Collapsed;
+        CvTastingEditor.Visibility = IsCvTransportEditor ? Visibility.Visible : Visibility.Collapsed;
+        EditPayoutAmount.Visibility = LegacyPayoutLabel.Visibility = IsCvTransportEditor ? Visibility.Collapsed : Visibility.Visible;
+        EditCvPayoutSmall.IsEnabled = EditCvPayoutLarge.IsEnabled = _canEdit;
+        EditCvTasting.IsEnabled = _canEdit;
+    }
+
+    private static decimal? OptionalMoney(string text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (!decimal.TryParse(text.Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount < 0m)
+            throw new InvalidOperationException($"{label}: escribe un importe válido no negativo, o déjalo vacío si está pendiente.");
+        return amount;
+    }
+
+    private static decimal? OptionalPercent(string text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        var trimmed = text.Trim();
+        if (!decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+            && !decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.CurrentCulture, out value))
+            throw new InvalidOperationException($"{label}: escribe un porcentaje válido entre 0 y 100, o déjalo vacío si está pendiente.");
+        if (value < 0m || value > 100m)
+            throw new InvalidOperationException($"{label}: el porcentaje debe estar entre 0 y 100, o quedar vacío si está pendiente.");
+        return value;
+    }
+
+    private int? ReadSimulatorAdults()
+    {
+        if (string.IsNullOrWhiteSpace(SimAdults.Text)) return null;
+        if (!int.TryParse(SimAdults.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var adults))
+            throw new InvalidOperationException("Adultos debe ser un número entero no negativo; no se calcula con PAX total.");
+        return adults;
+    }
+
     private async void Simulate_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -401,9 +498,10 @@ public partial class CommissionSettingsWindow : Window
                 0m,
                 0m,
                 0m,
-                Number(SimPayout.Text),
+                _branchCode == "CV" ? 0m : Number(SimPayout.Text),
                 Number(SimExpense.Text),
-                string.Empty));
+                string.Empty, _branchCode == "CV" ? ReadSimulatorAdults() : null), _branchCode);
+            if (_branchCode == "CV") SimPayout.Text = result.Configured ? result.Payout.ToString("0.##", CultureInfo.InvariantCulture) : "Pendiente";
             SimulationResult.Text =
                 $"Venta: {Number(SimSale.Text):C2}\n"
                 + $"Forma de pago: {SimPayment.Text}\n"
@@ -414,7 +512,7 @@ public partial class CommissionSettingsWindow : Window
                 + "¿Cómo se calculó?\n"
                 + result.Explanation
                 + Environment.NewLine
-                + (result.Configured ? "Estado: regla configurada." : "Estado: Esta regla usa un valor de respaldo. Conviene configurarla antes de liquidar.");
+                + (result.Configured ? "Estado: regla configurada." : "Estado: falta configuración válida; revisa el detalle antes de liquidar.");
         }
         catch (Exception ex)
         {
@@ -432,7 +530,7 @@ public partial class CommissionSettingsWindow : Window
                 FileName = "catalogo_comisiones.csv"
             };
             if (dialog.ShowDialog(this) != true) return;
-            await _settings.ExportCatalogCsvAsync(dialog.FileName);
+            await _settings.ExportCatalogCsvAsync(dialog.FileName, _branchCode);
             MessageBox.Show(this, "El catálogo CSV se exportó correctamente.", "Control Taxi", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -451,7 +549,7 @@ public partial class CommissionSettingsWindow : Window
                 FileName = "catalogo_comisiones.xls"
             };
             if (dialog.ShowDialog(this) != true) return;
-            await _settings.ExportCatalogExcelAsync(dialog.FileName);
+            await _settings.ExportCatalogExcelAsync(dialog.FileName, _branchCode);
             MessageBox.Show(this, "El catálogo se exportó a Excel correctamente.", "Control Taxi", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -530,6 +628,7 @@ public partial class CommissionSettingsWindow : Window
         SimPayment.SelectedIndex = -1;
         SimPayment.Text = "MERCADO PAGO";
         SimPayout.Text = "0";
+        SimAdults.Clear();
         SimExpense.Text = "0";
         SimulationResult.Text = "Listo para una nueva prueba.";
     }
@@ -581,6 +680,7 @@ public partial class CommissionSettingsWindow : Window
         SimSale.Text = "1335";
         SimSubtotal.Text = "0";
         SimPayout.Text = "0";
+        SimAdults.Clear();
         SimExpense.Text = "0";
     }
 

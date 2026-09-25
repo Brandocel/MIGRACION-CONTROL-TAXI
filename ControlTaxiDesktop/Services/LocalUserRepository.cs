@@ -29,6 +29,51 @@ public sealed class LocalUserRepository(LocalDatabase database)
         public static AuthenticationResult Failure(AuthenticationFailureReason reason) => new(false, null, reason);
     }
 
+    // Construye el SqlConnectionStringBuilder para una sucursal sin abrir la conexión.
+    // Útil para verificar hacia dónde apuntará la conexión (DataSource, InitialCatalog)
+    // antes de intentar conectar o realizar escrituras. No incluye la contraseña.
+    private SqlConnectionStringBuilder BuildBranchConnectionBuilder(string branchCode)
+    {
+        var branch = _branchService.GetBranch(branchCode);
+        // When a local override is active prefer branch values from branches.local.json
+        var isLocalOverride = _branchService.IsLocalOverrideActive();
+        string? sqlServer = null;
+        string? sqlDatabase = null;
+        string? sqlUser = null;
+        if (!isLocalOverride)
+        {
+            // Only apply credential stores to populate environment variables when not using local override
+            if (string.Equals(branchCode, "P28", StringComparison.OrdinalIgnoreCase))
+                Plaza28CredentialStore.TryApplyToEnvironment(out _);
+            if (string.Equals(branchCode, "CV", StringComparison.OrdinalIgnoreCase))
+                CascoCredentialStore.TryApplyToEnvironment(out _);
+
+            sqlServer = Environment.GetEnvironmentVariable($"{(branchCode == "CV" ? "CASCO" : "PLAZA28")}_SQL_SERVER");
+            sqlDatabase = Environment.GetEnvironmentVariable($"{(branchCode == "CV" ? "CASCO" : "PLAZA28")}_SQL_DATABASE");
+            sqlUser = Environment.GetEnvironmentVariable($"{(branchCode == "CV" ? "CASCO" : "PLAZA28")}_SQL_USER");
+        }
+
+        var builder = new SqlConnectionStringBuilder
+        {
+            DataSource = string.IsNullOrWhiteSpace(sqlServer) ? branch.SqlServer : sqlServer,
+            InitialCatalog = string.IsNullOrWhiteSpace(sqlDatabase) ? branch.Database : sqlDatabase,
+            UserID = string.IsNullOrWhiteSpace(sqlUser) ? (string.IsNullOrWhiteSpace(branch.SqlUser) ? "sa" : branch.SqlUser.Trim()) : sqlUser,
+            // No se establece Password aquí para no exponer secretos.
+            Encrypt = false,
+            TrustServerCertificate = true,
+            ConnectTimeout = 8
+        };
+
+        return builder;
+    }
+
+    // Exponer información de conexion calculada (sin contraseña) para la UI.
+    public (string DataSource, string InitialCatalog, string UserId) GetBranchConnectionInfo(string branchCode)
+    {
+        var builder = BuildBranchConnectionBuilder(branchCode);
+        return (builder.DataSource, builder.InitialCatalog, builder.UserID);
+    }
+
     public enum AuthenticationFailureReason
     {
         None,
@@ -138,9 +183,40 @@ public sealed class LocalUserRepository(LocalDatabase database)
         if (branch is null || string.IsNullOrWhiteSpace(branch.SqlServer) || string.IsNullOrWhiteSpace(branch.Database))
             return AuthenticationResult.Failure(AuthenticationFailureReason.DatabaseStructureError);
 
+        // Ensure we have a saved credential or prompt the user to create one.
         var sqlPassword = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD");
         if (string.IsNullOrWhiteSpace(sqlPassword))
-            return AuthenticationResult.Failure(AuthenticationFailureReason.RemoteServerUnavailable);
+        {
+            // First try to load an existing saved credential and apply it to the process
+            if (!CascoCredentialStore.TryApplyToEnvironment(out var loadError))
+            {
+                // No saved credential: prompt the user with the existing setup window to capture and save one.
+                try
+                {
+                    var cascoBranch = _branchService.GetBranch("CV");
+                    var setupWindow = new CascoConnectionSetupWindow(cascoBranch);
+                    var configured = setupWindow.ShowDialog();
+                    if (configured == true)
+                    {
+                        // After save, try to apply again
+                        CascoCredentialStore.TryApplyToEnvironment(out _);
+                        sqlPassword = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD");
+                    }
+                }
+                catch
+                {
+                    // fallthrough to failure below
+                }
+            }
+            else
+            {
+                // Applied saved credential, pick up password
+                sqlPassword = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD");
+            }
+
+            if (string.IsNullOrWhiteSpace(sqlPassword))
+                return AuthenticationResult.Failure(AuthenticationFailureReason.RemoteServerUnavailable);
+        }
 
         var sqlUser = string.IsNullOrWhiteSpace(branch.SqlUser) ? "sa" : branch.SqlUser.Trim();
         var builder = new SqlConnectionStringBuilder
@@ -473,7 +549,10 @@ public sealed class LocalUserRepository(LocalDatabase database)
         branchCode = NormalizeBranchCode(branchCode);
         var permissionSet = permissions.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        await using var connection = await OpenBranchSqlConnectionAsync(adminBranchCode);
+        // Abrir la conexion hacia la SUCURSAL DESTINO (branchCode), no hacia la sucursal del administrador.
+        // Si se usa la conexion del administrador (adminBranchCode) se termina escribiendo el usuario
+        // en la base de datos del admin en lugar de la base de la sucursal objetivo.
+        await using var connection = await OpenBranchSqlConnectionAsync(branchCode);
         await EnsureAuthorizeColumnAsync(connection);
         var existing = await ReadCascoUserAsync(connection, userName);
         if (existing is null && string.IsNullOrWhiteSpace(password))
@@ -554,13 +633,33 @@ public sealed class LocalUserRepository(LocalDatabase database)
         var passwordEnvironmentName = string.Equals(branchCode, "CV", StringComparison.OrdinalIgnoreCase)
             ? "CASCO_SQL_PASSWORD"
             : "PLAZA28_SQL_PASSWORD";
+        // If local override active for CV, do NOT apply CascoCredentialStore.ApplyToEnvironment to avoid
+        // overriding server/database from branches.local.json. We still need the password: try to load it
+        // directly from the credential store without applying server/database overrides.
+        var isLocalOverride = _branchService.IsLocalOverrideActive();
         if (string.Equals(branchCode, "P28", StringComparison.OrdinalIgnoreCase))
             Plaza28CredentialStore.TryApplyToEnvironment(out _);
+        if (string.Equals(branchCode, "CV", StringComparison.OrdinalIgnoreCase) && !isLocalOverride)
+            CascoCredentialStore.TryApplyToEnvironment(out _);
 
         var sqlServer = Environment.GetEnvironmentVariable($"{(branchCode == "CV" ? "CASCO" : "PLAZA28")}_SQL_SERVER");
         var sqlDatabase = Environment.GetEnvironmentVariable($"{(branchCode == "CV" ? "CASCO" : "PLAZA28")}_SQL_DATABASE");
         var sqlUser = Environment.GetEnvironmentVariable($"{(branchCode == "CV" ? "CASCO" : "PLAZA28")}_SQL_USER");
-        var sqlPassword = Environment.GetEnvironmentVariable(passwordEnvironmentName);
+
+        string? sqlPassword = null;
+        if (string.Equals(branchCode, "CV", StringComparison.OrdinalIgnoreCase) && isLocalOverride)
+        {
+            // Try to read only the password from the CascoCredentialStore without overriding server/database
+            if (!CascoCredentialStore.TryLoad(out var cred, out var _ ) || cred is null || string.IsNullOrWhiteSpace(cred.SqlPassword))
+                sqlPassword = Environment.GetEnvironmentVariable(passwordEnvironmentName);
+            else
+                sqlPassword = cred.SqlPassword;
+        }
+        else
+        {
+            sqlPassword = Environment.GetEnvironmentVariable(passwordEnvironmentName);
+        }
+
         if (string.IsNullOrWhiteSpace(sqlPassword))
             throw new InvalidOperationException("No se encontro la credencial cifrada de SQL para guardar usuarios.");
 

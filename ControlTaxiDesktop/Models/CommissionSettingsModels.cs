@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 
 namespace ControlTaxiDesktop.Models;
 
@@ -32,6 +32,26 @@ public sealed record CommissionSettingsRule(
     // amarrada a ninguna moneda.
     int MonedaId = -1)
 {
+    public string Branch { get; init; } = string.Empty;
+    // Null means not configured; zero is an explicitly configured free payout.
+    public decimal? CvPayoutOneToFourAdults { get; init; }
+    public decimal? CvPayoutFiveOrMoreAdults { get; init; }
+    // Null means not configured; zero is an explicitly configured percentage.
+    public decimal? CvTastingPercent { get; init; }
+
+    public string CvPayoutOneToFourDisplay => Category == "TRANSPORTE" && Branch == "CV"
+    ? CvPayoutOneToFourAdults is decimal amount ? $"${amount:0.00}" : "Pendiente"
+    : string.Empty;
+
+    public string CvPayoutFiveOrMoreDisplay => Category == "TRANSPORTE" && Branch == "CV"
+        ? CvPayoutFiveOrMoreAdults is decimal amount ? $"${amount:0.00}" : "Pendiente"
+        : string.Empty;
+
+    public string CvTastingDisplay => Category == "TRANSPORTE" && Branch == "CV"
+        ? CvTastingPercent is decimal value
+            ? value.ToString("0.##", CultureInfo.InvariantCulture) + "%"
+            : "Pendiente"
+        : string.Empty;
     public string StatusText => Active ? "Activo" : "Inactivo";
     public string PayoutDisplay => PayoutAmount <= 0m
         ? "—"
@@ -73,7 +93,8 @@ public sealed record CommissionSimulationInput(
     decimal Amex,
     decimal Payout,
     decimal Expense,
-    string OperationType);
+    string OperationType,
+    int? AdultCount = null);
 
 public sealed record CommissionSimulationResult(
     string RuleName,

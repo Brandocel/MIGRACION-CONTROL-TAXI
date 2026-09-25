@@ -5,17 +5,21 @@ using Microsoft.Data.Sqlite;
 
 namespace ControlTaxiDesktop.Services;
 
-public sealed class LocalPosRepository(LocalDatabase database)
+public sealed class LocalPosRepository(LocalDatabase database, string sessionBranch = "")
 {
     private readonly LocalSqlServerSource? _sqlSource = LocalSqlServerSource.TryLoad();
     private readonly CommissionSettingsRepository _commissionSettings = new(database);
-    private readonly CommissionConfigurationResolver _commissionResolver = new(new CommissionSettingsRepository(database));
+    // Resolver will be constructed with session branch at runtime when initializing
+    private CommissionConfigurationResolver? _commissionResolver;
     private bool _commissionSettingsLoaded;
     private bool IsPlaza28SqlMode => _sqlSource is not null;
 
     private async Task EnsureCommissionSettingsLoadedAsync()
     {
         if (_commissionSettingsLoaded) return;
+        // Con la sucursal de la sesion: en Casco las reglas son otras, y con cadena vacia el POS
+        // calculaba con el catalogo fijo de Plaza 28.
+        _commissionResolver ??= new CommissionConfigurationResolver(_commissionSettings, sessionBranch);
         await _commissionResolver.InitializeAsync();
         _commissionSettingsLoaded = true;
     }
