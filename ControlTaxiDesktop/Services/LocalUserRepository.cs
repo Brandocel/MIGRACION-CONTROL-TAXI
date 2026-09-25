@@ -674,20 +674,6 @@ public sealed class LocalUserRepository(LocalDatabase database)
             ConnectTimeout = 8
         };
 
-#if DEBUG
-        // En Debug, bloquear la apertura de la conexión para CV si el destino real no es .\SQLEXPRESS/mkt
-        if (string.Equals(branchCode, "CV", StringComparison.OrdinalIgnoreCase))
-        {
-            var effectiveServer = builder.DataSource ?? string.Empty;
-            var effectiveDb = builder.InitialCatalog ?? string.Empty;
-            if (!string.Equals(effectiveServer, @".\SQLEXPRESS", StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(effectiveDb, "mkt", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException($"DEBUG BLOCK: Conexión CV bloqueada porque el destino efectivo es {effectiveServer}/{effectiveDb}. Esperado .\\SQLEXPRESS/mkt.");
-            }
-        }
-#endif
-
         var connection = new SqlConnection(builder.ConnectionString);
         await connection.OpenAsync();
         return connection;

@@ -1901,20 +1901,42 @@ public static class CascoOperationsDataService
         var database = new LocalDatabase();
         await database.InitializeAsync();
         var settings = new CommissionSettingsRepository(database);
+        // Si esta maquina todavia no tiene las reglas de Casco, se traen de SQL Server. Si falla,
+        // se sigue: el calculo usara el respaldo y el viaje no se queda sin renglon.
+        await CascoCommissionRuleImporter.EnsureImportedAsync(settings, branch, sqlPassword, "SISTEMA", cancellationToken);
+
+        // La comision ya generada y autorizada manda sobre cualquier recalculo: es el importe que
+        // el negocio ya reviso y, en su caso, pago. Recalcularla haria que un pago hecho se viera
+        // distinto en pantalla.
+        var generated = await LoadGeneratedCommissionsAsync(branch, sqlPassword, rows, cancellationToken);
+
         var result = new List<LocalRelation>();
         foreach (var row in rows)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (TryGetGeneratedCommission(generated, row, out var generatedAmount, out var generatedPaid, out var generatedStatus))
+            {
+                result.Add(row with
+                {
+                    Commission = generatedAmount,
+                    CommissionPaid = generatedPaid,
+                    CommissionStatus = generatedStatus,
+                    OrigenComision = "Calculada"
+                });
+                continue;
+            }
+
             if (!DateTime.TryParse(row.DateText, out var operationDate))
             {
                 result.Add(row with { Commission = 0m, CommissionStatus = "SIN FECHA VALIDA", OrigenComision = "SIN_CONFIGURACION" });
                 continue;
             }
+
             var simulation = await settings.SimulateAsync(CascoPayoutRules.FromRelation(row, operationDate), "CV");
             result.Add(row with
             {
                 Commission = simulation.FinalCommission,
-                CommissionStatus = simulation.Configured ? ResolveCommissionStatus(simulation.FinalCommission, row.CommissionPaid) : simulation.Explanation,
+                CommissionStatus = ResolveCommissionStatus(simulation.FinalCommission, row.CommissionPaid),
                 CommissionCalculationDetail = simulation.Explanation,
                 OrigenComision = simulation.Source
             });

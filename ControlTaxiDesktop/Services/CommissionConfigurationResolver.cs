@@ -1,4 +1,4 @@
-using ControlTaxiDesktop.Models;
+﻿using ControlTaxiDesktop.Models;
 
 namespace ControlTaxiDesktop.Services;
 
@@ -20,20 +20,32 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
     {
         var text = Clean(transport);
         // Obtain branch from settings caller: the repository will filter by session branch when provided.
-        var rules = await settings.GetRulesAsync("TRANSPORTE", text, true, operationDate, sessionBranch);
         var isCv = string.Equals(sessionBranch.Trim(), "CV", StringComparison.OrdinalIgnoreCase);
-        var matches = rules.Where(r => string.Equals(r.Code, text, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(r.Name, text, StringComparison.OrdinalIgnoreCase)).ToArray();
+        // En Casco la busqueda va por el proveedor normalizado ("VAN BLANCA 7914" -> "TAXIS/VANS"),
+        // que es como se guardan las reglas. Buscando el texto tal cual casi nunca empatan y todo
+        // se iria al respaldo del 10 %.
+        var rules = await settings.GetRulesAsync("TRANSPORTE", isCv ? string.Empty : text, true, operationDate, sessionBranch);
+        var matches = MatchTransportRules(rules, text, isCv);
         var rule = isCv ? (matches.Length == 1 ? matches[0] : null) : rules.FirstOrDefault();
         if (rule is not null)
         {
             return new CommissionResolvedRule("TRANSPORTE", rule.Code, rule.Name, rule.CommissionPercent, rule.CashRetentionPercent, rule.CardRetentionPercent, rule.AmexRetentionPercent, "CONFIGURACION_LOCAL", rule.EffectiveFrom, rule.EffectiveTo, true, string.Empty);
         }
-        // If session branch is CV, do NOT fallback to fixed catalog or percent: signal missing configuration
         if (isCv)
         {
-            await settings.LogDiagnosticAsync("FALTA", "TRANSPORTE", text, "Falta regla configurada para este transporte en Casco Viejo.", "Configurar regla en Configuracion de Comisiones (sucursal CV).", "MISSING_RULE_CV");
-            return new CommissionResolvedRule("TRANSPORTE", text, text, 0m, 0m, 0m, 0m, "SIN_CONFIGURACION", DateTime.MinValue, null, false, "Falta regla para sucursal CV");
+            // Dos reglas que empatan es un error de captura, no un caso a calcular: se avisa y no
+            // se inventa un importe, igual que hacia el motor anterior ("REGLA AMBIGUA").
+            if (matches.Length > 1)
+            {
+                await settings.LogDiagnosticAsync("ALTA", "TRANSPORTE", text, $"Hay {matches.Length} reglas CV vigentes para este transporte.", "Dejar una sola regla vigente en Configuracion de Comisiones (sucursal CV).", "REGLA_AMBIGUA_CV");
+                return new CommissionResolvedRule("TRANSPORTE", text, text, 0m, 0m, 0m, 0m, CascoAmbiguousSource, DateTime.MinValue, null, false, "Mas de una regla CV vigente");
+            }
+
+            // Sin regla se conserva el 10 % de respaldo de Casco: un transporte nuevo o mal escrito
+            // no puede dejar al taxista sin comision. Queda anotado en el diagnostico para que se
+            // configure la regla de verdad.
+            await settings.LogDiagnosticAsync("FALTA", "TRANSPORTE", text, "Falta regla configurada para este transporte en Casco Viejo. Se aplica el 10 % de respaldo.", "Configurar regla en Configuracion de Comisiones (sucursal CV).", "MISSING_RULE_CV");
+            return new CommissionResolvedRule("TRANSPORTE", text, text, CascoFallbackPercent, 0m, 0m, 0m, CascoFallbackSource, DateTime.MinValue, null, false, "Falta regla CV; se aplica el 10 % de respaldo");
         }
 
         var normalizedCatalog = CommissionPaymentRules.NormalizePercent(catalogCommission);
@@ -71,9 +83,18 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
         var date = input.Date.Date;
         var transport = await ResolveTransportAsync(input.TransportCodeOrName, date, 0m, 0m, 0m, 0m);
         var isCv = string.Equals(sessionBranch.Trim(), "CV", StringComparison.OrdinalIgnoreCase);
-        if (isCv && !transport.Configured)
+        if (isCv && string.Equals(transport.Source, CascoAmbiguousSource, StringComparison.Ordinal))
             return new CommissionSimulationResult(transport.Name, transport.Source, "Sin vigencia", 0m, 0m, 0m, input.Payout, input.Expense, 0m,
-                "Falta una regla CV vigente y única para este transporte en SQLite. No se calculó comisión ni se aplicaron porcentajes de respaldo.", false);
+                "Hay mas de una regla CV vigente para este transporte. No se calcula hasta dejar una sola.", false);
+
+        if (isCv && string.Equals(transport.Source, CascoFallbackSource, StringComparison.Ordinal))
+        {
+            var ventaBruta = input.Subtotal > 0m ? input.Subtotal : input.Sale;
+            // Mismo respaldo que el motor anterior: 10 % de la venta, sin descontar nada.
+            var respaldo = ventaBruta <= 0m ? 0m : decimal.Round(ventaBruta * (CascoFallbackPercent / 100m), 2, MidpointRounding.AwayFromZero);
+            return new CommissionSimulationResult(transport.Name, transport.Source, "Sin vigencia", CascoFallbackPercent, 0m, ventaBruta, 0m, 0m, respaldo,
+                $"Sin regla CV para {transport.Name}. Se aplica el 10 % de respaldo sobre la venta: {respaldo:C2}. Configura la regla para que deje de usarse el respaldo.", false);
+        }
         var payment = isCv ? transport : await ResolvePaymentAsync(input.PaymentMethod, date);
         var sale = input.Subtotal > 0m ? input.Subtotal : input.Sale;
         var cash = input.Cash;
@@ -96,23 +117,58 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
         var selectedPayout = input.Payout;
         var payoutDetail = string.Empty;
         var expense = input.Expense;
+        var specialDiscount = 0m;
+        var specialDetail = string.Empty;
         if (isCv)
         {
-            var rule = (await settings.GetRulesAsync("TRANSPORTE", input.TransportCodeOrName, true, date, "CV"))
-                .Single(r => string.Equals(r.Code, input.TransportCodeOrName.Trim(), StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(r.Name, input.TransportCodeOrName.Trim(), StringComparison.OrdinalIgnoreCase));
-            var selection = CascoPayoutRules.Select(rule, input.AdultCount);
-            if (selection.Amount is null)
-                return new CommissionSimulationResult(transport.Name, "DATOS_PENDIENTES_CV", FormatVigency(transport),
-                    transport.CommissionPercent, retentionPercent, 0m, 0m, input.Expense, 0m,
-                    selection.Detail + " No se calculó comisión.", false);
-            selectedPayout = selection.Amount.Value;
-            payoutDetail = selection.Detail;
-            payout = rule.AppliesPayout ? selectedPayout : 0m;
+            var text = Clean(input.TransportCodeOrName);
+            // SingleOrDefault y no Single: si la regla desaparece entre una consulta y otra se
+            // sigue calculando con el respaldo, no truena la pantalla con una excepcion.
+            var rule = MatchTransportRules(await settings.GetRulesAsync("TRANSPORTE", string.Empty, true, date, "CV"), text, true)
+                .SingleOrDefault();
+            if (rule is null)
+            {
+                var ventaBruta = sale;
+                var respaldo = ventaBruta <= 0m ? 0m : decimal.Round(ventaBruta * (CascoFallbackPercent / 100m), 2, MidpointRounding.AwayFromZero);
+                return new CommissionSimulationResult(transport.Name, CascoFallbackSource, "Sin vigencia", CascoFallbackPercent, 0m, ventaBruta, 0m, 0m, respaldo,
+                    $"La regla CV de {transport.Name} ya no esta vigente. Se aplica el 10 % de respaldo: {respaldo:C2}.", false);
+            }
+
+            if (!rule.AppliesPayout)
+            {
+                payout = 0m;
+                selectedPayout = 0m;
+                payoutDetail = "Esta regla no descuenta dejada.";
+            }
+            else
+            {
+                var selection = CascoPayoutRules.Select(rule, input.AdultCount);
+                if (selection.Amount is decimal banda)
+                {
+                    selectedPayout = banda;
+                    payout = banda;
+                    payoutDetail = selection.Detail;
+                }
+                else
+                {
+                    // Sin adultos confirmados o sin bandas capturadas se usa la dejada que trae el
+                    // viaje, que es como se venia calculando. Se avisa en el detalle, pero nunca se
+                    // deja la comision sin calcular.
+                    selectedPayout = input.Payout;
+                    payout = input.Payout;
+                    payoutDetail = selection.Detail + $" Se usa la dejada del viaje: {input.Payout:C2}.";
+                }
+            }
+
             expense = rule.AppliesExpense ? expense : 0m;
+            (specialDiscount, specialDetail) = ResolveCascoSpecialDiscount(rule, sale);
         }
-        var baseAmount = Math.Max(0m, sale - retained - payout - expense);
-        var final = Math.Max(0m, decimal.Truncate(baseAmount * (transport.CommissionPercent / 100m)));
+        var baseAmount = Math.Max(0m, sale - retained - payout - expense - specialDiscount);
+        // Plaza 28 trunca los centavos; Casco los redondea a dos decimales, que es como venia
+        // calculando su motor anterior. Truncar en Casco movia cada comision unos centavos hacia
+        // abajo contra lo que el negocio ya tenia pagado.
+        var bruto = baseAmount * (transport.CommissionPercent / 100m);
+        var final = Math.Max(0m, isCv ? decimal.Round(bruto, 2, MidpointRounding.AwayFromZero) : decimal.Truncate(bruto));
         var explanation = $"""
             Regla encontrada: {transport.Name}
             Fuente: {transport.Source}
@@ -123,6 +179,7 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
             Retencion = {retentionPercent:0.##}% ({retained:C2})
             Base = venta - retencion - dejada - gasto = {baseAmount:C2}
             {payoutDetail}
+            {specialDetail}
             Dejada aplicada = {payout:C2}
             Gasto aplicado = {expense:C2}
             Porcentaje comision = {transport.CommissionPercent:0.##}%
@@ -130,6 +187,44 @@ public sealed class CommissionConfigurationResolver(CommissionSettingsRepository
             Resultado = {final:C2}
             """;
         return new CommissionSimulationResult(transport.Name, transport.Source, FormatVigency(transport), transport.CommissionPercent, retentionPercent, baseAmount, selectedPayout, input.Expense, final, explanation, transport.Configured && payment.Configured);
+    }
+
+    /// <summary>
+    /// Empata el transporte del viaje con las reglas. En Casco se compara tambien contra el
+    /// proveedor normalizado, que es el nombre con el que el negocio tiene sus reglas.
+    /// </summary>
+    public static CommissionSettingsRule[] MatchTransportRules(IReadOnlyList<CommissionSettingsRule> rules, string transport, bool isCasco)
+    {
+        var text = Clean(transport);
+        var normalized = isCasco ? CascoCommissionRuleService.NormalizeProvider(text) : text;
+        return rules.Where(rule =>
+                string.Equals(rule.Code, text, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(rule.Name, text, StringComparison.OrdinalIgnoreCase)
+                || (isCasco && (string.Equals(rule.Code, normalized, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(rule.Name, normalized, StringComparison.OrdinalIgnoreCase))))
+            .ToArray();
+    }
+
+    /// <summary>Respaldo de Casco cuando un transporte no tiene regla capturada.</summary>
+    public const decimal CascoFallbackPercent = 10m;
+    public const string CascoFallbackSource = "RESPALDO_CV";
+    public const string CascoAmbiguousSource = "REGLA_AMBIGUA_CV";
+
+    /// <summary>
+    /// Descuentos especiales de Casco que van pegados al proveedor y no a un porcentaje.
+    /// Hoy solo AVENTURAS MAYAS: desde $1,000 se quitan $100 por cada $1,000 de venta. Venia del
+    /// Excel del negocio y el motor anterior si lo descontaba; sin esto la comision de ese
+    /// proveedor sale mas alta de lo que el negocio paga.
+    /// </summary>
+    private static (decimal Amount, string Detail) ResolveCascoSpecialDiscount(CommissionSettingsRule rule, decimal sale)
+    {
+        var name = (rule.Name + " " + rule.Code).ToUpperInvariant();
+        if (!name.Contains("AVENTURAS MAYAS", StringComparison.Ordinal) || sale < 1000m)
+            return (0m, string.Empty);
+
+        var blocks = Math.Floor(sale / 1000m);
+        var amount = blocks * 100m;
+        return (amount, $"Descuento especial AVENTURAS MAYAS: {amount:C2} ($100 por cada $1,000).");
     }
 
     public static string FormatVigency(CommissionResolvedRule rule) =>

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -48,7 +48,7 @@ public partial class PosWindow : Window
     public PosWindow(LocalDatabase database, string user, string branchCode, string? selectedModule = null, string? initialSaleLookup = null, bool startEmpty = false, string? cascoOperationFolioForSaleLink = null)
     {
         _database = database;
-        _pos = new LocalPosRepository(database);
+        _pos = new LocalPosRepository(database, string.IsNullOrWhiteSpace(branchCode) ? "P28" : branchCode.Trim().ToUpperInvariant());
         _operations = new LocalOperationsRepository(database);
         _users = new LocalUserRepository(database);
         _errors = new LocalErrorLogger(database);
@@ -1435,7 +1435,7 @@ public partial class PosWindow : Window
             if (relation is not null)
             {
                 SalePayoutText.Text = (relation.Payout ?? 0m).ToString("N2", CultureInfo.CurrentCulture);
-                SaleCommissionText.Text = relation.OrigenComision is "DATOS_PENDIENTES_CV" or "SIN_CONFIGURACION"
+                SaleCommissionText.Text = relation.OrigenComision == "SIN_CONFIGURACION"
                     ? "Pendiente" : relation.Commission.ToString("N2", CultureInfo.CurrentCulture);
                 SaleCommissionText.ToolTip = string.IsNullOrWhiteSpace(relation.CommissionCalculationDetail)
                     ? relation.CommissionStatus : relation.CommissionCalculationDetail;
@@ -1450,8 +1450,13 @@ public partial class PosWindow : Window
                 transportOverride: row.Transporte,
                 paymentMethodOverride: row.Efectivo > 0m ? "Efectivo" : row.Tarjeta > 0m ? "Tarjeta" : string.Empty,
                 cancellationToken: CancellationToken.None);
-            SaleCommissionText.Text = preview.RuleFound ? preview.CommissionAmount.ToString("N2", CultureInfo.CurrentCulture) : "Pendiente";
-            SaleCommissionText.ToolTip = preview.Detail;
+            // Se muestra el importe siempre: con el respaldo del 10 % tambien hay comision, y
+            // poner "Pendiente" encima de un numero real confundia al operador. El aviso de que
+            // falta configurar la regla va en el detalle.
+            SaleCommissionText.Text = preview.CommissionAmount.ToString("N2", CultureInfo.CurrentCulture);
+            SaleCommissionText.ToolTip = preview.RuleFound
+                ? preview.Detail
+                : "Sin regla configurada para este transporte: se uso el respaldo. " + preview.Detail;
         }
         catch (Exception ex)
         {

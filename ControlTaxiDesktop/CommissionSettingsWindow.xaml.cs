@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -42,10 +42,34 @@ public partial class CommissionSettingsWindow : Window
         RetireTestRuleButton.IsEnabled = _canEdit;
         Loaded += async (_, _) =>
         {
+            await ImportCascoRulesIfMissingAsync();
             await RefreshAllAsync();
             SearchBox.Focus();
         };
         // NewRule enablement for TRANSPORTE will be checked at NewRule click time using _branchCode.
+    }
+
+    /// <summary>
+    /// En Casco las reglas viven en la base local. Si esta maquina todavia no las tiene, se traen
+    /// de SQL Server (dbo.ControlTaxiComisiones) para que el operador no vea la pantalla vacia ni
+    /// tenga que capturar a mano lo que el negocio ya confirmo.
+    /// </summary>
+    private async Task ImportCascoRulesIfMissingAsync()
+    {
+        if (_branchCode != "CV") return;
+        try
+        {
+            var password = Environment.GetEnvironmentVariable("CASCO_SQL_PASSWORD");
+            if (string.IsNullOrWhiteSpace(password)) return;
+            var branch = new BranchConfigurationService().GetBranch("CV");
+            var outcome = await CascoCommissionRuleImporter.EnsureImportedAsync(_settings, branch, password, _user);
+            if (outcome.Ran && outcome.Imported > 0)
+                EditorMessageText = outcome.Detail;
+        }
+        catch
+        {
+            // La pantalla abre igual: sin importacion solo se ve lo que ya hay capturado.
+        }
     }
 
     /// <summary>

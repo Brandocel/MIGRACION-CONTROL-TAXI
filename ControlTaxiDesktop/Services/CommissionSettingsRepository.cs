@@ -110,6 +110,51 @@ public sealed class CommissionSettingsRepository(LocalDatabase database)
         await MigrateCvTastingPercentAsync(connection);
     }
 
+    /// <summary>Dice si esta maquina ya tiene reglas de transporte de Casco capturadas.</summary>
+    public async Task<bool> HasCascoTransportRulesAsync()
+    {
+        await InitializeSchemaAsync();
+        await using var connection = database.Open();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='TRANSPORTE' AND Branch='CV' COLLATE NOCASE;";
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) > 0;
+    }
+
+    /// <summary>
+    /// Mete reglas de transporte de Casco que vienen de SQL Server.
+    ///
+    /// Nunca pisa lo que ya existe: si un proveedor ya tiene regla en esta maquina, se salta. Asi
+    /// una importacion no puede borrar un ajuste hecho a mano por el operador. Todo queda en la
+    /// bitacora como cualquier alta.
+    /// </summary>
+    public async Task<int> ImportCascoTransportRulesAsync(IReadOnlyList<CommissionSettingsRule> rules, string user, string reason)
+    {
+        if (rules is null || rules.Count == 0) return 0;
+        await InitializeSchemaAsync();
+        await using var connection = database.Open();
+        await using var transaction = connection.BeginTransaction();
+        var imported = 0;
+        foreach (var rule in rules)
+        {
+            if (!string.Equals(rule.Category, TransportCategory, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(rule.Branch, "CV", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("La importacion de Casco solo admite reglas de TRANSPORTE de la sucursal CV.");
+
+            await using var existing = connection.CreateCommand();
+            existing.Transaction = transaction;
+            existing.CommandText = "SELECT COUNT(*) FROM CommissionSettingsRules WHERE Category='TRANSPORTE' AND Branch='CV' COLLATE NOCASE AND (Code=$code COLLATE NOCASE OR Name=$name COLLATE NOCASE);";
+            existing.Parameters.AddWithValue("$code", rule.Code);
+            existing.Parameters.AddWithValue("$name", rule.Name);
+            if (Convert.ToInt64(await existing.ExecuteScalarAsync(), CultureInfo.InvariantCulture) != 0) continue;
+
+            await InsertRuleAsync(connection, transaction, rule with { Id = 0 }, user);
+            await WriteAuditAsync(connection, transaction, null, rule, user, reason);
+            imported++;
+        }
+        await transaction.CommitAsync();
+        return imported;
+    }
+
     // Explicit import only. No automatic seeding, overwrites or activation of commission percentages.
     public async Task SaveCvPayoutDraftAsync(CommissionSettingsRule rule, string user, string reason)
     {

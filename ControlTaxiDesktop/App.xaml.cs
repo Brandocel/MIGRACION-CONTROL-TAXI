@@ -149,7 +149,6 @@ public partial class App : Application
                 // Print to console first so automated runs capture the exact text,
                 // then show a MessageBox with the same text for interactive inspection.
                 Console.WriteLine(message);
-                MessageBox.Show(message, "Diagnóstico sucursales", MessageBoxButton.OK, MessageBoxImage.Information);
 
                 // Detect presence of CV credentials (without revealing them).
                 // Use TryLoad to detect an existing casco.credentials.dat without creating folders.
@@ -177,7 +176,8 @@ public partial class App : Application
                 }
 
                 Console.WriteLine(cvHasCred ? "yes" : "no");
-                MessageBox.Show(message + "\n" + (cvHasCred ? "yes" : "no"), "Diagnóstico sucursales", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(message + Environment.NewLine + "Credencial CV guardada: " + (cvHasCred ? "si" : "no"),
+                    "Diagnostico de sucursales", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -362,24 +362,22 @@ public partial class App : Application
         {
             var branchService = new BranchConfigurationService();
             var cascoBranch = branchService.GetBranch("CV");
-            // Try to apply any saved credential. If missing or invalid, show the setup window so the
-            // user can Test and Save a new credential. Do NOT abort startup immediately: allow the
-            // user to provide credentials interactively (important when running under F5).
+            // Sin credencial no hay nada que hacer en Casco: todas las pantallas leen SQL Server.
+            // Si el operador cancela, se avisa y se cierra, en lugar de dejarlo entrar y que cada
+            // pantalla truene despues con un error que no explica nada.
             if (!CascoCredentialStore.TryApplyToEnvironment(out var credentialError))
             {
                 var setupWindow = new CascoConnectionSetupWindow(cascoBranch);
                 var configured = setupWindow.ShowDialog();
-                if (configured == true)
+                if (configured != true || !CascoCredentialStore.TryApplyToEnvironment(out credentialError))
                 {
-                    // If user saved new credential, ensure it's applied. If Apply still fails, show a
-                    // warning but continue startup so the app can show the login and allow retry.
-                    CascoCredentialStore.TryApplyToEnvironment(out credentialError);
-                }
-                else
-                {
-                    // User cancelled setup: warn but continue startup so they can still use the app
-                    // (some modules may not require Casco). Do not shutdown here to allow interactive
-                    // development with F5.
+                    MessageBox.Show(
+                        "No se completo la configuracion de Casco Viejo." + Environment.NewLine + credentialError,
+                        "Control Taxi",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    Shutdown(0);
+                    return;
                 }
             }
         }

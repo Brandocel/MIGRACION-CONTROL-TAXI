@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -158,15 +158,13 @@ public sealed class BranchConfigurationService
 
     private static IEnumerable<string> EnumerateBranchConfigCandidates()
     {
-        // Prefer a local override file for development/testing that does NOT modify
-        // the production configuration. If branches.local.json exists it will
-        // override branches.production.json.
-        // Check for a local override both in the running output folder and in the
-        // workspace root. The project copies ..\branches.local.json to the
-        // output folder for Debug builds, but when running from dotnet the
-        // workspace file may be the authoritative source. Include both.
+        // Override local para desarrollo. SOLO en Debug a proposito: en una maquina de tienda
+        // un branches.local.json olvidado junto al .exe apuntaba el programa a otro servidor sin
+        // avisar a nadie. En Release ni se busca.
+#if DEBUG
         yield return Path.Combine(AppContext.BaseDirectory, "branches.local.json");
         yield return Path.Combine(Environment.CurrentDirectory, "branches.local.json");
+#endif
 
         yield return Path.Combine(AppContext.BaseDirectory, "branches.production.json");
         yield return Path.Combine(Environment.CurrentDirectory, "branches.production.json");

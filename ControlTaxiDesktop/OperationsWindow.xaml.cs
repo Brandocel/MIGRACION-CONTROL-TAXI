@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Data;
@@ -79,7 +79,7 @@ public partial class OperationsWindow : Window
     {
         _database = database;
         _operations = new LocalOperationsRepository(database);
-        _pos = new LocalPosRepository(database);
+        _pos = new LocalPosRepository(database, NormalizeBranchCode(branchCode));
         _branchCode = NormalizeBranchCode(branchCode);
         _cascoTripRecordsApi = new CascoTripRecordsApiService();
         _user = user;

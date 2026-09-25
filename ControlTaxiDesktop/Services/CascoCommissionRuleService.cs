@@ -157,6 +157,9 @@ public sealed class CascoCommissionRuleService
         var database = new SqliteDatabase();
         await database.InitializeAsync();
         var settings = new CommissionSettingsRepository(database);
+        // Primera vez en esta maquina: se traen las reglas de Casco desde SQL Server.
+        await CascoCommissionRuleImporter.EnsureImportedAsync(settings, branch, sqlPassword, "SISTEMA", cancellationToken);
+
         var dateValid = DateTime.TryParse(sourceRow?.OperationDate, out var operationDate);
         var input = CascoPayoutRules.FromRecords(sourceRows, operationDate, transporte, ventaTotal,
             paymentMethod, payoutOverride ?? 0m, (gastoOverride ?? 0m) + (degustacionOverride ?? 0m));
@@ -164,17 +167,26 @@ public sealed class CascoCommissionRuleService
             ? await settings.SimulateAsync(input, "CV")
             : new CommissionSimulationResult(transporte, "SIN_CONFIGURACION", "Sin fecha", 0m, 0m, 0m, 0m, 0m, 0m,
                 "No se calculó comisión: falta una fecha de operación válida.", false);
-        var rule = simulation.Configured
-            ? new CascoCommissionRule(checked((int)(await settings.GetRulesAsync("TRANSPORTE", transporte, true, operationDate, "CV"))
-                .Single(r => string.Equals(r.Code, transporte, StringComparison.OrdinalIgnoreCase) || string.Equals(r.Name, transporte, StringComparison.OrdinalIgnoreCase)).Id),
-                "CV", proveedor, transporte, conTarjeta, 0m, null, null, simulation.CommissionPercent / 100m, null, null, true, simulation.RuleName, false)
+
+        // SingleOrDefault sobre el mismo empatado que usa el calculo: con Single, dos reglas
+        // vigentes o ninguna tiraban la pantalla con una excepcion en lugar de avisar.
+        var storedRule = simulation.Configured
+            ? CommissionConfigurationResolver.MatchTransportRules(
+                    await settings.GetRulesAsync("TRANSPORTE", string.Empty, true, operationDate, "CV"), transporte, true)
+                .SingleOrDefault()
             : null;
+        var rule = storedRule is null
+            ? null
+            : new CascoCommissionRule(checked((int)storedRule.Id),
+                "CV", proveedor, transporte, conTarjeta, 0m, null, null, simulation.CommissionPercent / 100m, null, null, true, simulation.RuleName, false);
         var agencyAmount = 0m;
         var taxistaAmount = simulation.FinalCommission;
         var vendorAmount = 0m;
         var sportAmount = 0m;
         var commissionAmount = simulation.FinalCommission;
-        var detail = "Adultos tomados del registro guardado (detalle_json.adultCount). " + simulation.Explanation;
+        var detail = (rule is null
+            ? "Sin regla configurada para este proveedor. "
+            : "Adultos tomados del registro guardado (detalle_json.adultCount). ") + simulation.Explanation;
         return new CascoCommissionPreview(
             branch.Code,
             branch.SqlServer,
