@@ -82,7 +82,19 @@ Es lo nuevo que aporta la rama y se conservó, pero sin bloquear:
 - Si faltan los adultos o las bandas, se usa la dejada que trae el viaje y se anota en el detalle.
   Antes, sin esos datos, la comisión se quedaba en cero.
 
-## 5. Pendientes
+## 5. Los gafetes y las comisiones ya viven juntos
+
+El trabajo de gafetes del 24/09 estaba sin commit y tocaba los mismos archivos. Se junto en
+`main` (commits `de31b10` y `653a757`). El unico conflicto fue `CascoCommissionRuleService`: la
+rama de gafetes traia el motor viejo de Casco y `main` ya lo habia reemplazado por el que lee
+SQLite. **Se quedo el de `main`**; el 10 % de respaldo no se perdio, ahora vive en
+`CommissionConfigurationResolver`. El importador tambien pasa por `CascoSqlIdentity`, asi que ya
+no queda ningun usuario de SQL escrito a mano.
+
+Despues de juntar se volvio a probar todo sobre la base local: los nueve casos de comision dan el
+mismo importe, y los tres viajes de prueba siguen sacando sus talones (3, 1 y 2 gafetes).
+
+## 6. Pendientes
 
 1. Probar en la máquina de Casco: la importación corre sola la primera vez, hay que confirmar que
    trae las 14 reglas y que las comisiones salen iguales a las de hoy.
